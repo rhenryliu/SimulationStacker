@@ -51,7 +51,12 @@ class SimulationStacker(object):
             snapshot (int): _description_
             nPixels (int, optional): Pixel size of the output 2D field, i.e. the number of pixels in each direction.
             simType (str, optional): Simulation type, one of ['IllustrisTNG', 'SIMBA']. Defaults to 'IllustrisTNG'.
-            feedback (str, optional): feedback types for SIMBA. Defaults to None. One of ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet'].
+            feedback (str, optional): feedback types for SIMBA. Defaults to None. One of 
+                ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet'].
+            z (float, optional): Redshift of the snapshot. Defaults to 0.0.
+            
+        TODO:
+            Add support for tSZ and kSZ maps!
         """
         
         self.simType = simType
@@ -182,7 +187,7 @@ class SimulationStacker(object):
         Returns:
             np.ndarry: 2D numpy array of the field for the given particle type.
             
-        Todo:
+        TODO:
             Add directionality to the fields (i.e. x, y, and z projected 2D fields.)
         """
         if nPixels is None:

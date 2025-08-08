@@ -58,7 +58,7 @@ def main(path2config, verbose=True):
     figName = config['fig_name']
     figType = config['fig_type']
     
-    colourmaps = ['spring', 'magma']
+    colourmaps = ['hot', 'cool']
 
     fig, ax = plt.subplots(figsize=(10,8))
     t0 = time.time()
@@ -154,8 +154,10 @@ def main(path2config, verbose=True):
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
 
-    ax.set_xlabel('Radius (arcmin)')
-    ax.set_ylabel('CAP')
+    # ax.set_xlabel('Radius (arcmin)')
+    # ax.set_ylabel('f')
+    ax.set_xlabel('R [arcmin]', fontsize=18)
+    ax.set_ylabel(r'$f_{\rm gas}(< R) / (\Omega_b/\Omega_m)$', fontsize=18)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     ax.set_xlim(0.0, 6.5)
@@ -163,7 +165,7 @@ def main(path2config, verbose=True):
     ax.axhline(1.0, color='k', ls='--', lw=2)
     ax.legend(loc='lower right', fontsize=12)
     ax.grid(True)
-    ax.set_title(f'{filterType} filter at z={redshift} for Gas particles', fontsize=16)
+    ax.set_title(f'{filterType} filter at z={redshift}', fontsize=18)
     
     fig.tight_layout()
     fig.savefig(figPath / f'{figName}_{filterType}.{figType}', dpi=300) # type: ignore

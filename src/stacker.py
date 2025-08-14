@@ -271,8 +271,8 @@ class SimulationStacker(object):
 
         return field
     
-    def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6, numRadii=11,
-                 z=None, projection='xy', save=True, load=True, radDistance=1.0, pixelSize=0.5, 
+    def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
+                 z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
                  halo_mass_avg=10**(13.22), halo_mass_upper=None):
         """Stack the map of a given particle type.
 
@@ -280,19 +280,26 @@ class SimulationStacker(object):
             pType (str): Particle type to stack.
             filterType (str, optional): Type of filter to apply. Defaults to 'cumulative'.
             minRadius (float, optional): Minimum radius for stacking. Defaults to 0.2.
-            maxRadius (int, optional): Maximum radius for stacking. Defaults to 9.
-            numRadii: 
+            maxRadius (float, optional): Maximum radius for stacking. Defaults to 6.0.
+            numRadii (int, optional): Number of radial bins for stacking. Defaults to 11.
             z (float, optional): Redshift of the snapshot. Defaults to None, in which case self.z is used.
-            projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
-            nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to None.
+            projection (str, optional): Direction of the field projection. Defaults to 'xy'. Options are ['xy', 'yz', 'xz']
             save (bool, optional): If True, saves the stacked map to a file. Defaults to True.
             load (bool, optional): If True, loads the stacked map from a file if it exists. Defaults to True.
-            radDistance (float, optional): Radial distance units for stacking. Defaults to 1 arcmin. 
+            radDistance (float, optional): Radial distance units for stacking. Defaults to 1 arcmin.
                 Note there is no None option here as in stackField.
             pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
             halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
+
+        Returns:
+            radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
+            
+        ToDo:
+            Add a wrapper for automatic stacking along all 3 projections.
+            Implement the DSigma filter for stacking.
         """
+
         
         if z is None:
             z = self.z
@@ -399,25 +406,29 @@ class SimulationStacker(object):
         return 
         
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                   projection='xy', nPixels=None, save=True, load=True, radDistance=1000):
+                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000):
         """Do stacking on the computed field.
 
         Args:
             pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma']. Defaults to 'CumulativeMass'.
-            minRadius (float, optional): Minimum radius in kpc/h for the stacking. Defaults to 0.2.
-            maxRadius (float, optional): Maximum radius in kpc/h for the stacking. Defaults to 9.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma']. Defaults to 'cumulative'.
+            minRadius (float, optional): Minimum radius in kpc/h for the stacking. Defaults to 0.1.
+            maxRadius (float, optional): Maximum radius in kpc/h for the stacking. Defaults to 4.5.
+            numRadii (int, optional): Number of radial bins for the stacking. Defaults to 25.
             projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
-            nPixel (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
+            nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
             save (bool, optional): If True, saves the stacked field to a file. Defaults to True.
             load (bool, optional): If True, loads the stacked field from a file if it exists. Defaults to True.
-            radDistance (float, optional): Radial distance units for stacking. Defaults to 1000 kpc/h (so converts to 1 Mpc/h). 
+            radDistance (float, optional): Radial distance units for stacking. Defaults to 1000 kpc/h (so converts to 1 Mpc/h).
                 If None, uses the mean halo radius from the halo catalog.
-            
+
+        Raises:
+            NotImplementedError: If pType is not one of the ones listed above.
 
         Returns:
-            _type_: _description_
+            radii, profiles : 1D radii and 2D profiles for the stacked field.
         """
+
         
         if nPixels is None:
             nPixels = self.nPixels
@@ -457,11 +468,11 @@ class SimulationStacker(object):
         RadPixel = radDistance / kpcPerPixel # Convert to pixels    
         
         # Fix the stacking function:
-        filterFunc = SimulationStacker.total_mass
-        # if filterType == 'cumulative':
-        #     filterFunc = SimulationStacker.total_mass
-        # elif filterType == 'CAP':
-        #     filterFunc = SimulationStacker.CAP
+        # filterFunc = SimulationStacker.total_mass
+        if filterType == 'cumulative':
+            filterFunc = SimulationStacker.total_mass
+        elif filterType == 'CAP':
+            filterFunc = SimulationStacker.CAP
         #TODO: DSigma Filter Function.
 
 

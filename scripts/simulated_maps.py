@@ -69,10 +69,10 @@ def main(path2config, verbose=True):
         
         if sim_type_name == 'IllustrisTNG':
             TNG_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0, 0.85, len(TNG_sims)))
+            colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0, 0.85, len(SIMBA_sims)))
+            colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
 
         if verbose:
             print(f"Processing simulations of type: {sim_type_name}")
@@ -89,7 +89,7 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                             simType=sim_type_name)
                 
-                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0, 
+                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
                                                      save=saveField, load=loadField, radDistance=radDistance)
                 radii2, profiles2 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
@@ -128,7 +128,7 @@ def main(path2config, verbose=True):
                                             simType=sim_type_name, 
                                             feedback=feedback)
                 
-                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0, 
+                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
                                                      save=saveField, load=loadField, radDistance=radDistance)
                 radii2, profiles2 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)

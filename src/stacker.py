@@ -91,7 +91,7 @@ class SimulationStacker(object):
         This is more realistic than makeField
 
         Args:
-            pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'
+            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
             z (float, optional): Redshift of the snapshot. Defaults to None, in which case self.z is used.
             # nPixels (int, optional): Number of pixels in each direction of the 2D map. Defaults to self.nPixels.
             projection (str, optional): Direction of the map projection. Currently only 'xy' is implemented. Defaults to 'xy'.
@@ -175,7 +175,7 @@ class SimulationStacker(object):
         """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
         Args:
-            pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'
+            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
             nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
             projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
             save (bool, optional): If True, saves the field to a file. Defaults to False.
@@ -960,6 +960,9 @@ class SimulationStacker(object):
                 particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
             elif pType == 'Stars':
                 particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
+            elif pType == 'BH':
+                # TODO: Check to make sure that the masses here are correct.
+                particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
             else:
                 raise NotImplementedError('Particle Type not implemented')
                                         
@@ -970,6 +973,9 @@ class SimulationStacker(object):
                 pTypeval = 'PartType1'
             elif pType == 'Stars':
                 pTypeval = 'PartType4'
+            elif pType == 'BH':
+                # TODO: Check that the masses here make sense.
+                pTypeval = 'PartType5'
             else:
                 raise NotImplementedError('Particle Type not implemented')
             

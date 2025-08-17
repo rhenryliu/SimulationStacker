@@ -51,6 +51,8 @@ def main(path2config, verbose=True):
     loadField = config['load_field']
     saveField = config['save_field']
     radDistance = config['rad_distance']
+    
+    fractionType = config['fraction_type']
 
     figPath = Path(config['fig_path'])
     figPath.mkdir(parents=False, exist_ok=True)
@@ -89,28 +91,35 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                             simType=sim_type_name)
                 
-                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
+                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
                                                      save=saveField, load=loadField, radDistance=radDistance)
-                radii2, profiles2 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
+                radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
-                radii3, profiles3 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
+                radii4, profiles4 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
+                radii5, profiles5 = stacker.stackMap('BH', filterType=filterType, maxRadius=6.0, 
+                                                     save=saveField, load=loadField, radDistance=radDistance)
+
 
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
 
-                gas_fraction = profiles1 / (profiles1 + profiles2 + profiles3) / (OmegaBaryon / stacker.header['Omega0'])
-                gas_fraction_plot = np.median(gas_fraction, axis=1)
-                ax.plot(radii1 * radDistance, gas_fraction_plot, label=sim_name, color=colours[j], lw=2)
-                # ax.plot(radii1 * radDistance, profiles1.mean(axis=1), label=sim_name, color=colours[j], lw=2)
-                # ax.plot(radii1 * radDistance, profiles1, label=sim_name, color=colours[j], lw=2)
+                if fractionType == 'gas':
+                    fraction = profiles0 / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+                elif fractionType == 'baryon':
+                    fraction = (profiles0 + profiles4) / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+
+                fraction_plot = np.median(fraction, axis=1)
+                ax.plot(radii0 * radDistance, fraction_plot, label=sim_name, color=colours[j], lw=2)
+                # ax.plot(radii0 * radDistance, profiles0.mean(axis=1), label=sim_name, color=colours[j], lw=2)
+                # ax.plot(radii0 * radDistance, profiles0, label=sim_name, color=colours[j], lw=2)
                 if plotErrorBars:
-                    gas_fraction_err = np.std(gas_fraction, axis=1) / np.sqrt(gas_fraction.shape[1])
-                    upper = np.percentile(gas_fraction, 75, axis=1)
-                    lower = np.percentile(gas_fraction, 25, axis=1)
-                    ax.fill_between(radii1 * radDistance, 
+                    fraction_err = np.std(fraction, axis=1) / np.sqrt(fraction.shape[1])
+                    upper = np.percentile(fraction, 75, axis=1)
+                    lower = np.percentile(fraction, 25, axis=1)
+                    ax.fill_between(radii0 * radDistance, 
                                     lower, 
                                     upper, 
                                     color=colours[j], alpha=0.2)
@@ -128,25 +137,31 @@ def main(path2config, verbose=True):
                                             simType=sim_type_name, 
                                             feedback=feedback)
                 
-                radii1, profiles1 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
+                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
                                                      save=saveField, load=loadField, radDistance=radDistance)
-                radii2, profiles2 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
+                radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
-                radii3, profiles3 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
+                radii4, profiles4 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
-                
+                radii5, profiles5 = stacker.stackMap('BH', filterType=filterType, maxRadius=6.0, 
+                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
-                gas_fraction = profiles1 / (profiles1 + profiles2 + profiles3) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-                gas_fraction_plot = np.median(gas_fraction, axis=1)
-                ax.plot(radii1 * radDistance, gas_fraction_plot, label=sim_name_show, color=colours[j], lw=2)
-                # ax.plot(radii1 * radDistance, profiles1.mean(axis=1), label=sim_name_show, color=colours[j], lw=2)
-                # ax.plot(radii1 * radDistance, profiles1, label=sim_name_show, color=colours[j], lw=2)
+                if fractionType == 'gas':
+                    fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+                elif fractionType == 'baryon':
+                    fraction = (profiles0 + profiles4 + profiles5) / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+
+                fraction_plot = np.median(fraction, axis=1)
+                ax.plot(radii0 * radDistance, fraction_plot, label=sim_name_show, color=colours[j], lw=2)
+                # ax.plot(radii0 * radDistance, profiles0.mean(axis=1), label=sim_name_show, color=colours[j], lw=2)
+                # ax.plot(radii0 * radDistance, profiles0, label=sim_name_show, color=colours[j], lw=2)
                 if plotErrorBars:
-                    gas_fraction_err = np.std(gas_fraction, axis=1) / np.sqrt(gas_fraction.shape[1])
-                    upper = np.percentile(gas_fraction, 75, axis=1)
-                    lower = np.percentile(gas_fraction, 25, axis=1)
-                    ax.fill_between(radii1 * radDistance, 
+                    fraction_err = np.std(fraction, axis=1) / np.sqrt(fraction.shape[1])
+                    upper = np.percentile(fraction, 75, axis=1)
+                    lower = np.percentile(fraction, 25, axis=1)
+                    ax.fill_between(radii0 * radDistance, 
                                     lower, 
                                     upper, 
                                     color=colours[j], alpha=0.2)

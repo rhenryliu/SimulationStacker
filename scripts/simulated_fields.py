@@ -25,7 +25,7 @@ sys.path.append('../src/')
 from stacker import SimulationStacker
 
 sys.path.append('../../illustrisPython/')
-import illustris_python as il
+import illustris_python as il # type: ignore
 
 import yaml
 import argparse

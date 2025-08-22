@@ -91,7 +91,7 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                             simType=sim_type_name)
                 
-                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
+                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance)
                 radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)
@@ -137,7 +137,7 @@ def main(path2config, verbose=True):
                                             simType=sim_type_name, 
                                             feedback=feedback)
                 
-                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,
+                radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance)
                 radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
                                                      save=saveField, load=loadField, radDistance=radDistance)

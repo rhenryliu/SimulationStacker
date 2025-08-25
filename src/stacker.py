@@ -14,11 +14,12 @@ from astropy import units as u
 # from abacusnbody.analysis.tsc import tsc_parallel
 import time
 import yaml
+import glob
 # import json
 # import pprint 
 
-sys.path.append('../../illustrisPython/')
-import illustris_python as il # type: ignore
+# sys.path.append('../../illustrisPython/')
+import illustris_python as il 
 
 from tools import numba_tsc_3D, hist2d_numba_seq
 
@@ -191,43 +192,84 @@ class SimulationStacker(object):
                
         Lbox = self.header['BoxSize'] # kpc/h
         
-        # Get all particles
-        particles = self.loadSubsets(pType)
-        coordinates = particles['Coordinates'] # kpc/h
-        masses = particles['Masses'] # Msun/h
+        # Get all particle snap chunks:
+
+        folderPath = self.snapPath(self.simType, pathOnly=True)
+        snaps = glob.glob(folderPath + 'snap_*.hdf5')
+
+        # The code below does the statistic by chunk rather than by the whole dataset
         
-                
-        if projection == 'xy':
-            coordinates = coordinates[:, :2]  # Take x and y coordinates
-        elif projection == 'xz':
-            coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
-        elif projection == 'yz':
-            coordinates = coordinates[:, 1:] # Take y and z coordinates
-        else:
-            raise NotImplementedError('Projection type not implemented: ' + projection)
-        
-        # Convert coordinates to pixel coordinates        
+        # Initialize empty maps
         gridSize = [nPixels, nPixels]
         minMax = [0, self.header['BoxSize']]
-
-        t0 = time.time()
-        result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
-                                     'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        field = result.statistic
+        field_total = np.zeros(gridSize)
         
+        t0 = time.time()
+        for i, snap in enumerate(snaps):
+            particles = self.loadSubset(pType, snapPath=snap)
+            coordinates = particles['Coordinates'] # kpc/h
+            masses = particles['Masses'] # Msun/h
+            
+            if projection == 'xy':
+                coordinates = coordinates[:, :2]  # Take x and y coordinates
+            elif projection == 'xz':
+                coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
+            elif projection == 'yz':
+                coordinates = coordinates[:, 1:] # Take y and z coordinates
+            else:
+                raise NotImplementedError('Projection type not implemented: ' + projection)
+            
+            # Convert coordinates to pixel coordinates        
+
+            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
+                                        'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            field = result.statistic
+            
+            field_total += field
+
+            if i % 10 == 0:
+                print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
+
         print('Binned statistic time:', time.time() - t0)
+
+
+        # particles = self.loadSubsets(pType)
+        # coordinates = particles['Coordinates'] # kpc/h
+        # masses = particles['Masses'] # Msun/h
+        
+                
+        # if projection == 'xy':
+        #     coordinates = coordinates[:, :2]  # Take x and y coordinates
+        # elif projection == 'xz':
+        #     coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
+        # elif projection == 'yz':
+        #     coordinates = coordinates[:, 1:] # Take y and z coordinates
+        # else:
+        #     raise NotImplementedError('Projection type not implemented: ' + projection)
+        
+        # # Convert coordinates to pixel coordinates        
+        # gridSize = [nPixels, nPixels]
+        # minMax = [0, self.header['BoxSize']]
+
+        # t0 = time.time()
+        # result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
+        #                              'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+        # field = result.statistic
+        
+        # print('Binned statistic time:', time.time() - t0)
+        
         if save:
             if self.simType == 'IllustrisTNG':
                 saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
                             pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field)
+                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
             elif self.simType == 'SIMBA':
                 saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
                             pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field)
+                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
 
-        return field
-    
+        return field_total
+
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
                  halo_mass_avg=10**(13.22), halo_mass_upper=None):
@@ -847,20 +889,27 @@ class SimulationStacker(object):
         base = base.rstrip('0').rstrip('.')  # Remove trailing zeros and decimal if needed
         return f"{base}e{int(exponent)}"
 
-    def snapPath(self, simType):
+    def snapPath(self, simType, chunkNum=0, pathOnly=False):
         """Get the snapshot path for the given simulation type.
 
         Args:
             simType (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
+            chunkNum (int): The chunk number for the simulation (Only used in the case of IllustrisTNG currently)
 
         Returns:
             str: The path to the snapshot file.
         """
         if simType == 'IllustrisTNG':
-            snapPath = il.snapshot.snapPath(self.simPath, self.snapshot)
+            folderPath = self.simPath + '/snapdir_' + str(self.snapshot).zfill(3) + '/'
+            snapPath = il.snapshot.snapPath(self.simPath, self.snapshot, chunkNum=chunkNum)
         elif simType == 'SIMBA':
-            snapPath = self.simPath + 'snapshots/snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
-        return snapPath
+            folderPath = self.simPath + 'snapshots/'
+            snapPath = folderPath + 'snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
+            folderPath = snapPath # This is hacky, we do this because SIMBA has a different file structure. TODO: Make this less hacky.
+        if pathOnly:
+            return folderPath
+        else:
+            return snapPath
 
     def loadHalos(self, simType):
         """Load halo data for the specified simulation type.
@@ -948,9 +997,60 @@ class SimulationStacker(object):
             
         particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
         return particles
-            
 
+    def loadSubset(self, pType, snapPath, keys=None):
+        """Load a subset of particles from the snapshot.
+
+        Args:
+            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
+            snapPath (str): The path to the snapshot file.
+            keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
+
+        Raises:
+            NotImplementedError: If the particle type is not implemented.
+
+        Returns:
+            dict: A dictionary containing the particle properties.
+        """
+         # Avoid mutable default arg; build a fresh list each call
+        if keys is None:
+            keys = ['Coordinates', 'Masses']
+        read_keys = list(keys)  # copy so we can mutate safely
+        
+        addMass = False # This is to handle the case for IllustrisTNG sims not having 'Masses' as a category in sims.
+        if pType == 'gas':
+            pTypeval = 'PartType0'
+        elif pType == 'DM':
+            pTypeval = 'PartType1'
             
+            if 'Masses' in read_keys and self.simType == 'IllustrisTNG':
+                 read_keys[read_keys.index('Masses')] = 'ParticleIDs'
+                 addMass = True
+        elif pType == 'Stars':
+            pTypeval = 'PartType4'
+        elif pType == 'BH':
+            # TODO: Check that the masses here make sense.
+            pTypeval = 'PartType5'
+        else:
+            raise NotImplementedError('Particle Type not implemented')
+
+        particles = {}
+        with h5py.File(snapPath, 'r') as f:
+            # Print all top-level groups/datasets
+            # print("Keys:")
+            # print(list(f.keys()))
+            # particles = f['PartType0']
+            header = dict(f['Header'].attrs.items())
+            for key in read_keys:
+                particles[key] = f[pTypeval][key][:] # type: ignore
+
+        if addMass:
+            particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
+            del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
+                
+        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
+        return particles
+
 
 class SZMapStacker(SimulationStacker):
     
@@ -1062,7 +1162,7 @@ class SZMapStacker(SimulationStacker):
                 print(e)
                 print("Computing the field instead...")
 
-            
+        # If loading fails, we then compute the necessary fields. Much of the code below is the same as the SZ_TNG repo.            
         # Define some necessary parameters: (Physical units in cgs)
         gamma = 5/3. # unitless. Adiabatic Index
         k_B = 1.3807e-16 # cgs (erg/K)
@@ -1084,12 +1184,22 @@ class SZMapStacker(SimulationStacker):
         unit_vol = (kpc_to_cm/h)**3 # cancels unit dens division from previous, so h doesn't matter neither does kpc
 
 
-        # z = zs[snaps == snapshot]
+        # z = zs[snaps == snapshot] # TODO: Implement the automatic selection of snapshot from redshift (or vice versa)
         z = self.z
         a = 1./(1+self.z) # scale factor
         Lbox_hkpc = self.header['BoxSize'] # kpc/h
         
-            
+        
+        # Now we compute the SZ fields iteratively, iterating over every snapshot chunk: (Note SIMBA only has one chunk)
+        
+        # Get chunks:        
+        folderPath = self.snapPath(self.simType, pathOnly=True)
+        if self.simType == 'IllustrisTNG':
+            snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
+        elif self.simType == 'SIMBA':
+            snaps = glob.glob(folderPath + f'snap_*_{self.snapshot}.hdf5')
+
+
         particles = self.loadSubsets(pType)
 
         Co = particles['Coordinates']
@@ -1188,9 +1298,9 @@ class SZMapStacker(SimulationStacker):
             pTypeval = 'PartType0'
 
             if pType == 'tSZ':
-                keys = ['Coordinates', 'Masses']
+                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             elif pType == 'kSZ':
-                keys = ['Coordinates', 'Masses']
+                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             else:
                 raise NotImplementedError('Particle Type not implemented')
             
@@ -1205,6 +1315,58 @@ class SZMapStacker(SimulationStacker):
         particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
         return particles
 
+    def loadSubset(self, pType, snapPath, keys=None):
+        """Load a subset of particles from the snapshot.
+
+        Args:
+            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
+            snapPath (str): The path to the snapshot file.
+            keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
+
+        Raises:
+            NotImplementedError: If the particle type is not implemented.
+
+        Returns:
+            dict: A dictionary containing the particle properties.
+        """
+         # Avoid mutable default arg; build a fresh list each call
+        if keys is None:
+            keys = ['Coordinates', 'Masses']
+        read_keys = list(keys)  # copy so we can mutate safely
+        
+        addMass = False # This is to handle the case for IllustrisTNG sims not having 'Masses' as a category in sims.
+        if pType == 'gas':
+            pTypeval = 'PartType0'
+        elif pType == 'DM':
+            pTypeval = 'PartType1'
+            
+            if 'Masses' in read_keys and self.simType == 'IllustrisTNG':
+                 read_keys[read_keys.index('Masses')] = 'ParticleIDs'
+                 addMass = True
+        elif pType == 'Stars':
+            pTypeval = 'PartType4'
+        elif pType == 'BH':
+            # TODO: Check that the masses here make sense.
+            pTypeval = 'PartType5'
+        else:
+            raise NotImplementedError('Particle Type not implemented')
+
+        particles = {}
+        with h5py.File(snapPath, 'r') as f:
+            # Print all top-level groups/datasets
+            # print("Keys:")
+            # print(list(f.keys()))
+            # particles = f['PartType0']
+            header = dict(f['Header'].attrs.items())
+            for key in read_keys:
+                particles[key] = f[pTypeval][key][:] # type: ignore
+
+        if addMass:
+            particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
+            del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
+                
+        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
+        return particles
 
 
 

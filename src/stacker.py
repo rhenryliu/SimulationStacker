@@ -195,8 +195,11 @@ class SimulationStacker(object):
         # Get all particle snap chunks:
 
         folderPath = self.snapPath(self.simType, pathOnly=True)
-        snaps = glob.glob(folderPath + 'snap_*.hdf5')
-
+        if self.simType == 'IllustrisTNG':
+            snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
+        elif self.simType == 'SIMBA':
+            snaps = glob.glob(folderPath)
+            print('Snaps:', snaps)
         # The code below does the statistic by chunk rather than by the whole dataset
         
         # Initialize empty maps
@@ -1197,78 +1200,93 @@ class SZMapStacker(SimulationStacker):
         if self.simType == 'IllustrisTNG':
             snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
         elif self.simType == 'SIMBA':
-            snaps = glob.glob(folderPath + f'snap_*_{self.snapshot}.hdf5')
+            # print('Folder Path:', folderPath + f'*_{self.snapshot}.hdf5')
+            snaps = glob.glob(folderPath)
+            # print('Snaps:', snaps)
 
-
-        particles = self.loadSubsets(pType)
-
-        Co = particles['Coordinates']
-        EA = particles['ElectronAbundance']
-        IE = particles['InternalEnergy']
-        D = particles['Density']
-        M = particles['Masses']
-        V = particles['Velocities']
-
-        
-        # for each cell, compute its total volume (gas mass by gas density) and convert density units
-        dV = M/D # cMpc/h^3 (MTNG) or ckpc/h^3 (TNG)
-        D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
-        unit_c = 1.e10 # TNG faq is wrong (see README.md)
-
-        # obtain electron temperature, electron number density and velocity
-        Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
-        ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
-        Ve = V*np.sqrt(a) # km/s
-
-        # compute the contribution to the y and b signals of each cell
-        # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
-        # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-        dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Compton Y parameter
-        b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # kSZ signal
-        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Optical depth. This is what we use for 
-        
-        
-        # Now we make the fields:
-        
         # Convert coordinates to pixel coordinates        
         gridSize = [nPixels, nPixels]
         minMax = [0, self.header['BoxSize']]
-
+        field_total = np.zeros(gridSize)
         
-        if projection == 'xy':
-            coordinates = Co[:, :2]  # Take x and y coordinates
-        elif projection == 'xz':
-            coordinates = Co[:, [0, 2]] # Take x and z coordinates
-        elif projection == 'yz':
-            coordinates = Co[:, 1:] # Take y and z coordinates
-        else:
-            raise NotImplementedError('Projection type not implemented: ' + projection)
-
         t0 = time.time()
-        if pType == 'tSZ':
-            field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
-        elif pType == 'kSZ':
-            field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
-        elif pType == 'tau':
-            field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
-        else:
-            raise ValueError('Particle type not recognized: ' + pType)
+        for i, snap in enumerate(snaps):
+
+            particles = self.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
+
+            Co = particles['Coordinates']
+            EA = particles['ElectronAbundance']
+            IE = particles['InternalEnergy']
+            D = particles['Density']
+            M = particles['Masses']
+            V = particles['Velocities']
+
+            
+            # for each cell, compute its total volume (gas mass by gas density) and convert density units
+            dV = M/D # cMpc/h^3 (MTNG) or ckpc/h^3 (TNG)
+            D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
+            unit_c = 1.e10 # TNG faq is wrong (see README.md)
+
+            # obtain electron temperature, electron number density and velocity
+            Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
+            ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
+            Ve = V*np.sqrt(a) # km/s
+
+            # compute the contribution to the y and b signals of each cell
+            # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
+            # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
+            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Compton Y parameter
+            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # kSZ signal
+            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Optical depth. This is what we use for 
+            
+            
+            # Now we make the fields:
+            
+            if projection == 'xy':
+                coordinates = Co[:, :2]  # Take x and y coordinates
+            elif projection == 'xz':
+                coordinates = Co[:, [0, 2]] # Take x and z coordinates
+            elif projection == 'yz':
+                coordinates = Co[:, 1:] # Take y and z coordinates
+            else:
+                raise NotImplementedError('Projection type not implemented: ' + projection)
+
+            if pType == 'tSZ':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=dY, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            elif pType == 'kSZ':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=b, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            elif pType == 'tau':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=tau, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            else:
+                raise ValueError('Particle type not recognized: ' + pType)
+            
+            field = result.statistic
+            field_total += field
+
+            if i % 10 == 0:
+                print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
+        
         
         print('hist2d time:', time.time() - t0)
         if save:
             if self.simType == 'IllustrisTNG':
                 saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
                             pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field)
+                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
             elif self.simType == 'SIMBA':
                 saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
                             pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field)
+                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
 
-        
-        return field
-    
-    
+        return field_total
+
+
     def loadSubsets(self, pType):
         """Load particle subsets for the specified particle type.
 
@@ -1288,6 +1306,8 @@ class SZMapStacker(SimulationStacker):
                 fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             elif pType == 'kSZ':
                 fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
+            elif pType == 'tau':
+                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             else:
                 raise NotImplementedError('Particle Type not implemented')
 
@@ -1300,6 +1320,8 @@ class SZMapStacker(SimulationStacker):
             if pType == 'tSZ':
                 keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             elif pType == 'kSZ':
+                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
+            elif pType == 'tau':
                 keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
             else:
                 raise NotImplementedError('Particle Type not implemented')
@@ -1334,23 +1356,9 @@ class SZMapStacker(SimulationStacker):
             keys = ['Coordinates', 'Masses']
         read_keys = list(keys)  # copy so we can mutate safely
         
-        addMass = False # This is to handle the case for IllustrisTNG sims not having 'Masses' as a category in sims.
-        if pType == 'gas':
-            pTypeval = 'PartType0'
-        elif pType == 'DM':
-            pTypeval = 'PartType1'
-            
-            if 'Masses' in read_keys and self.simType == 'IllustrisTNG':
-                 read_keys[read_keys.index('Masses')] = 'ParticleIDs'
-                 addMass = True
-        elif pType == 'Stars':
-            pTypeval = 'PartType4'
-        elif pType == 'BH':
-            # TODO: Check that the masses here make sense.
-            pTypeval = 'PartType5'
-        else:
-            raise NotImplementedError('Particle Type not implemented')
-
+        pTypeVal = 'PartType0'
+        
+        
         particles = {}
         with h5py.File(snapPath, 'r') as f:
             # Print all top-level groups/datasets
@@ -1359,11 +1367,8 @@ class SZMapStacker(SimulationStacker):
             # particles = f['PartType0']
             header = dict(f['Header'].attrs.items())
             for key in read_keys:
-                particles[key] = f[pTypeval][key][:] # type: ignore
+                particles[key] = f[pTypeVal][key][:] # type: ignore
 
-        if addMass:
-            particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
-            del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
                 
         particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
         return particles

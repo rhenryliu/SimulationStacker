@@ -195,7 +195,7 @@ class SZMapStacker(SimulationStacker):
 
             
             # for each cell, compute its total volume (gas mass by gas density) and convert density units
-            dV = M/D # cMpc/h^3 (MTNG) or ckpc/h^3 (TNG)
+            dV = M/D # ckpc/h^3 
             D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
             # unit_c = 1.e10 # TNG faq is wrong (see README.md)
 
@@ -257,91 +257,4 @@ class SZMapStacker(SimulationStacker):
                 np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
 
         return field_total
-
-
-    def loadSubsets(self, pType):
-        """Load particle subsets for the specified particle type.
-
-        Args:
-            pType (str): The type of particles to load for the SZ effects. Either 'tSZ', 'kSZ', or 'tau'.
-
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
-
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-       
-        if self.simType == 'IllustrisTNG':
-            pTypeval = 'gas'
-            if pType =='tSZ':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'kSZ':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'tau':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            else:
-                raise NotImplementedError('Particle Type not implemented')
-
-            particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pTypeval, fields=fields)
-
-                                        
-        elif self.simType == 'SIMBA':
-            pTypeval = 'PartType0'
-
-            if pType == 'tSZ':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'kSZ':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'tau':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            else:
-                raise NotImplementedError('Particle Type not implemented')
-            
-            # keys = ['Coordinates', 'Masses']
-            snapPath = self.simPath + 'snapshots/snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
-            particles = {}
-            with h5py.File(snapPath, 'r') as f:
-                header = dict(f['Header'].attrs.items())
-                for key in keys:
-                    particles[key] = f[pTypeval][key][:] # type: ignore
-            
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
-
-    def loadSubset(self, pType, snapPath, keys=None):
-        """Load a subset of particles from the snapshot.
-
-        Args:
-            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
-            snapPath (str): The path to the snapshot file.
-            keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
-
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
-
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-         # Avoid mutable default arg; build a fresh list each call
-        if keys is None:
-            keys = ['Coordinates', 'Masses']
-        read_keys = list(keys)  # copy so we can mutate safely
-        
-        pTypeVal = 'PartType0'
-        
-        
-        particles = {}
-        with h5py.File(snapPath, 'r') as f:
-            # Print all top-level groups/datasets
-            # print("Keys:")
-            # print(list(f.keys()))
-            # particles = f['PartType0']
-            header = dict(f['Header'].attrs.items())
-            for key in read_keys:
-                particles[key] = f[pTypeVal][key][:] # type: ignore
-
-                
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
 

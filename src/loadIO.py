@@ -67,50 +67,68 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
     return haloes
 
 
-def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=None, header=None):
+def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=None, header=None, keys=None):
     """Load particle subsets for the specified particle type.
 
     Args:
         sim_path (str): Base path to the simulation.
         snapshot (int): Snapshot number.
         sim_type (str): The type of simulation.
-        p_type (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
+        p_type (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars', 'tSZ', 'kSZ', 'tau').
         sim_name (str, optional): Name of the simulation (for SIMBA).
         feedback (str, optional): Feedback type (for SIMBA).
         header (dict, optional): Simulation header (required for mass conversion).
+        keys (list, optional): Specific keys to load. If None, defaults are used based on particle type.
 
     Returns:
         dict: A dictionary containing the particle properties.
     """
     if header is None:
         raise ValueError("Header is required for mass conversion")
+    
+    # Handle SZ particle types by mapping to gas with appropriate fields
+    if p_type in ['tSZ', 'kSZ', 'tau']:
+        actual_p_type = 'gas'
+        if keys is None:
+            keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
+    else:
+        actual_p_type = p_type
+        if keys is None:
+            keys = ['Coordinates', 'Masses']
         
     if sim_type == 'IllustrisTNG':
-        if p_type == 'gas':
-            particles = il.snapshot.loadSubset(sim_path, snapshot, p_type, fields=['Masses', 'Coordinates'])
-        elif p_type == 'DM':
-            particles = il.snapshot.loadSubset(sim_path, snapshot, p_type, fields=['ParticleIDs', 'Coordinates'])
-            particles['Masses'] = header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
-        elif p_type == 'Stars':
-            particles = il.snapshot.loadSubset(sim_path, snapshot, p_type, fields=['Masses', 'Coordinates'])
-        elif p_type == 'BH':
-            particles = il.snapshot.loadSubset(sim_path, snapshot, p_type, fields=['Masses', 'Coordinates'])
+        if actual_p_type == 'gas':
+            if keys is None:
+                particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=['Masses', 'Coordinates'])
+            else:
+                particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=keys)
+        elif actual_p_type == 'DM':
+            # Handle DM case where we need ParticleIDs for mass
+            dm_keys = list(keys) if keys else ['Coordinates', 'Masses']
+            if 'Masses' in dm_keys:
+                dm_keys[dm_keys.index('Masses')] = 'ParticleIDs'
+                particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=dm_keys)
+                particles['Masses'] = header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])
+                del particles['ParticleIDs']
+            else:
+                particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=dm_keys)
+        elif actual_p_type in ['Stars', 'BH']:
+            particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=keys)
         else:
             raise NotImplementedError('Particle Type not implemented')
                                     
     elif sim_type == 'SIMBA':
-        if p_type == 'gas':
+        if actual_p_type == 'gas':
             p_type_val = 'PartType0'
-        elif p_type == 'DM':
+        elif actual_p_type == 'DM':
             p_type_val = 'PartType1'
-        elif p_type == 'Stars':
+        elif actual_p_type == 'Stars':
             p_type_val = 'PartType4'
-        elif p_type == 'BH':
+        elif actual_p_type == 'BH':
             p_type_val = 'PartType5'
         else:
             raise NotImplementedError('Particle Type not implemented')
         
-        keys = ['Coordinates', 'Masses']
         snap_path = sim_path + 'snapshots/snap_' + sim_name + '_' + str(snapshot) + '.hdf5'
         particles = {}
         with h5py.File(snap_path, 'r') as f:
@@ -128,7 +146,7 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
         sim_path (str): Base path to the simulation.
         snapshot (int): Snapshot number.
         sim_type (str): The type of simulation.
-        p_type (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
+        p_type (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars', 'tSZ', 'kSZ', 'tau').
         snap_path (str): The path to the snapshot file.
         header (dict, optional): Simulation header (required for mass conversion).
         keys (list, optional): The keys to load from the snapshot.
@@ -144,17 +162,23 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     if header is None:
         raise ValueError("Header is required for mass conversion")
     
+    # Handle SZ particle types by mapping to gas
+    if p_type in ['tSZ', 'kSZ', 'tau']:
+        actual_p_type = 'gas'
+    else:
+        actual_p_type = p_type
+    
     add_mass = False  # Handle IllustrisTNG DM case without Masses field
-    if p_type == 'gas':
+    if actual_p_type == 'gas':
         p_type_val = 'PartType0'
-    elif p_type == 'DM':
+    elif actual_p_type == 'DM':
         p_type_val = 'PartType1'
         if 'Masses' in read_keys and sim_type == 'IllustrisTNG':
             read_keys[read_keys.index('Masses')] = 'ParticleIDs'
             add_mass = True
-    elif p_type == 'Stars':
+    elif actual_p_type == 'Stars':
         p_type_val = 'PartType4'
-    elif p_type == 'BH':
+    elif actual_p_type == 'BH':
         p_type_val = 'PartType5'
     else:
         raise NotImplementedError('Particle Type not implemented')

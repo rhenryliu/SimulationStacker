@@ -8,4 +8,5 @@ venv/
 Outputs_Perlmutter/
 figures/
 .vscode/
-boryanas_files/
+external/
+tests/

@@ -565,35 +565,7 @@ class SimulationStacker(object):
         else:
             raise NotImplementedError('Filter Type not implemented: ' + filterType)
 
-    # def loadField(self, pType, nPixels=None, projection='xy'):
-    #     """Load a precomputed field from file for a given particle type.
 
-    #     Args:
-    #         pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'.
-    #         nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
-    #         projection (str, optional): Direction of the field projection. Defaults to 'xy'.
-
-    #     Returns:
-    #         np.ndarray: 2D numpy array of the field for the given particle type.
-    #     """
-    #     if nPixels is None:
-    #         nPixels = self.nPixels
-        
-    #     try:    
-    #         if self.simType == 'IllustrisTNG':
-    #             saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-    #                 pType + '_' + str(nPixels) + '_' + projection
-    #             field = np.load(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy')
-    #         elif self.simType == 'SIMBA':
-    #             saveName = self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' + \
-    #                 pType + '_' + str(nPixels) + '_' + projection
-    #             field = np.load(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy')
-    #     except FileNotFoundError:
-    #         raise ValueError(f"Field for file '{saveName}' not found. Please compute it first.")
-        
-    #     return field
-    
-    
     # Other util functions:
     
     @staticmethod
@@ -658,10 +630,10 @@ class SimulationStacker(object):
         return load_halos(self.simPath, self.snapshot, simType, 
                          sim_name=self.sim, header=self.header)
 
-    def loadSubsets(self, pType):
+    def loadSubsets(self, pType, keys=None):
         """Load particle subsets for the specified particle type."""
         return load_subsets(self.simPath, self.snapshot, self.simType, pType,
-                           sim_name=self.sim, feedback=self.feedback, header=self.header)
+                           sim_name=self.sim, feedback=self.feedback, header=self.header, keys=keys)
 
     def loadSubset(self, pType, snapPath, keys=None):
         """Load a subset of particles from the snapshot."""

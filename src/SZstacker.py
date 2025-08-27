@@ -23,6 +23,7 @@ import illustris_python as il
 
 from tools import numba_tsc_3D, hist2d_numba_seq
 from stacker import SimulationStacker
+from utils import fft_smoothed_map
 
 
 class SZMapStacker(SimulationStacker):
@@ -95,7 +96,7 @@ class SZMapStacker(SimulationStacker):
 
         # Convolve the map with a Gaussian beam (only if beamsize is not None)
         if beamsize is not None:
-            map_ = self.convolveMap(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
+            map_ = fft_smoothed_map(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
 
         if save:
             if self.simType == 'IllustrisTNG':
@@ -140,7 +141,8 @@ class SZMapStacker(SimulationStacker):
         gamma = 5/3. # unitless. Adiabatic Index
         k_B = 1.3807e-16 # cgs (erg/K)
         m_p = 1.6726e-24 # g
-        unit_c = 1.e10 # TNG faq is wrong (see README.md)
+        # unit_c = 1.e10 # TNG faq is wrong (see README.md)
+        unit_c = 1.023**2*1.e10
         X_H = 0.76 # unitless
         sigma_T = 6.6524587158e-29*1.e2**2 # cm^2
         m_e = 9.10938356e-28 # g
@@ -195,7 +197,7 @@ class SZMapStacker(SimulationStacker):
             # for each cell, compute its total volume (gas mass by gas density) and convert density units
             dV = M/D # cMpc/h^3 (MTNG) or ckpc/h^3 (TNG)
             D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
-            unit_c = 1.e10 # TNG faq is wrong (see README.md)
+            # unit_c = 1.e10 # TNG faq is wrong (see README.md)
 
             # obtain electron temperature, electron number density and velocity
             Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K

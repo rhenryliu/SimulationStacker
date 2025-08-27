@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 
+import scipy
 from scipy.stats import binned_statistic_2d
 from scipy.ndimage import gaussian_filter
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -22,6 +23,10 @@ import glob
 import illustris_python as il 
 
 from tools import numba_tsc_3D, hist2d_numba_seq
+from utils import fft_smoothed_map
+from halos import select_massive_halos, halo_ind
+from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
+from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 
 
 class SimulationStacker(object):
@@ -128,7 +133,7 @@ class SimulationStacker(object):
 
         # Convolve the map with a Gaussian beam (only if beamsize is not None)
         if beamsize is not None:
-            map_ = self.convolveMap(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
+            map_ = fft_smoothed_map(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
 
         if save:
             if self.simType == 'IllustrisTNG':
@@ -143,7 +148,9 @@ class SimulationStacker(object):
         return map_
 
     def convolveMap(self, map_, fwhm_arcmin, pixel_size_arcmin):
-        """Convolve the map with a Gaussian beam.
+        """
+        DEPRECIATED: Check below for new Convolution code
+        Convolve the map with a Gaussian beam.
 
         Args:
             map_ (np.ndarray): 2D numpy array of the field for the given particle type.
@@ -161,6 +168,27 @@ class SimulationStacker(object):
         
         return convolved_map
     
+    # def get_smooth_density(D, fwhm, Lbox, pizel_size_arcmin, N_dim):
+    #     """
+    #     Smooth density map D ((0, Lbox] and N_dim^2 cells) with Gaussian beam of FWHM
+    #     """
+    #   
+    #     kstep = 2*np.pi/(N_dim*np.pi/180*pizel_size_arcmin)
+    #     #karr = np.fft.fftfreq(N_dim, d=Lbox/(2*np.pi*N_dim)) # physical (not correct)
+    #     karr = np.fft.fftfreq(N_dim, d=Lboxdeg*np.pi/180./(2*np.pi*N_dim)) # angular
+    #     print("kstep = ", kstep, karr[1]-karr[0]) # N_dim/d gives kstep
+    #
+    #     # fourier transform the map and apply gaussian beam
+    #     D = D.astype(np.float32)
+    #     dfour = scipy.fft.fftn(D, workers=-1)
+    #     dksmo = np.zeros((N_dim, N_dim), dtype=np.complex64)
+    #     ksq = np.zeros((N_dim, N_dim), dtype=np.complex64)
+    #     ksq[:, :] = karr[None, :]**2+karr[:,None]**2
+    #     dksmo[:, :] = SimulationStacker.gauss_beam(ksq, fwhm)*dfour
+    #     drsmo = np.real(scipy.fft.ifftn(dksmo, workers=-1))
+    #
+    #     return drsmo
+
     def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
         """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
@@ -328,7 +356,7 @@ class SimulationStacker(object):
         haloes = self.loadHalos(self.simType)
         haloMass = haloes['GroupMass']
         haloPos = haloes['GroupPos']
-        halo_mask = SimulationStacker.select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
+        halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
         print('Number of halos selected:', halo_mask.shape[0])
         
         RadPixel = radDistance / arcminPerPixel # Convert to pixels
@@ -336,9 +364,9 @@ class SimulationStacker(object):
         # Fix the stacking function:
         # filterFunc = SimulationStacker.total_mass
         if filterType == 'cumulative':
-            filterFunc = SimulationStacker.total_mass
+            filterFunc = total_mass
         elif filterType == 'CAP':
-            filterFunc = SimulationStacker.CAP
+            filterFunc = CAP
         #TODO: DSigma Filter Function.
 
 
@@ -452,7 +480,7 @@ class SimulationStacker(object):
         haloMass = haloes['GroupMass']
         haloPos = haloes['GroupPos']
         
-        mass_min, mass_max, _ = self.halo_ind(2)
+        mass_min, mass_max, _ = halo_ind(2)
         
         halo_mask = np.where(np.logical_and((haloMass > mass_min), (haloMass < mass_max)))[0]
         print(halo_mask.shape)
@@ -472,9 +500,9 @@ class SimulationStacker(object):
         # Fix the stacking function:
         # filterFunc = SimulationStacker.total_mass
         if filterType == 'cumulative':
-            filterFunc = SimulationStacker.total_mass
+            filterFunc = total_mass
         elif filterType == 'CAP':
-            filterFunc = SimulationStacker.CAP
+            filterFunc = CAP
         #TODO: DSigma Filter Function.
 
 
@@ -532,7 +560,7 @@ class SimulationStacker(object):
             return radii, profiles
         elif filterType == 'CAP':
             radii_CAP = np.linspace(minRadius, maxRadius, 25)
-            cap_profiles = SimulationStacker.CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
+            cap_profiles = CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
             return radii_CAP, cap_profiles
         else:
             raise NotImplementedError('Filter Type not implemented: ' + filterType)
@@ -565,177 +593,9 @@ class SimulationStacker(object):
         
     #     return field
     
-    def loadData(self, pType, nPixels=None, projection='xy', type='field'):
-        """Load a precomputed field or map from file for a given particle type.
-
-        Args:
-            pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'.
-            nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
-            projection (str, optional): Direction of the field projection. Defaults to 'xy'.
-            type (str, optional): Type of data to load ('field' or 'map'). Defaults to 'field'.
-
-        Returns:
-            np.ndarray: 2D numpy array of the field or map for the given particle type.
-        """
-        if nPixels is None:
-            nPixels = self.nPixels
-
-        suffix = '_map' if type == 'map' else ''
-        try:
-            if self.simType == 'IllustrisTNG':
-                saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + suffix
-                data = np.load(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy')
-            elif self.simType == 'SIMBA':
-                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-                            pType + '_' + str(nPixels) + '_' + projection + suffix )
-                data = np.load(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy')
-        except FileNotFoundError:
-            raise ValueError(f"Data for file '{saveName}' not found. Please compute it first.")
-
-        return data
-
-    # Filter Functions:
-
-    @staticmethod
-    def total_mass(mass_grid, r_grid, r):
-        """ Cumulative Mass Filter
-
-        Args:
-            mass_grid (np.ndarray): 2D array of mass values in the grid.
-            r_grid (np.ndarray): 2D array of radial distances from the centre of the mass grid. Same shape as mass_grid.
-            r (float): radius at which to compute the cumulative mass.
-
-        Returns:
-            float: cumulative mass
-        """
-       
-        mass_tot = np.sum(mass_grid[r_grid<r])
-        return mass_tot        
-
-    @staticmethod
-    def CAP(mass_grid, r_grid, r):
-        """Compensated Aperture Photometry (CAP) Filter, see papers on kSZ/tSZ stacking
-
-
-        Args:
-            mass_grid (np.ndarray): 2D array of mass values in the grid.
-            r_grid (np.ndarray): 2D array of radial distances from the centre of the mass grid. Same shape as mass_grid.
-            r (float): radius at which to compute the cumulative mass.
-
-        Returns:
-            float: cumulative mass
-        """
-
-        r1 = r * np.sqrt(2.)
-        inDisk = 1.*(r_grid <= r)
-        inRing = 1.*(r_grid > r)*(r_grid <= r1)
-        inRing *= np.sum(inDisk) / np.sum(inRing) # Normalize the ring
-        filterW = inDisk - inRing
-
-        filtMap = np.sum(filterW * mass_grid)
-        return filtMap
-
-    @staticmethod
-    def delta_sigma(mass_grid, r_grid, r, dr=0.1):
-        """Delta Sigma Filter, note that the amplitude of this filter is not necessarily
-        correct
-
-        Args:
-            mass_grid (np.ndarray): 2D array of mass values in the grid.
-            r_grid (np.ndarray): 2D array of radial distances from the centre of the mass grid. Same shape as mass_grid.
-            r (float): radius at which to compute the Delta Sigma profile.
-            dr (float, optional): area at which to aveage the surface mass density. Defaults to 0.1.
-
-        Returns:
-            np.ndarray: The computed Delta Sigma profile.
-        """
-
-        mean_sigma = np.sum(mass_grid[r_grid<r]) / (np.pi*r**2)
-        # mean_sigma = np.mean(mass_grid[r_grid<r]) 
-
-        r_mask = np.logical_and((r_grid >= r), (r_grid < r+dr))
-        sigma_value = np.sum(mass_grid[r_mask]) / (2*np.pi*r*dr)
-        # sigma_value = np.mean(mass_grid[r_mask])
-
-        return mean_sigma - sigma_value
     
-    @staticmethod
-    def CAP_from_mass(r, radii_2D, M_2D, k=3):
-        """Compute the analytic variant Compensated Aperture Photometry (CAP) profile from the mass distribution.
-        CAP(r) = 2 * M(r) - M(sqrt(2) * r)
-
-        Args:
-            r (float): The radius at which to compute the profile.
-            radii_2D (np.ndarray): 1D array of radial distances. (This is the radial distance of the interpolated mass profile.)
-            M_2D (np.ndarray): 1D or 2D array of mass values.
-            k (int, optional): The order of the spline interpolation. Defaults to 3.
-
-        Raises:
-            ValueError: If the input arrays are not compatible.
-
-        Returns:
-            np.ndarray: The computed CAP profile. 1D or 2D array depending on the input M_2D.
-        """
-        
-        r = np.atleast_1d(r)
-        
-        if M_2D.ndim == 1:
-            M_interp = InterpolatedUnivariateSpline(radii_2D, M_2D, k=k)
-            return 2 * M_interp(r) - M_interp(np.sqrt(2) * r) # type: ignore
-
-        elif M_2D.ndim == 2:
-            result = []
-            for i in range(M_2D.shape[1]):
-                M_interp = InterpolatedUnivariateSpline(radii_2D, M_2D[:, i], k=k)
-                cap = 2 * M_interp(r) - M_interp(np.sqrt(2) * r) # type: ignore
-                result.append(cap)
-            return np.stack(result, axis=-1)  # shape (n, l)
-
-        else:
-            raise ValueError("M_2D must be either a 1D or 2D array.")
-
-    @staticmethod
-    def DSigma_from_mass(r, radii_2D, M_2D, k=3):
-        """Compute the analytic variant of the Delta Sigma profile from the mass distribution.
-        DSigma(r) = M(r)/(pi*r^2) - dM/dr/(2*pi*r)
-
-        Args:
-            r (float): The radius at which to compute the profile.
-            radii_2D (np.ndarray): 1D array of radial distances. 
-                (This is the radial distance of the interpolated mass profile.)
-            M_2D (np.ndarray): 1D or 2D array of mass values.
-            k (int, optional): The order of the spline interpolation. Defaults to 3.
-
-        Raises:
-            ValueError: If the input arrays are not compatible.
-
-        Returns:
-            np.ndarray: The computed Delta Sigma profile.
-        """
-        
-        r = np.atleast_1d(r)
-
-        if M_2D.ndim == 1:
-            M_interp = InterpolatedUnivariateSpline(radii_2D, M_2D, k=k)
-            dM_dr_interp = M_interp.derivative()
-            return M_interp(r)/(np.pi*r**2) - dM_dr_interp(r)/(2*np.pi*r)
-
-        elif M_2D.ndim == 2:
-            result = []
-            for i in range(M_2D.shape[1]):
-                M_interp = InterpolatedUnivariateSpline(radii_2D, M_2D[:, i], k=k)
-                dM_dr_interp = M_interp.derivative()
-                dsigma = M_interp(r)/(np.pi*r**2) - dM_dr_interp(r)/(2*np.pi*r)
-                result.append(dsigma)
-            return np.stack(result, axis=-1)  # shape (n, l)
-
-        else:
-            raise ValueError("M_2D must be either a 1D or 2D array.")
-
-
     # Other util functions:
-
+    
     @staticmethod
     def cutout_2d_periodic(array, center, length):
         """
@@ -783,595 +643,199 @@ class SimulationStacker(object):
         
         return radial_distances
     
-    def halo_ind(self, ind):
-        """Simple wrapper that masks haloes into mass bins.
 
-        Args:
-            ind (int): Index of the mass bin.
-
-        Returns:
-            tuple: (mass_min, mass_max, title_str) for the given mass bin.
-        """
-        if ind == 0:
-            mass_min = 5e11 # solar masses
-            mass_max = 1e12 # solar masses
-            title_str = r'$5\times 10^{11} M_\odot < M_{\rm halo} < 10^{12} M_\odot$, '
-        elif ind == 1:
-            mass_min = 1e12 # solar masses
-            mass_max = 1e13 # solar masses
-            title_str = r'$1\times 10^{12} M_\odot < M_{\rm halo} < 10^{13} M_\odot$, '
-        elif ind == 2:
-            mass_min = 1e13 # solar masses
-            # mass_max = 1e14 # solar masses
-            # title_str = r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{14} M_\odot$, '
-            mass_max = 1e19 # solar masses /h
-            title_str = r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
-        # elif ind == 3:
-        #     mass_min = 1e14 # solar masses
-        #     mass_max = 1e19 # solar masses
-        #     title_str = r'$M_{\rm halo} > 10^{14} M_\odot$, '
-        else:
-            print('Wrong ind')
-        return mass_min, mass_max, title_str
     
-    import numpy as np
-
-    @staticmethod
-    def select_massive_halos(halo_masses, target_average_mass, upper_mass_bound=None):
-        """
-        Returns a boolean mask selecting the most massive halos such that the average mass
-        of the selected halos is at least the target average mass.
-
-        Parameters
-        halo_masses : np.ndarray
-            Array of halo masses (can be in any consistent units).
-        target_average_mass : float
-            The minimum average mass desired for the selected halos.
-        upper_mass_bound : float, optional
-            If provided, only consider halos with mass ≤ upper_mass_bound.
-
-        Returns
-        mask : np.ndarray
-            Boolean mask array of the same shape as halo_masses, selecting halos
-            that meet the criteria.
-        """
-
-        halo_masses = np.asarray(halo_masses)
-
-        # Apply upper mass bound if given
-        if upper_mass_bound is not None:
-            valid_mask = halo_masses <= upper_mass_bound
-            filtered_masses = halo_masses[valid_mask]
-        else:
-            valid_mask = np.ones_like(halo_masses, dtype=bool)
-            filtered_masses = halo_masses
-
-        # Sort halo masses in descending order
-        sorted_indices = np.argsort(filtered_masses)[::-1]
-        sorted_masses = filtered_masses[sorted_indices]
-
-        # Cumulative average
-        cumulative_sum = np.cumsum(sorted_masses)
-        counts = np.arange(1, len(sorted_masses) + 1)
-        cumulative_avg = cumulative_sum / counts
-
-        # Find the cutoff index where the average drops below the target
-        idx = np.searchsorted(cumulative_avg[::-1], target_average_mass, side='right')
-        if idx == 0:
-            # No subset meets the target average
-            # return np.zeros_like(halo_masses, dtype=bool)
-            raise ValueError("No subset of halos meets the target average mass.")
-
-        cutoff = len(sorted_masses) - idx
-        selected_indices = sorted_indices[:cutoff]
-
-        # Build final mask
-        # final_mask = np.zeros_like(halo_masses, dtype=bool)
-        # final_mask[np.where(valid_mask)[0][selected_indices]] = True
-        final_mask = np.where(valid_mask)[0][selected_indices]
-
-        return final_mask
-
-    @staticmethod
-    def format_string_sci(num):
-        """
-        Converts a number to scientific notation with up to 2 decimal places,
-        removing trailing zeroes after the decimal point.
-
-        Parameters
-        ----------
-        num : float or int
-            The number to convert.
-
-        Returns
-        -------
-        str
-            Scientific notation string (e.g., '5e12', '5.2e13', '5.12e12').
-        """
-        base, exponent = f"{num:.2e}".split('e')
-        base = base.rstrip('0').rstrip('.')  # Remove trailing zeros and decimal if needed
-        return f"{base}e{int(exponent)}"
+    # Some tools for file handling and loading:
 
     def snapPath(self, simType, chunkNum=0, pathOnly=False):
-        """Get the snapshot path for the given simulation type.
-
-        Args:
-            simType (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
-            chunkNum (int): The chunk number for the simulation (Only used in the case of IllustrisTNG currently)
-
-        Returns:
-            str: The path to the snapshot file.
-        """
-        if simType == 'IllustrisTNG':
-            folderPath = self.simPath + '/snapdir_' + str(self.snapshot).zfill(3) + '/'
-            snapPath = il.snapshot.snapPath(self.simPath, self.snapshot, chunkNum=chunkNum)
-        elif simType == 'SIMBA':
-            folderPath = self.simPath + 'snapshots/'
-            snapPath = folderPath + 'snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
-            folderPath = snapPath # This is hacky, we do this because SIMBA has a different file structure. TODO: Make this less hacky.
-        if pathOnly:
-            return folderPath
-        else:
-            return snapPath
+        """Get the snapshot path for the given simulation type."""
+        return snap_path(self.simPath, self.snapshot, simType, 
+                        sim_name=self.sim, feedback=self.feedback, 
+                        chunk_num=chunkNum, path_only=pathOnly)
 
     def loadHalos(self, simType):
-        """Load halo data for the specified simulation type.
+        """Load halo data for the specified simulation type."""
+        return load_halos(self.simPath, self.snapshot, simType, 
+                         sim_name=self.sim, header=self.header)
 
-        Args:
-            simType (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
-
-        Returns:
-            dict: A dictionary containing halo properties (e.g., mass, position, radius).
-        """
-        
-        if simType == 'IllustrisTNG':
-            haloes = {}
-            haloes_cat = il.groupcat.loadHalos(self.simPath, self.snapshot)
-            # haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10 * self.header['HubbleParam'] # Convert to solar masses
-            haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10 # Convert to Msun/h
-            haloes['GroupPos'] = haloes_cat['GroupPos']
-            haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
-            
-        elif simType == 'SIMBA':
-            haloPath = self.simPath + 'catalogs/' +  self.sim + '_' + str(self.snapshot) + '.hdf5'
-            haloes = {}
-            with h5py.File(haloPath, 'r') as f:
-                # Print all top-level groups/datasets
-                # print("Keys:")
-                # print(f['halo_data']['dicts'].keys())
-                haloes['GroupPos'] = f['halo_data']['pos'][:] * self.header['HubbleParam'] # kpc/h # type: ignore
-                # haloes['GroupMass'] = f['halo_data']['dicts']['masses.total'][:] # SIMBA already in solar masses (I think)
-                haloes['GroupMass'] = f['halo_data']['dicts']['masses.total'][:] * self.header['HubbleParam'] # Convert to Msun/h # type: ignore
-                # haloes['GroupMass'] = f['halo_data']['dicts']['virial_quantities.m200c'][:]
-                haloes['GroupRad'] = f['halo_data']['dicts']['virial_quantities.r200c'][:] * self.header['HubbleParam'] # kpc/h # type: ignore
-        return haloes
-    
     def loadSubsets(self, pType):
-        """Load particle subsets for the specified particle type.
-
-        Args:
-            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
-
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
-
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-        
-        if self.simType == 'IllustrisTNG':
-            if pType =='gas':
-                particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
-            elif pType == 'DM':
-                particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['ParticleIDs','Coordinates'])
-                particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
-            elif pType == 'Stars':
-                particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
-            elif pType == 'BH':
-                # TODO: Check to make sure that the masses here are correct.
-                particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
-            else:
-                raise NotImplementedError('Particle Type not implemented')
-                                        
-        elif self.simType == 'SIMBA':
-            if pType == 'gas':
-                pTypeval = 'PartType0'
-            elif pType == 'DM':
-                pTypeval = 'PartType1'
-            elif pType == 'Stars':
-                pTypeval = 'PartType4'
-            elif pType == 'BH':
-                # TODO: Check that the masses here make sense.
-                pTypeval = 'PartType5'
-            else:
-                raise NotImplementedError('Particle Type not implemented')
-            
-            keys = ['Coordinates', 'Masses']
-            snapPath = self.simPath + 'snapshots/snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
-            particles = {}
-            with h5py.File(snapPath, 'r') as f:
-                # Print all top-level groups/datasets
-                # print("Keys:")
-                # print(list(f.keys()))
-                # particles = f['PartType0']
-                header = dict(f['Header'].attrs.items())
-                for key in keys:
-                    particles[key] = f[pTypeval][key][:] # type: ignore
-            
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
+        """Load particle subsets for the specified particle type."""
+        return load_subsets(self.simPath, self.snapshot, self.simType, pType,
+                           sim_name=self.sim, feedback=self.feedback, header=self.header)
 
     def loadSubset(self, pType, snapPath, keys=None):
-        """Load a subset of particles from the snapshot.
+        """Load a subset of particles from the snapshot."""
+        return load_subset(self.simPath, self.snapshot, self.simType, pType, snapPath,
+                          header=self.header, keys=keys, sim_name=self.sim)
 
-        Args:
-            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
-            snapPath (str): The path to the snapshot file.
-            keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
-
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
-
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-         # Avoid mutable default arg; build a fresh list each call
-        if keys is None:
-            keys = ['Coordinates', 'Masses']
-        read_keys = list(keys)  # copy so we can mutate safely
-        
-        addMass = False # This is to handle the case for IllustrisTNG sims not having 'Masses' as a category in sims.
-        if pType == 'gas':
-            pTypeval = 'PartType0'
-        elif pType == 'DM':
-            pTypeval = 'PartType1'
-            
-            if 'Masses' in read_keys and self.simType == 'IllustrisTNG':
-                 read_keys[read_keys.index('Masses')] = 'ParticleIDs'
-                 addMass = True
-        elif pType == 'Stars':
-            pTypeval = 'PartType4'
-        elif pType == 'BH':
-            # TODO: Check that the masses here make sense.
-            pTypeval = 'PartType5'
-        else:
-            raise NotImplementedError('Particle Type not implemented')
-
-        particles = {}
-        with h5py.File(snapPath, 'r') as f:
-            # Print all top-level groups/datasets
-            # print("Keys:")
-            # print(list(f.keys()))
-            # particles = f['PartType0']
-            header = dict(f['Header'].attrs.items())
-            for key in read_keys:
-                particles[key] = f[pTypeval][key][:] # type: ignore
-
-        if addMass:
-            particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
-            del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
-                
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
-
-
-class SZMapStacker(SimulationStacker):
-    
-    def __init__(self,
-                 sim: str, 
-                 snapshot: int, 
-                 nPixels=2000, 
-                 simType='IllustrisTNG', 
-                 feedback=None, # Only for SIMBA
-                 z=0.0):
-        """Initialize the SZMapStacker.
-
-        Args:
-            sim (str): The simulation name.
-            snapshot (int): The snapshot number.
-            SZ (str): The SZ map type. Either 'tSZ', 'kSZ', or 'tau'.
-            nPixels (int, optional): The number of pixels in the map. Defaults to 2000.
-            simType (str, optional): The type of simulation. Defaults to 'IllustrisTNG'.
-            feedback (_type_, optional): Feedback mechanism. Defaults to None.
-        """
-        
-        super().__init__(sim, snapshot, nPixels, simType=simType, feedback=feedback, z=z)
-
-
-    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5):
-        """Create a map from the simulation data.
-
-        Args:
-            pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'.
-                Note that in the case of 'kSZ', an optical depth (tau) map will be created instead of a velocity map.
-            z (float, optional): The redshift to use for the map. Defaults to None.
-            projection (str, optional): The projection to use for the map. Defaults to 'xy'.
-            beamsize (float, optional): The size of the beam to use for the map. Defaults to 1.6.
-            save (bool, optional): Whether to save the map to disk. Defaults to False.
-            load (bool, optional): Whether to load the map from disk. Defaults to True.
-            pixelSize (float, optional): The size of the pixels in the map. Defaults to 0.5.
-        """
-        
-        if z is None:
-            z = self.z
-        
-        # First define cosmology
-        cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
-
-        # Get distance to the snapshot redshift
-        dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
-        dA *= self.header['HubbleParam']  # Convert to kpc/h
-        
-        # Get the box size in angular units.
-        theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes
-        print(f"Map size at z={z}: {theta_arcmin:.2f} arcmin")
-
-        # Round up to the nearest integer, pixel size is 0.5 arcmin as in ACT
-        nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
-        arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
-        # beamsize_pixel = beamsize / arcminPerPixel  # Convert arcminutes to pixels
-        
-        
-
-        # Now that we know the expected pixel size, we try to load the map first before computing it:
-        if load:
-            try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map')
-            except ValueError as e:
-                print(e)
-                print("Computing the map instead...")    
-
-        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load)
-
-        # Convolve the map with a Gaussian beam (only if beamsize is not None)
-        if beamsize is not None:
-            map_ = self.convolveMap(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
-
-        if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
-            elif self.simType == 'SIMBA':
-                saveName = self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
-
-        return map_
-
-        # TODO
-        pass
-    
-    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
-        """Create a map from the simulation data. 
-        Much of the algo for this method comes from the SZ_TNG repo on Github authored by Boryana Hadzhiyska.
-
-        Args:
-            pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'.
-                Note that in the case of 'kSZ', an optical depth (tau) map will be created instead of a velocity map.
-            z (float, optional): The redshift to use for the map. Defaults to None.
-            nPixels: Size of the output map in pixels. Defaults to self.nPixels.
-            save (bool, optional): Whether to save the map to disk. Defaults to False.
-            load (bool, optional): Whether to load the map from disk. Defaults to True.
-            pixelSize (float, optional): The size of the pixels in the map. Defaults to 0.5.
-        """
+    def loadData(self, pType, nPixels=None, projection='xy', type='field'):
+        """Load a precomputed field or map from file."""
         if nPixels is None:
             nPixels = self.nPixels
-            
-        if load:
-            try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
-            except ValueError as e:
-                print(e)
-                print("Computing the field instead...")
+        return load_data(self.simPath, self.simType, self.sim, self.snapshot, 
+                        self.feedback, pType, nPixels, projection, type)
 
-        # If loading fails, we then compute the necessary fields. Much of the code below is the same as the SZ_TNG repo.            
-        # Define some necessary parameters: (Physical units in cgs)
-        gamma = 5/3. # unitless. Adiabatic Index
-        k_B = 1.3807e-16 # cgs (erg/K)
-        m_p = 1.6726e-24 # g
-        unit_c = 1.e10 # TNG faq is wrong (see README.md)
-        X_H = 0.76 # unitless
-        sigma_T = 6.6524587158e-29*1.e2**2 # cm^2
-        m_e = 9.10938356e-28 # g
-        c = 29979245800. # cm/s
-        const = k_B*sigma_T/(m_e*c**2) # cgs (cm^2/K), constant for optical depth computation
-        kpc_to_cm = ((1.*u.kpc).to(u.cm)).value # cm
-        solar_mass = 1.989e33 # g
+    # def snapPath(self, simType, chunkNum=0, pathOnly=False):
+    #     """Get the snapshot path for the given simulation type.
 
+    #     Args:
+    #         simType (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
+    #         chunkNum (int): The chunk number for the simulation (Only used in the case of IllustrisTNG currently)
 
-        # sim params (same for MTNG and TNG)
-        h = self.header['HubbleParam'] # Hubble Parameter
-        unit_mass = 1.e10*(solar_mass/h)
-        unit_dens = 1.e10*(solar_mass/h)/(kpc_to_cm/h)**3 # g/cm**3 # note density has units of h in it
-        unit_vol = (kpc_to_cm/h)**3 # cancels unit dens division from previous, so h doesn't matter neither does kpc
+    #     Returns:
+    #         str: The path to the snapshot file.
+    #     """
+    #     if simType == 'IllustrisTNG':
+    #         folderPath = self.simPath + '/snapdir_' + str(self.snapshot).zfill(3) + '/'
+    #         snapPath = il.snapshot.snapPath(self.simPath, self.snapshot, chunkNum=chunkNum)
+    #     elif simType == 'SIMBA':
+    #         folderPath = self.simPath + 'snapshots/'
+    #         snapPath = folderPath + 'snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
+    #         folderPath = snapPath # This is hacky, we do this because SIMBA has a different file structure. TODO: Make this less hacky.
+    #     if pathOnly:
+    #         return folderPath
+    #     else:
+    #         return snapPath
 
+    # def loadHalos(self, simType):
+    #     """Load halo data for the specified simulation type.
 
-        # z = zs[snaps == snapshot] # TODO: Implement the automatic selection of snapshot from redshift (or vice versa)
-        z = self.z
-        a = 1./(1+self.z) # scale factor
-        Lbox_hkpc = self.header['BoxSize'] # kpc/h
+    #     Args:
+    #         simType (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
+
+    #     Returns:
+    #         dict: A dictionary containing halo properties (e.g., mass, position, radius).
+    #     """
         
-        
-        # Now we compute the SZ fields iteratively, iterating over every snapshot chunk: (Note SIMBA only has one chunk)
-        
-        # Get chunks:        
-        folderPath = self.snapPath(self.simType, pathOnly=True)
-        if self.simType == 'IllustrisTNG':
-            snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
-        elif self.simType == 'SIMBA':
-            # print('Folder Path:', folderPath + f'*_{self.snapshot}.hdf5')
-            snaps = glob.glob(folderPath)
-            # print('Snaps:', snaps)
-
-        # Convert coordinates to pixel coordinates        
-        gridSize = [nPixels, nPixels]
-        minMax = [0, self.header['BoxSize']]
-        field_total = np.zeros(gridSize)
-        
-        t0 = time.time()
-        for i, snap in enumerate(snaps):
-
-            particles = self.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
-
-            Co = particles['Coordinates']
-            EA = particles['ElectronAbundance']
-            IE = particles['InternalEnergy']
-            D = particles['Density']
-            M = particles['Masses']
-            V = particles['Velocities']
-
+    #     if simType == 'IllustrisTNG':
+    #         haloes = {}
+    #         haloes_cat = il.groupcat.loadHalos(self.simPath, self.snapshot)
+    #         # haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10 * self.header['HubbleParam'] # Convert to solar masses
+    #         haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10 # Convert to Msun/h
+    #         haloes['GroupPos'] = haloes_cat['GroupPos']
+    #         haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
             
-            # for each cell, compute its total volume (gas mass by gas density) and convert density units
-            dV = M/D # cMpc/h^3 (MTNG) or ckpc/h^3 (TNG)
-            D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
-            unit_c = 1.e10 # TNG faq is wrong (see README.md)
+    #     elif simType == 'SIMBA':
+    #         haloPath = self.simPath + 'catalogs/' +  self.sim + '_' + str(self.snapshot) + '.hdf5'
+    #         haloes = {}
+    #         with h5py.File(haloPath, 'r') as f:
+    #             # Print all top-level groups/datasets
+    #             # print("Keys:")
+    #             # print(f['halo_data']['dicts'].keys())
+    #             haloes['GroupPos'] = f['halo_data']['pos'][:] * self.header['HubbleParam'] # kpc/h # type: ignore
+    #             # haloes['GroupMass'] = f['halo_data']['dicts']['masses.total'][:] # SIMBA already in solar masses (I think)
+    #             haloes['GroupMass'] = f['halo_data']['dicts']['masses.total'][:] * self.header['HubbleParam'] # Convert to Msun/h # type: ignore
+    #             # haloes['GroupMass'] = f['halo_data']['dicts']['virial_quantities.m200c'][:]
+    #             haloes['GroupRad'] = f['halo_data']['dicts']['virial_quantities.r200c'][:] * self.header['HubbleParam'] # kpc/h # type: ignore
+    #     return haloes
+    
+    # def loadSubsets(self, pType):
+    #     """Load particle subsets for the specified particle type.
 
-            # obtain electron temperature, electron number density and velocity
-            Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
-            ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
-            Ve = V*np.sqrt(a) # km/s
+    #     Args:
+    #         pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
 
-            # compute the contribution to the y and b signals of each cell
-            # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
-            # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Compton Y parameter
-            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # kSZ signal
-            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Optical depth. This is what we use for 
-            
-            
-            # Now we make the fields:
-            
-            if projection == 'xy':
-                coordinates = Co[:, :2]  # Take x and y coordinates
-            elif projection == 'xz':
-                coordinates = Co[:, [0, 2]] # Take x and z coordinates
-            elif projection == 'yz':
-                coordinates = Co[:, 1:] # Take y and z coordinates
-            else:
-                raise NotImplementedError('Projection type not implemented: ' + projection)
+    #     Raises:
+    #         NotImplementedError: If the particle type is not implemented.
 
-            if pType == 'tSZ':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=dY, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            elif pType == 'kSZ':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=b, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            elif pType == 'tau':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=tau, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            else:
-                raise ValueError('Particle type not recognized: ' + pType)
-            
-            field = result.statistic
-            field_total += field
-
-            if i % 10 == 0:
-                print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
+    #     Returns:
+    #         dict: A dictionary containing the particle properties.
+    #     """
         
-        
-        print('hist2d time:', time.time() - t0)
-        if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
-            elif self.simType == 'SIMBA':
-                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
-
-        return field_total
-
-
-    def loadSubsets(self, pType):
-        """Load particle subsets for the specified particle type.
-
-        Args:
-            pType (str): The type of particles to load for the SZ effects. Either 'tSZ', 'kSZ', or 'tau'.
-
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
-
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-       
-        if self.simType == 'IllustrisTNG':
-            pTypeval = 'gas'
-            if pType =='tSZ':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'kSZ':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'tau':
-                fields = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            else:
-                raise NotImplementedError('Particle Type not implemented')
-
-            particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pTypeval, fields=fields)
-
+    #     if self.simType == 'IllustrisTNG':
+    #         if pType =='gas':
+    #             particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
+    #         elif pType == 'DM':
+    #             particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['ParticleIDs','Coordinates'])
+    #             particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
+    #         elif pType == 'Stars':
+    #             particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
+    #         elif pType == 'BH':
+    #             # TODO: Check to make sure that the masses here are correct.
+    #             particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
+    #         else:
+    #             raise NotImplementedError('Particle Type not implemented')
                                         
-        elif self.simType == 'SIMBA':
-            pTypeval = 'PartType0'
-
-            if pType == 'tSZ':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'kSZ':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            elif pType == 'tau':
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities']
-            else:
-                raise NotImplementedError('Particle Type not implemented')
+    #     elif self.simType == 'SIMBA':
+    #         if pType == 'gas':
+    #             pTypeval = 'PartType0'
+    #         elif pType == 'DM':
+    #             pTypeval = 'PartType1'
+    #         elif pType == 'Stars':
+    #             pTypeval = 'PartType4'
+    #         elif pType == 'BH':
+    #             # TODO: Check that the masses here make sense.
+    #             pTypeval = 'PartType5'
+    #         else:
+    #             raise NotImplementedError('Particle Type not implemented')
             
-            # keys = ['Coordinates', 'Masses']
-            snapPath = self.simPath + 'snapshots/snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
-            particles = {}
-            with h5py.File(snapPath, 'r') as f:
-                header = dict(f['Header'].attrs.items())
-                for key in keys:
-                    particles[key] = f[pTypeval][key][:] # type: ignore
+    #         keys = ['Coordinates', 'Masses']
+    #         snapPath = self.simPath + 'snapshots/snap_' + self.sim + '_' + str(self.snapshot) + '.hdf5'
+    #         particles = {}
+    #         with h5py.File(snapPath, 'r') as f:
+    #             # Print all top-level groups/datasets
+    #             # print("Keys:")
+    #             # print(list(f.keys()))
+    #             # particles = f['PartType0']
+    #             header = dict(f['Header'].attrs.items())
+    #             for key in keys:
+    #                 particles[key] = f[pTypeval][key][:] # type: ignore
             
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
+    #     particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
+    #     return particles
 
-    def loadSubset(self, pType, snapPath, keys=None):
-        """Load a subset of particles from the snapshot.
+    # def loadSubset(self, pType, snapPath, keys=None):
+    #     """Load a subset of particles from the snapshot.
 
-        Args:
-            pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
-            snapPath (str): The path to the snapshot file.
-            keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
+    #     Args:
+    #         pType (str): The type of particles to load (e.g., 'gas', 'DM', 'Stars').
+    #         snapPath (str): The path to the snapshot file.
+    #         keys (list, optional): The keys to load from the snapshot. Defaults to ['Coordinates', 'Masses'].
 
-        Raises:
-            NotImplementedError: If the particle type is not implemented.
+    #     Raises:
+    #         NotImplementedError: If the particle type is not implemented.
 
-        Returns:
-            dict: A dictionary containing the particle properties.
-        """
-         # Avoid mutable default arg; build a fresh list each call
-        if keys is None:
-            keys = ['Coordinates', 'Masses']
-        read_keys = list(keys)  # copy so we can mutate safely
+    #     Returns:
+    #         dict: A dictionary containing the particle properties.
+    #     """
+    #      # Avoid mutable default arg; build a fresh list each call
+    #     if keys is None:
+    #         keys = ['Coordinates', 'Masses']
+    #     read_keys = list(keys)  # copy so we can mutate safely
         
-        pTypeVal = 'PartType0'
-        
-        
-        particles = {}
-        with h5py.File(snapPath, 'r') as f:
-            # Print all top-level groups/datasets
-            # print("Keys:")
-            # print(list(f.keys()))
-            # particles = f['PartType0']
-            header = dict(f['Header'].attrs.items())
-            for key in read_keys:
-                particles[key] = f[pTypeVal][key][:] # type: ignore
+    #     addMass = False # This is to handle the case for IllustrisTNG sims not having 'Masses' as a category in sims.
+    #     if pType == 'gas':
+    #         pTypeval = 'PartType0'
+    #     elif pType == 'DM':
+    #         pTypeval = 'PartType1'
+            
+    #         if 'Masses' in read_keys and self.simType == 'IllustrisTNG':
+    #              read_keys[read_keys.index('Masses')] = 'ParticleIDs'
+    #              addMass = True
+    #     elif pType == 'Stars':
+    #         pTypeval = 'PartType4'
+    #     elif pType == 'BH':
+    #         # TODO: Check that the masses here make sense.
+    #         pTypeval = 'PartType5'
+    #     else:
+    #         raise NotImplementedError('Particle Type not implemented')
 
+    #     particles = {}
+    #     with h5py.File(snapPath, 'r') as f:
+    #         # Print all top-level groups/datasets
+    #         # print("Keys:")
+    #         # print(list(f.keys()))
+    #         # particles = f['PartType0']
+    #         header = dict(f['Header'].attrs.items())
+    #         for key in read_keys:
+    #             particles[key] = f[pTypeval][key][:] # type: ignore
+
+    #     if addMass:
+    #         particles['Masses'] = self.header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
+    #         del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
                 
-        particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
-        return particles
+    #     particles['Masses'] = particles['Masses'] * 1e10 / self.header['HubbleParam'] # Convert masses to Msun/h
+    #     return particles
 
 
 

@@ -24,7 +24,9 @@ import illustris_python as il
 from tools import numba_tsc_3D, hist2d_numba_seq
 from stacker import SimulationStacker
 from utils import fft_smoothed_map
-
+from halos import select_massive_halos, halo_ind
+from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
+from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 
 class SZMapStacker(SimulationStacker):
     
@@ -139,15 +141,15 @@ class SZMapStacker(SimulationStacker):
         # If loading fails, we then compute the necessary fields. Much of the code below is the same as the SZ_TNG repo.            
         # Define some necessary parameters: (Physical units in cgs)
         gamma = 5/3. # unitless. Adiabatic Index
-        k_B = 1.3807e-16 # cgs (erg/K)
-        m_p = 1.6726e-24 # g
-        # unit_c = 1.e10 # TNG faq is wrong (see README.md)
-        unit_c = 1.023**2*1.e10
-        X_H = 0.76 # unitless
-        sigma_T = 6.6524587158e-29*1.e2**2 # cm^2
-        m_e = 9.10938356e-28 # g
-        c = 29979245800. # cm/s
-        const = k_B*sigma_T/(m_e*c**2) # cgs (cm^2/K), constant for optical depth computation
+        k_B = 1.3807e-16 # cgs (erg/K), Boltzmann constant
+        m_p = 1.6726e-24 # g, mass of proton
+        unit_c = 1.e10 # TNG faq is wrong (see README.md)
+        # unit_c = 1.023**2*1.e10
+        X_H = 0.76 # unitless, primordial hydrogen fraction
+        sigma_T = 6.6524587158e-29*1.e2**2 # cm^2, thomson cross section
+        m_e = 9.10938356e-28 # g, electron mass
+        c = 29979245800. # cm/s, speed of light
+        const = k_B*sigma_T/(m_e*c**2) # cgs (cm^2/K), constant for compton y computation
         kpc_to_cm = ((1.*u.kpc).to(u.cm)).value # cm
         solar_mass = 1.989e33 # g
 
@@ -155,7 +157,9 @@ class SZMapStacker(SimulationStacker):
         # sim params (same for MTNG and TNG)
         h = self.header['HubbleParam'] # Hubble Parameter
         unit_mass = 1.e10*(solar_mass/h)
+        # unit_mass = 1.0 # msun/h, units already converted.
         unit_dens = 1.e10*(solar_mass/h)/(kpc_to_cm/h)**3 # g/cm**3 # note density has units of h in it
+        # unit_dens = 1./(kpc_to_cm/h)**3 # g/cm**3 # note density has units of h in it
         unit_vol = (kpc_to_cm/h)**3 # cancels unit dens division from previous, so h doesn't matter neither does kpc
 
 
@@ -207,11 +211,10 @@ class SZMapStacker(SimulationStacker):
             # compute the contribution to the y and b signals of each cell
             # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
             # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Compton Y parameter
-            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # kSZ signal
-            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h))**2.#d_A**2 # Optical depth. This is what we use for 
-            
-            
+            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Compton Y parameter
+            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
+            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Optical depth. This is what we use for
+
             # Now we make the fields:
             
             if projection == 'xy':
@@ -257,4 +260,118 @@ class SZMapStacker(SimulationStacker):
                 np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
 
         return field_total
+    
+    def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
+                 z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
+                 halo_mass_avg=10**(13.22), halo_mass_upper=None):
+        """Stack the map of a given particle type.
+
+        Args:
+            pType (str): Particle type to stack.
+            filterType (str, optional): Type of filter to apply. Defaults to 'cumulative'.
+            minRadius (float, optional): Minimum radius for stacking. Defaults to 0.2.
+            maxRadius (float, optional): Maximum radius for stacking. Defaults to 6.0.
+            numRadii (int, optional): Number of radial bins for stacking. Defaults to 11.
+            z (float, optional): Redshift of the snapshot. Defaults to None, in which case self.z is used.
+            projection (str, optional): Direction of the field projection. Defaults to 'xy'. Options are ['xy', 'yz', 'xz']
+            save (bool, optional): If True, saves the stacked map to a file. Defaults to True.
+            load (bool, optional): If True, loads the stacked map from a file if it exists. Defaults to True.
+            radDistance (float, optional): Radial distance units for stacking. Defaults to 1 arcmin.
+                Note there is no None option here as in stackField.
+            pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
+            halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
+            halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
+
+        Returns:
+            radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
+            
+        TODO:
+            Add a wrapper for automatic stacking along all 3 projections.
+            Implement the DSigma filter for stacking.
+        """
+
+        
+        if z is None:
+            z = self.z
+        
+        fieldKey = (pType, z, projection, pixelSize)
+        if not (fieldKey in self.maps and self.maps[fieldKey] is not None):
+            self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection,
+                                               save=save, load=load, pixelSize=pixelSize)
+        
+        nPixels = self.maps[fieldKey].shape[0]  # Get the number of pixels from the loaded map
+        assert self.maps[fieldKey].shape == (nPixels, nPixels), f"Map shape mismatch: {self.maps[fieldKey].shape} != {(nPixels, nPixels)}"
+
+        # Get the true arcmin per pixel:
+        cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
+        # Get distance to the snapshot redshift
+        dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
+        dA *= self.header['HubbleParam']  # Convert to kpc/h
+        # Get the box size in angular units.
+        theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes
+        arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
+
+
+        # Load the halo catalog
+        haloes = self.loadHalos(self.simType)
+        haloMass = haloes['GroupMass']
+        haloPos = haloes['GroupPos']
+        halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
+        print('Number of halos selected:', halo_mask.shape[0])
+        
+        RadPixel = radDistance / arcminPerPixel # Convert to pixels
+        
+        # Fix the stacking function:
+        # filterFunc = SimulationStacker.total_mass
+        if filterType == 'cumulative':
+            filterFunc = total_mass
+        elif filterType == 'CAP':
+            filterFunc = CAP
+        #TODO: DSigma Filter Function.
+
+
+        # Now do stacking - same code below as stackField, but using the map instead of the field.
+        i = 0
+        profiles = []
+        radii = np.linspace(minRadius, maxRadius, numRadii)
+        if filterType == 'CAP':
+            n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
+        else:
+            n_vir = radii.max() + 1 # number of virial radii to cutout
+
+        profiles = []
+
+        for j, haloID in enumerate(halo_mask):
+            # Load the snapshot for gas and DM around that halo:
+            if projection == 'xy':
+                haloPos_2D = haloPos[haloID, :2]
+            elif projection == 'xz':
+                haloPos_2D = haloPos[haloID, [0, 2]]
+            elif projection == 'yz':
+                haloPos_2D = haloPos[haloID, 1:]
+            
+            # Convert halo position to pixel coordinates in arcminutes
+            
+            haloLoc = np.round(haloPos_2D / self.header['BoxSize'] * nPixels).astype(int)  # Convert to arcminutes
+            # haloLoc = np.round(haloPos_2D / kpcPerPixel).astype(int) # Halo location in pixels
+            # fieldKey = (pType, nPixels, projection, pixelSize)
+            cutout = SimulationStacker.cutout_2d_periodic(self.maps[fieldKey], haloLoc, n_vir*RadPixel)
+
+            rr = SimulationStacker.radial_distance_grid(cutout, (-n_vir, n_vir))
+            
+            profile = []
+    
+            for rad in radii:
+                filt_result = filterFunc(cutout, rr, rad)
+                profile.append(filt_result)
+        
+        
+            profile = np.array(profile)
+            profiles.append(profile)
+            # print(i)
+            i += 1
+            
+        profiles = np.array(profiles).T
+        
+        return radii, profiles
 

@@ -239,7 +239,7 @@ class SimulationStacker(object):
         for i, snap in enumerate(snaps):
             particles = self.loadSubset(pType, snapPath=snap)
             coordinates = particles['Coordinates'] # kpc/h
-            masses = particles['Masses'] # Msun/h
+            masses = particles['Masses']  * 1e10 / self.header['HubbleParam'] # Msun/h
             
             if projection == 'xy':
                 coordinates = coordinates[:, :2]  # Take x and y coordinates
@@ -431,9 +431,7 @@ class SimulationStacker(object):
         #     return radii_CAP, cap_profiles
         # else:
         #     raise NotImplementedError('Filter Type not implemented: ' + filterType)
-
-        
-        return 
+        # return 
         
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                    projection='xy', nPixels=None, save=False, load=True, radDistance=1000):

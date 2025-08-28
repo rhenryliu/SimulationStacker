@@ -135,7 +135,7 @@ def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=N
             for key in keys:
                 particles[key] = f[p_type_val][key][:] # type: ignore
         
-    particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
+    # particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
     return particles
 
 
@@ -193,7 +193,7 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
         particles['Masses'] = header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
         del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
             
-    particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
+    # particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
     return particles
 
 

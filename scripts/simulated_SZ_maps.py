@@ -153,9 +153,13 @@ def main(path2config, verbose=True):
             T_CMB = 2.7255
             # speed of light:
             # v_c = 0.0007
-            v_c = 223000 / 299792458 # velocity over speed of light.
+            v_c = 300000 / 299792458 # velocity over speed of light.
             # v_c = 1.06e-3
-            # profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
+            profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
+            
+            if sim_type_name == 'SIMBA':
+                # SIMBA simulations have different feedback models               
+                sim_name = sim_name + '_' + sim['feedback'] 
             
             profiles_plot = np.mean(profiles0, axis=1)
             ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
@@ -168,6 +172,16 @@ def main(path2config, verbose=True):
                                 upper, 
                                 color=colours[j], alpha=0.2)
 
+    T_CMB = 2.7255
+    v_c = 300000 / 299792458 # velocity over speed of light.
+
+    if config['plot_data']:
+        data_path = config['data_path']
+        data = np.load(data_path)
+        r_data = data['theta_arcmins']
+        profile_data = data['prof']
+        profile_err = np.sqrt(np.diag(data['cov']))
+        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=config['data_label'], markersize=8)
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
@@ -175,6 +189,22 @@ def main(path2config, verbose=True):
     ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
     # ax.set_xscale('log')
     ax.set_yscale('log')
+    # --- Secondary Y axis examples ---
+
+    # 1) Multiplicative (recommended for log scale): y2 = k * y1
+    k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
+    secax = ax.secondary_yaxis('right',
+                               functions=(lambda y: y * k,      # forward
+                                          lambda y: y / k))     # inverse
+    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
+
+    # 2) If you really need an additive offset (ensure y+C > 0 on log scale):
+    # C = 5.0  # additive offset in the same units
+    # secax = ax.secondary_yaxis('right',
+    #                          functions=(lambda y: y + C,      # forward
+    #                                     lambda y: y - C))     # inverse
+    # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
+
     ax.set_xlim(0.0, 6.5)
     # ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)

@@ -155,7 +155,10 @@ def main(path2config, verbose=True):
             # v_c = 0.0007
             v_c = 300000 / 299792458 # velocity over speed of light.
             # v_c = 1.06e-3
-            profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
+            # The conversion from tau to micro-Kelvin for kSZ is T_CMB * (v/c) * 1e6
+            # This is already done in the SZstacker.py file when loading the tau field.
+            # So here we do not need to do it again.
+            # profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
             
             if sim_type_name == 'SIMBA':
                 # SIMBA simulations have different feedback models               

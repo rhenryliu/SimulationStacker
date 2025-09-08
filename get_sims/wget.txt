@@ -1,0 +1,8 @@
+For regular sim files:
+wget -nd -nc -nv -e robots=off -l 1 -r -A hdf5 --content-disposition __link_here__
+wget -nd -nc -nv -e robots=off -l 1 -r -A hdf5 http://simba.roe.ac.uk/simdata/m100n1024/s50/snapshots/snap_m100n1024_134.hdf5
+wget -nd -nc -nv -e robots=off -l 1 -r -A hdf5 http://simba.roe.ac.uk/simdata/m100n1024/s50/snapshots/snap_m100n1024_125.hdf5
+
+For non hdf5 files:
+wget -nd -nc -nv -e robots=off -l 1 -r __link_here__
+wget -nd -nc -nv -e robots=off -l 1 -r http://simba.roe.ac.uk/outputs.txt

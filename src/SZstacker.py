@@ -112,8 +112,6 @@ class SZMapStacker(SimulationStacker):
 
         return map_
 
-        # TODO
-        pass
     
     def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
         """Create a map from the simulation data. 
@@ -372,6 +370,20 @@ class SZMapStacker(SimulationStacker):
             i += 1
             
         profiles = np.array(profiles).T
+        
+        # Unit Conversion:
+        T_CMB = 2.7255
+        if pType == 'tau':
+            # In the case of the tau field, we want to do unit conversion from optical depth units to micro-Kelvin.
+            # This is done by multiplying the tau field by T_CMB * (v/c)
+            v_c = 300000 / 299792458 # velocity over speed of light.
+            profiles = profiles * T_CMB * 1e6 * v_c # Convert to micro-Kelvin, the units for kSZ in data.
+        elif pType == 'kSZ':
+            # TODO
+            pass
+        elif pType == 'tSZ':
+            # TODO
+            pass
         
         return radii, profiles
 

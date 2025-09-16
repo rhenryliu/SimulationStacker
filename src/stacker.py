@@ -367,6 +367,8 @@ class SimulationStacker(object):
             filterFunc = total_mass
         elif filterType == 'CAP':
             filterFunc = CAP
+        elif filterType == 'DSigma':
+            filterFunc = delta_sigma
         #TODO: DSigma Filter Function.
 
 
@@ -501,6 +503,8 @@ class SimulationStacker(object):
             filterFunc = total_mass
         elif filterType == 'CAP':
             filterFunc = CAP
+        elif filterType == 'DSigma':
+            filterFunc = delta_sigma
         #TODO: DSigma Filter Function.
 
 

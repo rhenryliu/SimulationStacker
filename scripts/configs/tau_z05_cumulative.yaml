@@ -1,17 +1,26 @@
 redshift: 0.5
-filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
-# filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
+# filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
+filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
 load_field: true
 save_field: true
 rad_distance: 1.0 # in arcmin
 
-fig_path: '../figures/2025-09/'
-fig_name: 'all_z05_map'
+plot_data: true
+data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
+data_label: 'Hadzhiyska 2024 pz1'
+
+fig_path: '../figures/2025-08/testSZ/'
+fig_name: 'mass_profiles'
 fig_type: 'png'
 plot_error_bars: true
 
 # fraction_type: 'baryon' # gas or baryon
-fraction_type: 'plotall' # gas or baryon
+# particle_types: 
+#   - 'tau'
+  # - 'kSZ'
+  # - 'tSZ'
+particle_type: 'tau'
+
 
 simulations:
   - sim_type: 'SIMBA'
@@ -38,7 +47,7 @@ simulations:
     sims:
       - name: 'TNG100-1'
         snapshot: 67
-      - name: 'TNG300-1'
+      - name: 'TNG300-2'
         snapshot: 67
       - name: 'Illustris-2'
         snapshot: 103

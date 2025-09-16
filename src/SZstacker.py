@@ -325,6 +325,8 @@ class SZMapStacker(SimulationStacker):
             filterFunc = total_mass
         elif filterType == 'CAP':
             filterFunc = CAP
+        elif filterType == 'DSigma':
+            filterFunc = delta_sigma
         #TODO: DSigma Filter Function.
 
 
@@ -379,10 +381,10 @@ class SZMapStacker(SimulationStacker):
             v_c = 300000 / 299792458 # velocity over speed of light.
             profiles = profiles * T_CMB * 1e6 * v_c # Convert to micro-Kelvin, the units for kSZ in data.
         elif pType == 'kSZ':
-            # TODO
+            # TODO: kSZ unit conversion
             pass
         elif pType == 'tSZ':
-            # TODO
+            # TODO: tSZ unit conversion
             pass
         
         return radii, profiles

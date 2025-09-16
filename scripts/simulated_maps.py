@@ -110,6 +110,8 @@ def main(path2config, verbose=True):
                     fraction = profiles0 / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
                 elif fractionType == 'baryon':
                     fraction = (profiles0 + profiles4) / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+                elif fractionType == 'plotall':
+                    fraction = profiles0 + profiles1 + profiles4 + profiles5
 
                 fraction_plot = np.median(fraction, axis=1)
                 ax.plot(radii0 * radDistance, fraction_plot, label=sim_name, color=colours[j], lw=2)
@@ -152,6 +154,8 @@ def main(path2config, verbose=True):
                     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
                 elif fractionType == 'baryon':
                     fraction = (profiles0 + profiles4 + profiles5) / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+                elif fractionType == 'plotall':
+                    fraction = profiles0 + profiles1 + profiles4 + profiles5
 
                 fraction_plot = np.median(fraction, axis=1)
                 ax.plot(radii0 * radDistance, fraction_plot, label=sim_name_show, color=colours[j], lw=2)
@@ -172,13 +176,14 @@ def main(path2config, verbose=True):
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
     ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$f_{\rm gas}(< R) / (\Omega_b/\Omega_m)$', fontsize=18)
+    # ax.set_ylabel(r'$f_{\rm gas}(< R) / (\Omega_b/\Omega_m)$', fontsize=18)
+    ax.set_ylabel(r'Cumulative Total 2D Mass', fontsize=18)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     ax.set_xlim(0.0, 6.5)
-    ax.set_ylim(0, 1.2)
+    # ax.set_ylim(0, 1.2)
     ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
+    ax.legend(loc='best', fontsize=12)
     ax.grid(True)
     ax.set_title(f'{filterType} filter at z={redshift}', fontsize=18)
     

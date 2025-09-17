@@ -567,6 +567,10 @@ class SimulationStacker(object):
         else:
             raise NotImplementedError('Filter Type not implemented: ' + filterType)
 
+    def stack_on_array(self, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
+                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000):
+        
+        pass
 
     # Other util functions:
     

@@ -5,7 +5,7 @@ load_field: true
 save_field: true
 rad_distance: 1.0 # in arcmin
 
-fig_path: '../figures/2025-09/'
+fig_path: '../figures/2025-09/new/'
 fig_name: 'all_z05_map'
 fig_type: 'png'
 plot_error_bars: true

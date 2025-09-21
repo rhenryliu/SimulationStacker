@@ -303,7 +303,7 @@ class SimulationStacker(object):
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
-                 halo_mass_avg=10**(13.22), halo_mass_upper=None):
+                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
         """Stack the map of a given particle type.
 
         Args:
@@ -330,111 +330,31 @@ class SimulationStacker(object):
             Implement the DSigma filter for stacking.
         """
 
-        
         if z is None:
             z = self.z
         
+        # Load or create the map
         fieldKey = (pType, z, projection, pixelSize)
         if not (fieldKey in self.maps and self.maps[fieldKey] is not None):
             self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection,
                                                save=save, load=load, pixelSize=pixelSize)
-        
-        nPixels = self.maps[fieldKey].shape[0]  # Get the number of pixels from the loaded map
-        assert self.maps[fieldKey].shape == (nPixels, nPixels), f"Map shape mismatch: {self.maps[fieldKey].shape} != {(nPixels, nPixels)}"
 
-        # Get the true arcmin per pixel:
-        cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
-        # Get distance to the snapshot redshift
-        dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
-        dA *= self.header['HubbleParam']  # Convert to kpc/h
-        # Get the box size in angular units.
-        theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes
-        arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
+        # Use the abstracted stacking function
+        return self.stack_on_array(
+            array=self.maps[fieldKey],
+            filterType=filterType,
+            minRadius=minRadius,
+            maxRadius=maxRadius,
+            numRadii=numRadii,
+            projection=projection,
+            radDistance=radDistance,
+            radDistanceUnits='arcmin',
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
+            z=z,
+            pixelSize=pixelSize
+        )
 
-
-        # Load the halo catalog
-        haloes = self.loadHalos(self.simType)
-        haloMass = haloes['GroupMass']
-        haloPos = haloes['GroupPos']
-        halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
-        print('Number of halos selected:', halo_mask.shape[0])
-        
-        RadPixel = radDistance / arcminPerPixel # Convert to pixels
-        
-        # Fix the stacking function:
-        # filterFunc = SimulationStacker.total_mass
-        if filterType == 'cumulative':
-            filterFunc = total_mass
-        elif filterType == 'CAP':
-            filterFunc = CAP
-        elif filterType == 'DSigma':
-            filterFunc = delta_sigma
-        #TODO: DSigma Filter Function.
-
-
-        # Now do stacking - same code below as stackField, but using the map instead of the field.
-        i = 0
-        profiles = []
-        # if filterType == 'CAP':
-        #     dx = (maxRadius - minRadius) / (numRadii - 1)
-        #     new_max = np.sqrt(2) * maxRadius
-        #     n_new = int(np.ceil((new_max - minRadius) / dx)) + 1
-
-        #     radii = np.linspace(minRadius, minRadius + dx * (n_new - 1), n_new)
-        #     # TODO: Check that this part makes sense!!!
-        # else:
-        #     radii = np.linspace(minRadius, maxRadius, numRadii)
-        radii = np.linspace(minRadius, maxRadius, numRadii)
-        if filterType == 'CAP':
-            n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
-        else:
-            n_vir = radii.max() + 1 # number of virial radii to cutout
-
-        profiles = []
-
-        for j, haloID in enumerate(halo_mask):
-            # Load the snapshot for gas and DM around that halo:
-            if projection == 'xy':
-                haloPos_2D = haloPos[haloID, :2]
-            elif projection == 'xz':
-                haloPos_2D = haloPos[haloID, [0, 2]]
-            elif projection == 'yz':
-                haloPos_2D = haloPos[haloID, 1:]
-            
-            # Convert halo position to pixel coordinates in arcminutes
-            
-            haloLoc = np.round(haloPos_2D / self.header['BoxSize'] * nPixels).astype(int)  # Convert to arcminutes
-            # haloLoc = np.round(haloPos_2D / kpcPerPixel).astype(int) # Halo location in pixels
-            # fieldKey = (pType, nPixels, projection, pixelSize)
-            cutout = SimulationStacker.cutout_2d_periodic(self.maps[fieldKey], haloLoc, n_vir*RadPixel)
-
-            rr = SimulationStacker.radial_distance_grid(cutout, (-n_vir, n_vir))
-            
-            profile = []
-    
-            for rad in radii:
-                filt_result = filterFunc(cutout, rr, rad)
-                profile.append(filt_result)
-        
-        
-            profile = np.array(profile)
-            profiles.append(profile)
-            # print(i)
-            i += 1
-            
-        profiles = np.array(profiles).T
-        
-        return radii, profiles
-        # if filterType == 'cumulative':
-        #     return radii, profiles
-        # elif filterType == 'CAP':
-        #     radii_CAP = np.linspace(minRadius, maxRadius, numRadii)
-        #     cap_profiles = SimulationStacker.CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
-        #     return radii_CAP, cap_profiles
-        # else:
-        #     raise NotImplementedError('Filter Type not implemented: ' + filterType)
-        # return 
-        
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                    projection='xy', nPixels=None, save=False, load=True, radDistance=1000):
         """Do stacking on the computed field.
@@ -459,118 +379,155 @@ class SimulationStacker(object):
             radii, profiles : 1D radii and 2D profiles for the stacked field.
         """
 
-        
         if nPixels is None:
             nPixels = self.nPixels
-            kpcPerPixel = self.header['BoxSize'] / nPixels # kpc/h per pixel
 
-        # if not self.fields.get(pType):
+        # Load or create the field
         fieldKey = (pType, nPixels, projection)
-        # fieldKey = pType + '_' + str(self.nPixels) + '_xy'
         if not (fieldKey in self.fields and self.fields[fieldKey] is not None):
-            self.fields[fieldKey] = self.makeField(pType, nPixels=self.nPixels, projection=projection,
+            self.fields[fieldKey] = self.makeField(pType, nPixels=nPixels, projection=projection,
                                                    save=save, load=load)
         else:
             assert self.fields[fieldKey].shape == (nPixels, nPixels), \
                 f"Field shape mismatch: {self.fields[fieldKey].shape} != {(nPixels, nPixels)}"
 
-        # Load the halo catalog
-        # Note: This is a bit of a hack, but it works for now. - this is according to copilot lmao
+        # Handle radDistance = None case
+        if radDistance is None:
+            haloes = self.loadHalos(self.simType)
+            mass_min, mass_max, _ = halo_ind(2)
+            halo_mask = np.where(np.logical_and((haloes['GroupMass'] > mass_min), (haloes['GroupMass'] < mass_max)))[0]
+            radDistance = haloes['GroupRad'][halo_mask].mean()
+
+        # Use the abstracted stacking function
+        radii, profiles = self.stack_on_array(
+            array=self.fields[fieldKey],
+            filterType=filterType,
+            minRadius=minRadius,
+            maxRadius=maxRadius,
+            numRadii=numRadii,
+            projection=projection,
+            radDistance=radDistance,
+            radDistanceUnits='kpc/h'
+        )
+        
+        # Apply post-processing for CAP filter
+        # This is taken care of in the `stack_on_array` function now
+        # if filterType == 'CAP':
+        #     radii_CAP = np.linspace(minRadius, maxRadius, 25)
+        #     cap_profiles = CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
+        #     return radii_CAP, cap_profiles
+        
+        return radii, profiles
+
+    def stack_on_array(self, array, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
+                       projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', 
+                       halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), z=None, pixelSize=0.5):
+        """Abstract stacking function that works on any 2D array.
+
+        Args:
+            array (np.ndarray): 2D array to stack on. Requires shape (nPixels, nPixels) such that the array is square.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma']. Defaults to 'cumulative'.
+            minRadius (float, optional): Minimum radius for stacking. Defaults to 0.1.
+            maxRadius (float, optional): Maximum radius for stacking. Defaults to 4.5.
+            numRadii (int, optional): Number of radial bins for stacking. Defaults to 25.
+            projection (str, optional): Direction projection used. Defaults to 'xy'.
+            radDistance (float, optional): Radial distance units for stacking. Defaults to 1000.
+            radDistanceUnits (str, optional): Units for radDistance. Either 'kpc/h' or 'arcmin'. Defaults to 'kpc/h'.
+            halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
+            halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to 5*10**(14).
+            z (float, optional): Redshift for angular distance calculation (required if radDistanceUnits='arcmin'). Defaults to None.
+            pixelSize (float, optional): Pixel size in arcminutes (required if radDistanceUnits='arcmin'). Defaults to 0.5.
+
+        Returns:
+            tuple: (radii, profiles) - 1D radii array and 2D profiles array.
+        """
+        
+        nPixels = array.shape[0]
+        assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
+
+        # Load the halo catalog and select halos
         haloes = self.loadHalos(self.simType)
         haloMass = haloes['GroupMass']
         haloPos = haloes['GroupPos']
         
-        mass_min, mass_max, _ = halo_ind(2)
+        if halo_mass_upper is None:
+            # Use legacy selection method for backward compatibility
+            mass_min, mass_max, _ = halo_ind(2)
+            halo_mask = np.where(np.logical_and((haloMass > mass_min), (haloMass < mass_max)))[0]
+        else:
+            halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
         
-        halo_mask = np.where(np.logical_and((haloMass > mass_min), (haloMass < mass_max)))[0]
-        print(halo_mask.shape)
+        print(f'Number of halos selected: {halo_mask.shape[0]}')
         
-        # if self.R200 is None:
-        #     R200 = haloes['GroupRad'][halo_mask].mean()
-        # else:
-        #     R200 = self.R200 # kpc/h, from the input
-        # R200_Pixel = R200 / kpcPerPixel
+        # Convert radDistance to pixels based on units
+        if radDistanceUnits == 'kpc/h':
+            kpcPerPixel = self.header['BoxSize'] / nPixels
+            RadPixel = radDistance / kpcPerPixel
+        elif radDistanceUnits == 'arcmin':
+            if z is None:
+                z = self.z
+            # Calculate arcmin per pixel
+            cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
+            dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
+            dA *= self.header['HubbleParam']  # Convert to kpc/h
+            theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60
+            arcminPerPixel = theta_arcmin / nPixels
+            RadPixel = radDistance / arcminPerPixel
+        else:
+            raise ValueError(f"radDistanceUnits must be 'kpc/h' or 'arcmin', got: {radDistanceUnits}")
         
-        #
-        if radDistance is None:
-            radDistance = haloes['GroupRad'][halo_mask].mean() # kpc/h, from the input, 
-        
-        RadPixel = radDistance / kpcPerPixel # Convert to pixels    
-        
-        # Fix the stacking function:
-        # filterFunc = SimulationStacker.total_mass
+        # Set up filter function
         if filterType == 'cumulative':
             filterFunc = total_mass
         elif filterType == 'CAP':
             filterFunc = CAP
         elif filterType == 'DSigma':
             filterFunc = delta_sigma
-        #TODO: DSigma Filter Function.
+        else:
+            raise NotImplementedError('Filter Type not implemented: ' + filterType)
 
-
-        # Do stacking
-        i = 0
-        profiles = []
-        # if filterType == 'CAP':
-        #     dx = (maxRadius - minRadius) / (numRadii - 1)
-        #     new_max = np.sqrt(2) * maxRadius
-        #     n_new = int(np.ceil((new_max - minRadius) / dx)) + 1
-
-        #     radii = np.linspace(minRadius, minRadius + dx * (n_new - 1), n_new)
-        #     # TODO: Check that this part makes sense!!!
-        # else:
-        #     radii = np.linspace(minRadius, maxRadius, numRadii)
+        # Set up radial bins and cutout size
         radii = np.linspace(minRadius, maxRadius, numRadii)
         if filterType == 'CAP':
             n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
         else:
-            n_vir = radii.max() + 1 # number of virial radii to cutout
-            
-        profiles = []
+            n_vir = int(radii.max() + 1)  # number of virial radii to cutout
 
+        # Do stacking
+        profiles = []
         for j, haloID in enumerate(halo_mask):
-        
-            # Load the snapshot for gas and DM around that halo:
+            # Get halo position for the specified projection
             if projection == 'xy':
                 haloPos_2D = haloPos[haloID, :2]
             elif projection == 'xz':
                 haloPos_2D = haloPos[haloID, [0, 2]]
             elif projection == 'yz':
                 haloPos_2D = haloPos[haloID, 1:]
-
-            haloLoc = np.round(haloPos_2D / kpcPerPixel).astype(int) # Halo location in pixels # type: ignore
-            fieldKey = (pType, nPixels, projection)
-            cutout = SimulationStacker.cutout_2d_periodic(self.fields[fieldKey], haloLoc, n_vir*RadPixel)
-
+            else:
+                raise NotImplementedError('Projection type not implemented: ' + projection)
+            
+            # Convert halo position to pixel coordinates
+            if radDistanceUnits == 'kpc/h':
+                haloLoc = np.round(haloPos_2D / (self.header['BoxSize'] / nPixels)).astype(int)
+            else:  # arcmin units
+                haloLoc = np.round(haloPos_2D / (self.header['BoxSize'] / nPixels)).astype(int)
+            
+            # Create cutout and radial distance grid
+            cutout = SimulationStacker.cutout_2d_periodic(array, haloLoc, n_vir*RadPixel)
             rr = SimulationStacker.radial_distance_grid(cutout, (-n_vir, n_vir))
             
+            # Apply filters at each radius
             profile = []
-    
             for rad in radii:
                 filt_result = filterFunc(cutout, rr, rad)
                 profile.append(filt_result)
-        
-        
+            
             profile = np.array(profile)
             profiles.append(profile)
-            # print(i)
-            i += 1
             
         profiles = np.array(profiles).T
         
-        if filterType == 'cumulative':
-            return radii, profiles
-        elif filterType == 'CAP':
-            radii_CAP = np.linspace(minRadius, maxRadius, 25)
-            cap_profiles = CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
-            return radii_CAP, cap_profiles
-        else:
-            raise NotImplementedError('Filter Type not implemented: ' + filterType)
-
-    def stack_on_array(self, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000):
-        
-        pass
+        return radii, profiles
 
     # Other util functions:
     
@@ -720,7 +677,7 @@ class SimulationStacker(object):
     #         dict: A dictionary containing the particle properties.
     #     """
         
-    #     if self.simType == 'IllustrisTNG':
+    #     if simType == 'IllustrisTNG':
     #         if pType =='gas':
     #             particles = il.snapshot.loadSubset(self.simPath, self.snapshot, pType, fields=['Masses','Coordinates'])
     #         elif pType == 'DM':
@@ -734,7 +691,7 @@ class SimulationStacker(object):
     #         else:
     #             raise NotImplementedError('Particle Type not implemented')
                                         
-    #     elif self.simType == 'SIMBA':
+    #     elif simType == 'SIMBA':
     #         if pType == 'gas':
     #             pTypeval = 'PartType0'
     #         elif pType == 'DM':

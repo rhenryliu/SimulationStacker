@@ -138,7 +138,8 @@ def main(path2config, verbose=True):
                 # ax.plot(radii1 * radDistance, profiles1, label=sim_name_show, color=colours[j], lw=2)
                 if plotErrorBars:
                     gas_fraction_err = np.std(gas_fraction, axis=1) / np.sqrt(gas_fraction.shape[1])
-                    ax.fill_between(radii1 * radDistance, gas_fraction - gas_fraction_err, gas_fraction + gas_fraction_err, color=colours[j], alpha=0.2)
+                    gas_fraction_mean = gas_fraction.mean(axis=1)
+                    ax.fill_between(radii1 * radDistance, gas_fraction_mean - gas_fraction_err, gas_fraction_mean + gas_fraction_err, color=colours[j], alpha=0.2)
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 

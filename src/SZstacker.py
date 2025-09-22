@@ -27,6 +27,7 @@ from utils import fft_smoothed_map
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
+from mapMaker import create_field
 
 class SZMapStacker(SimulationStacker):
     
@@ -114,151 +115,10 @@ class SZMapStacker(SimulationStacker):
 
     
     def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
-        """Create a map from the simulation data. 
-        Much of the algo for this method comes from the SZ_TNG repo on Github authored by Boryana Hadzhiyska.
-
-        Args:
-            pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'.
-                Note that in the case of 'kSZ', an optical depth (tau) map will be created instead of a velocity map.
-            z (float, optional): The redshift to use for the map. Defaults to None.
-            nPixels: Size of the output map in pixels. Defaults to self.nPixels.
-            save (bool, optional): Whether to save the map to disk. Defaults to False.
-            load (bool, optional): Whether to load the map from disk. Defaults to True.
-            pixelSize (float, optional): The size of the pixels in the map. Defaults to 0.5.
-        """
         if nPixels is None:
             nPixels = self.nPixels
-            
-        if load:
-            try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
-            except ValueError as e:
-                print(e)
-                print("Computing the field instead...")
+        return create_field(self, pType, nPixels, projection, save, load)
 
-        # If loading fails, we then compute the necessary fields. Much of the code below is the same as the SZ_TNG repo.            
-        # Define some necessary parameters: (Physical units in cgs)
-        gamma = 5/3. # unitless. Adiabatic Index
-        k_B = 1.3807e-16 # cgs (erg/K), Boltzmann constant
-        m_p = 1.6726e-24 # g, mass of proton
-        unit_c = 1.e10 # TNG faq is wrong (see README.md)
-        # unit_c = 1.023**2*1.e10
-        X_H = 0.76 # unitless, primordial hydrogen fraction
-        sigma_T = 6.6524587158e-29*1.e2**2 # cm^2, thomson cross section
-        m_e = 9.10938356e-28 # g, electron mass
-        c = 29979245800. # cm/s, speed of light
-        const = k_B*sigma_T/(m_e*c**2) # cgs (cm^2/K), constant for compton y computation
-        kpc_to_cm = ((1.*u.kpc).to(u.cm)).value # cm
-        solar_mass = 1.989e33 # g
-
-
-        # sim params (same for MTNG and TNG)
-        h = self.header['HubbleParam'] # Hubble Parameter
-        unit_mass = 1.e10*(solar_mass/h)
-        # unit_mass = 1.0 # msun/h, units already converted.
-        unit_dens = 1.e10*(solar_mass/h)/(kpc_to_cm/h)**3 # g/cm**3 # note density has units of h in it
-        # unit_dens = 1./(kpc_to_cm/h)**3 # g/cm**3 # note density has units of h in it
-        unit_vol = (kpc_to_cm/h)**3 # cancels unit dens division from previous, so h doesn't matter neither does kpc
-
-
-        # z = zs[snaps == snapshot] # TODO: Implement the automatic selection of snapshot from redshift (or vice versa)
-        z = self.z
-        a = 1./(1+self.z) # scale factor
-        Lbox_hkpc = self.header['BoxSize'] # kpc/h
-        
-        
-        # Now we compute the SZ fields iteratively, iterating over every snapshot chunk: (Note SIMBA only has one chunk)
-        
-        # Get chunks:        
-        folderPath = self.snapPath(self.simType, pathOnly=True)
-        if self.simType == 'IllustrisTNG':
-            snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
-        elif self.simType == 'SIMBA':
-            # print('Folder Path:', folderPath + f'*_{self.snapshot}.hdf5')
-            snaps = glob.glob(folderPath)
-            # print('Snaps:', snaps)
-
-        # Convert coordinates to pixel coordinates        
-        gridSize = [nPixels, nPixels]
-        minMax = [0, self.header['BoxSize']]
-        field_total = np.zeros(gridSize)
-        
-        t0 = time.time()
-        for i, snap in enumerate(snaps):
-
-            particles = self.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
-
-            Co = particles['Coordinates']
-            EA = particles['ElectronAbundance']
-            IE = particles['InternalEnergy']
-            D = particles['Density']
-            M = particles['Masses']
-            V = particles['Velocities']
-
-            
-            # for each cell, compute its total volume (gas mass by gas density) and convert density units
-            dV = M/D # ckpc/h^3 
-            D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
-            # unit_c = 1.e10 # TNG faq is wrong (see README.md)
-
-            # obtain electron temperature, electron number density and velocity
-            Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
-            ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
-            Ve = V*np.sqrt(a) # km/s
-
-            # compute the contribution to the y and b signals of each cell
-            # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
-            # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Compton Y parameter
-            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
-            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Optical depth. This is what we use for
-
-            # Now we make the fields:
-            
-            if projection == 'xy':
-                coordinates = Co[:, :2]  # Take x and y coordinates
-            elif projection == 'xz':
-                coordinates = Co[:, [0, 2]] # Take x and z coordinates
-            elif projection == 'yz':
-                coordinates = Co[:, 1:] # Take y and z coordinates
-            else:
-                raise NotImplementedError('Projection type not implemented: ' + projection)
-
-            if pType == 'tSZ':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=dY, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            elif pType == 'kSZ':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=b, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            elif pType == 'tau':
-                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
-                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=tau, 
-                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            else:
-                raise ValueError('Particle type not recognized: ' + pType)
-            
-            field = result.statistic
-            field_total += field
-
-            if i % 10 == 0:
-                print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
-        
-        
-        print('hist2d time:', time.time() - t0)
-        if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
-            elif self.simType == 'SIMBA':
-                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
-
-        return field_total
-    
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
                  halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):

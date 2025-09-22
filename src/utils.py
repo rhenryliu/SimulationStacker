@@ -39,7 +39,7 @@ def fft_smoothed_map(D, fwhm_arcmin, pixel_size_arcmin):
     Returns:
         np.ndarray: Smoothed 2D map.
 
-    TODO: 
+    completed tests: 
         Test to make sure that this works as expected when compared to gaussian_smoothed_map
     """
     

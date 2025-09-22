@@ -4,9 +4,10 @@ filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
 load_field: true
 save_field: true
 rad_distance: 1.0 # in arcmin
+halo_mass_upper: !!float 2.0e14 # in log10(Msun/h), set to null to disable
 
 fig_path: '../figures/2025-09/new/'
-fig_name: 'all_z05_map'
+fig_name: 'all_z05_map_refactor'
 fig_type: 'png'
 plot_error_bars: true
 

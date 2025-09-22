@@ -10,7 +10,7 @@ data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
 data_label: 'Hadzhiyska 2024 pz1'
 
 fig_path: '../figures/2025-09/testSZ/'
-fig_name: 'CAP_profiles'
+fig_name: 'CAP_profiles_refactor'
 fig_type: 'png'
 plot_error_bars: true
 

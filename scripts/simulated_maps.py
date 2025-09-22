@@ -54,6 +54,9 @@ def main(path2config, verbose=True):
     
     fractionType = config['fraction_type']
 
+    haloMassUpper = config['halo_mass_upper']  # in log10(Msun/h)
+    print(haloMassUpper, type(haloMassUpper))
+
     figPath = Path(config['fig_path'])
     figPath.mkdir(parents=False, exist_ok=True)
     
@@ -92,13 +95,13 @@ def main(path2config, verbose=True):
                                             simType=sim_type_name)
                 
                 radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii4, profiles4 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii5, profiles5 = stacker.stackMap('BH', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
 
 
                 try:
@@ -140,14 +143,14 @@ def main(path2config, verbose=True):
                                             feedback=feedback)
                 
                 radii0, profiles0 = stacker.stackMap('gas', filterType=filterType, maxRadius=6.0,  # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii1, profiles1 = stacker.stackMap('DM', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii4, profiles4 = stacker.stackMap('Stars', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
                 radii5, profiles5 = stacker.stackMap('BH', filterType=filterType, maxRadius=6.0, 
-                                                     save=saveField, load=loadField, radDistance=radDistance)
-                                
+                                                     save=saveField, load=loadField, radDistance=radDistance, halo_mass_upper=haloMassUpper)
+
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
                 if fractionType == 'gas':

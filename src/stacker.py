@@ -27,6 +27,7 @@ from utils import fft_smoothed_map
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
+from mapMaker import create_field, compute_cosmological_parameters, calculate_pixel_parameters, create_basic_field, create_sz_field
 
 
 class SimulationStacker(object):
@@ -50,7 +51,6 @@ class SimulationStacker(object):
             z (float, optional): Redshift of the snapshot. Defaults to 0.0.
             
         TODO:
-            Add support for tSZ and kSZ maps!
             Automatic selection of closest snapshot from redshift specification!
         """
         
@@ -81,6 +81,30 @@ class SimulationStacker(object):
         self.fields = {}
         self.maps = {}
 
+    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
+        """Uses a histogram binning to make projected 2D fields of a given particle type from the simulation.
+
+        Args:
+            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
+            nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
+            projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
+            save (bool, optional): If True, saves the field to a file. Defaults to False.
+            load (bool, optional): If True, loads the field from a file if it exists and returns the field. Defaults to True.
+
+        Raises:
+            NotImplementedError: If field is not one of the ones listed above.
+
+        Returns:
+            np.ndarry: 2D numpy array of the field for the given particle type.
+            
+        TODO:
+            Add directionality to the fields (i.e. x, y, and z projected 2D fields.)
+        """
+    
+        if nPixels is None:
+            nPixels = self.nPixels
+        return create_field(self, pType, nPixels, projection, save, load)
+    
     def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5):
         """Make a 2D map convolved with a beam for a given particle type. 
         This is more realistic than makeField
@@ -93,32 +117,17 @@ class SimulationStacker(object):
             beamsize (float, optional): Size of the beam in arcminutes. Defaults to 1.6.
             save (bool, optional): If True, saves the map to a file. Defaults to False.
             load (bool, optional): If True, loads the map from a file if it exists and returns the map. Defaults to True.
-            pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
+            pixelSize (float, optional): The theoretical expected size of each pixel in arcminutes. Defaults to 0.5. arcminPerPixel overrides this to the exact size.
 
         Returns:
             np.ndarray: 2D numpy array of the map for the given particle type.
         """        
         if z is None:
             z = self.z
+            
+        cosmo, dA, theta_arcmin = compute_cosmological_parameters(self.header, z) # type: ignore
+        nPixels, arcminPerPixel = calculate_pixel_parameters(theta_arcmin, pixelSize)
         
-        # First define cosmology
-        cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
-
-        # Get distance to the snapshot redshift
-        dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
-        dA *= self.header['HubbleParam']  # Convert to kpc/h
-        
-        # Get the box size in angular units.
-        theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes
-        print(f"Map size at z={z}: {theta_arcmin:.2f} arcmin")
-
-        # Round up to the nearest integer, pixel size is 0.5 arcmin as in ACT
-        nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
-        arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
-        # beamsize_pixel = beamsize / arcminPerPixel  # Convert arcminutes to pixels
-        
-        
-
         # Now that we know the expected pixel size, we try to load the map first before computing it:
         if load:
             try:
@@ -141,15 +150,15 @@ class SimulationStacker(object):
                     pType + '_' + str(nPixels) + '_' + projection + '_map'
                 np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
             elif self.simType == 'SIMBA':
-                saveName = self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
+                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
+                            pType + '_' + str(nPixels) + '_' + projection + '_map')
                 np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
 
         return map_
 
     def convolveMap(self, map_, fwhm_arcmin, pixel_size_arcmin):
         """
-        DEPRECIATED: Check below for new Convolution code
+        DEPRECIATED: Check fft_smoothed_map function in utils.py for new convolution code.
         Convolve the map with a Gaussian beam.
 
         Args:
@@ -189,117 +198,117 @@ class SimulationStacker(object):
     #
     #     return drsmo
 
-    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
-        """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
+    # def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
+    #     """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
-        Args:
-            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
-            nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
-            projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
-            save (bool, optional): If True, saves the field to a file. Defaults to False.
-            load (bool, optional): If True, loads the field from a file if it exists and returns the field. Defaults to True.
+    #     Args:
+    #         pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
+    #         nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
+    #         projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
+    #         save (bool, optional): If True, saves the field to a file. Defaults to False.
+    #         load (bool, optional): If True, loads the field from a file if it exists and returns the field. Defaults to True.
 
-        Raises:
-            NotImplementedError: If field is not one of the ones listed above.
+    #     Raises:
+    #         NotImplementedError: If field is not one of the ones listed above.
 
-        Returns:
-            np.ndarry: 2D numpy array of the field for the given particle type.
+    #     Returns:
+    #         np.ndarry: 2D numpy array of the field for the given particle type.
             
-        TODO:
-            Add directionality to the fields (i.e. x, y, and z projected 2D fields.)
-        """
-        if nPixels is None:
-            nPixels = self.nPixels
+    #     TODO:
+    #         Add directionality to the fields (i.e. x, y, and z projected 2D fields.)
+    #     """
+    #     if nPixels is None:
+    #         nPixels = self.nPixels
 
-        if load:
-            try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
-            except ValueError as e:
-                print(e)
-                print("Computing the field instead...")
+    #     if load:
+    #         try:
+    #             return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+    #         except ValueError as e:
+    #             print(e)
+    #             print("Computing the field instead...")
                
-        Lbox = self.header['BoxSize'] # kpc/h
+    #     Lbox = self.header['BoxSize'] # kpc/h
         
-        # Get all particle snap chunks:
+    #     # Get all particle snap chunks:
 
-        folderPath = self.snapPath(self.simType, pathOnly=True)
-        if self.simType == 'IllustrisTNG':
-            snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
-        elif self.simType == 'SIMBA':
-            snaps = glob.glob(folderPath)
-            print('Snaps:', snaps)
-        # The code below does the statistic by chunk rather than by the whole dataset
+    #     folderPath = self.snapPath(self.simType, pathOnly=True)
+    #     if self.simType == 'IllustrisTNG':
+    #         snaps = glob.glob(folderPath + 'snap_*.hdf5') # TODO: fix this for SIMBA (done I think)
+    #     elif self.simType == 'SIMBA':
+    #         snaps = glob.glob(folderPath)
+    #         print('Snaps:', snaps)
+    #     # The code below does the statistic by chunk rather than by the whole dataset
         
-        # Initialize empty maps
-        gridSize = [nPixels, nPixels]
-        minMax = [0, self.header['BoxSize']]
-        field_total = np.zeros(gridSize)
+    #     # Initialize empty maps
+    #     gridSize = [nPixels, nPixels]
+    #     minMax = [0, self.header['BoxSize']]
+    #     field_total = np.zeros(gridSize)
         
-        t0 = time.time()
-        for i, snap in enumerate(snaps):
-            particles = self.loadSubset(pType, snapPath=snap)
-            coordinates = particles['Coordinates'] # kpc/h
-            masses = particles['Masses']  * 1e10 / self.header['HubbleParam'] # Msun/h
+    #     t0 = time.time()
+    #     for i, snap in enumerate(snaps):
+    #         particles = self.loadSubset(pType, snapPath=snap)
+    #         coordinates = particles['Coordinates'] # kpc/h
+    #         masses = particles['Masses']  * 1e10 / self.header['HubbleParam'] # Msun/h
             
-            if projection == 'xy':
-                coordinates = coordinates[:, :2]  # Take x and y coordinates
-            elif projection == 'xz':
-                coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
-            elif projection == 'yz':
-                coordinates = coordinates[:, 1:] # Take y and z coordinates
-            else:
-                raise NotImplementedError('Projection type not implemented: ' + projection)
+    #         if projection == 'xy':
+    #             coordinates = coordinates[:, :2]  # Take x and y coordinates
+    #         elif projection == 'xz':
+    #             coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
+    #         elif projection == 'yz':
+    #             coordinates = coordinates[:, 1:] # Take y and z coordinates
+    #         else:
+    #             raise NotImplementedError('Projection type not implemented: ' + projection)
             
-            # Convert coordinates to pixel coordinates        
+    #         # Convert coordinates to pixel coordinates        
 
-            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
-                                        'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-            field = result.statistic
+    #         result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
+    #                                     'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+    #         field = result.statistic
             
-            field_total += field
+    #         field_total += field
 
-            if i % 10 == 0:
-                print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
+    #         if i % 10 == 0:
+    #             print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
 
-        print('Binned statistic time:', time.time() - t0)
+    #     print('Binned statistic time:', time.time() - t0)
 
 
-        # particles = self.loadSubsets(pType)
-        # coordinates = particles['Coordinates'] # kpc/h
-        # masses = particles['Masses'] # Msun/h
+    #     # particles = self.loadSubsets(pType)
+    #     # coordinates = particles['Coordinates'] # kpc/h
+    #     # masses = particles['Masses'] # Msun/h
         
                 
-        # if projection == 'xy':
-        #     coordinates = coordinates[:, :2]  # Take x and y coordinates
-        # elif projection == 'xz':
-        #     coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
-        # elif projection == 'yz':
-        #     coordinates = coordinates[:, 1:] # Take y and z coordinates
-        # else:
-        #     raise NotImplementedError('Projection type not implemented: ' + projection)
+    #     # if projection == 'xy':
+    #     #     coordinates = coordinates[:, :2]  # Take x and y coordinates
+    #     # elif projection == 'xz':
+    #     #     coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
+    #     # elif projection == 'yz':
+    #     #     coordinates = coordinates[:, 1:] # Take y and z coordinates
+    #     # else:
+    #     #     raise NotImplementedError('Projection type not implemented: ' + projection)
         
-        # # Convert coordinates to pixel coordinates        
-        # gridSize = [nPixels, nPixels]
-        # minMax = [0, self.header['BoxSize']]
+    #     # # Convert coordinates to pixel coordinates        
+    #     # gridSize = [nPixels, nPixels]
+    #     # minMax = [0, self.header['BoxSize']]
 
-        # t0 = time.time()
-        # result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
-        #                              'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        # field = result.statistic
+    #     # t0 = time.time()
+    #     # result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
+    #     #                              'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+    #     # field = result.statistic
         
-        # print('Binned statistic time:', time.time() - t0)
+    #     # print('Binned statistic time:', time.time() - t0)
         
-        if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
-            elif self.simType == 'SIMBA':
-                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-                            pType + '_' + str(nPixels) + '_' + projection)
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
+    #     if save:
+    #         if self.simType == 'IllustrisTNG':
+    #             saveName = (self.sim + '_' + str(self.snapshot) + '_' + 
+    #                         pType + '_' + str(nPixels) + '_' + projection)
+    #             np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
+    #         elif self.simType == 'SIMBA':
+    #             saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
+    #                         pType + '_' + str(nPixels) + '_' + projection)
+    #             np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', field_total)
 
-        return field_total
+    #     return field_total
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 

@@ -53,6 +53,7 @@ def main(path2config, verbose=True):
     saveField = config['save_field']
     radDistance = config['rad_distance']
     pType = config['particle_type']
+    projection = config.get('projection', 'xy')
     
     # fractionType = config['fraction_type']
 
@@ -94,7 +95,8 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name)
                 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance,
+                                                     projection=projection)
 
 
                 try:
@@ -117,7 +119,8 @@ def main(path2config, verbose=True):
                                        feedback=feedback)
                 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance)
+                                                     save=saveField, load=loadField, radDistance=radDistance,
+                                                     projection=projection)
                                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
 

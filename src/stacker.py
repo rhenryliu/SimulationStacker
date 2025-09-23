@@ -27,7 +27,7 @@ from utils import fft_smoothed_map
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
-from mapMaker import create_field, compute_cosmological_parameters, calculate_pixel_parameters 
+from mapMaker import create_field 
 
 
 class SimulationStacker(object):
@@ -139,8 +139,22 @@ class SimulationStacker(object):
         if z is None:
             z = self.z
             
-        cosmo, dA, theta_arcmin = compute_cosmological_parameters(self.header, z) # type: ignore
-        nPixels, arcminPerPixel = calculate_pixel_parameters(theta_arcmin, pixelSize)
+        # First define cosmology
+        cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
+
+        # Get distance to the snapshot redshift
+        dA = cosmo.angular_diameter_distance(z).to(u.kpc).value
+        dA *= self.header['HubbleParam']  # Convert to kpc/h
+        
+        # Get the box size in angular units.
+        theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes
+        print(f"Map size at z={z}: {theta_arcmin:.2f} arcmin")
+
+        # Round up to the nearest integer, pixel size is 0.5 arcmin as in ACT
+        nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
+        arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
+        # beamsize_pixel = beamsize / arcminPerPixel  # Convert arcminutes to pixels
+
         
         # Now that we know the expected pixel size, we try to load the map first before computing it:
         if load:

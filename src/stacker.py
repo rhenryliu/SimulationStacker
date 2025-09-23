@@ -27,7 +27,7 @@ from utils import fft_smoothed_map
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
-from mapMaker import create_field, compute_cosmological_parameters, calculate_pixel_parameters, create_basic_field, create_sz_field
+from mapMaker import create_field, compute_cosmological_parameters, calculate_pixel_parameters 
 
 
 class SimulationStacker(object):
@@ -103,7 +103,21 @@ class SimulationStacker(object):
     
         if nPixels is None:
             nPixels = self.nPixels
-        return create_field(self, pType, nPixels, projection, save, load)
+
+        if load:
+            try:
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+            except ValueError as e:
+                print(e)
+                print("Computing the field instead...")
+                
+        field = create_field(self, pType, nPixels, projection)
+        
+        if save:
+            save_data(field, self.simType, self.sim, self.snapshot, 
+                      self.feedback, pType, nPixels, projection, 'field')
+
+        return field
     
     def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5):
         """Make a 2D map convolved with a beam for a given particle type. 
@@ -145,14 +159,16 @@ class SimulationStacker(object):
             map_ = fft_smoothed_map(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
 
         if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
-            elif self.simType == 'SIMBA':
-                saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-                            pType + '_' + str(nPixels) + '_' + projection + '_map')
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
+            save_data(map_, self.simType, self.sim, self.snapshot, 
+                      self.feedback, pType, nPixels, projection, 'map')
+            # if self.simType == 'IllustrisTNG':
+            #     saveName = self.sim + '_' + str(self.snapshot) + '_' + \
+            #         pType + '_' + str(nPixels) + '_' + projection + '_map'
+            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
+            # elif self.simType == 'SIMBA':
+            #     saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
+            #                 pType + '_' + str(nPixels) + '_' + projection + '_map')
+            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
 
         return map_
 
@@ -616,8 +632,8 @@ class SimulationStacker(object):
         """Load a precomputed field or map from file."""
         if nPixels is None:
             nPixels = self.nPixels
-        return load_data(self.simPath, self.simType, self.sim, self.snapshot, 
-                        self.feedback, pType, nPixels, projection, type)
+        return load_data(self.simType, self.sim, self.snapshot, 
+                         self.feedback, pType, nPixels, projection, type)
 
     # def snapPath(self, simType, chunkNum=0, pathOnly=False):
     #     """Get the snapshot path for the given simulation type.

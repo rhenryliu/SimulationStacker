@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import glob
 import illustris_python as il
+from pathlib import Path
 
 
 def snap_path(sim_path, snapshot, sim_type, sim_name=None, feedback=None, chunk_num=0, path_only=False):
@@ -197,7 +198,8 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     return particles
 
 
-def load_data(sim_path, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, projection='xy', data_type='field'):
+def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
+              projection='xy', data_type='field', base_path='/pscratch/sd/r/rhliu/simulations/'):
     """Load a precomputed field or map from file.
 
     Args:
@@ -220,23 +222,24 @@ def load_data(sim_path, sim_type, sim_name, snapshot, feedback, p_type, n_pixels
         if sim_type == 'IllustrisTNG':
             save_name = (sim_name + '_' + str(snapshot) + '_' + 
                         p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-            data = np.load(f'/pscratch/sd/r/rhliu/simulations/{sim_type}/products/2D/{save_name}.npy')
+            data = np.load(f'{base_path}/{sim_type}/products/2D/{save_name}.npy')
         elif sim_type == 'SIMBA':
             save_name = (sim_name + '_' + feedback + '_' + str(snapshot) + '_' +
                         p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-            data = np.load(f'/pscratch/sd/r/rhliu/simulations/{sim_type}/products/2D/{save_name}.npy')
+            data = np.load(f'{base_path}/{sim_type}/products/2D/{save_name}.npy')
     except FileNotFoundError:
         raise ValueError(f"Data for file '{save_name}' not found. Please compute it first.")
 
     return data
 
 
-def save_data(data, sim_path, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, projection='xy', data_type='field'):
+def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
+              projection='xy', data_type='field', base_path='/pscratch/sd/r/rhliu/simulations/',
+              mkdir=True):
     """Save a field or map to file.
 
     Args:
         data (np.ndarray): 2D array to save.
-        sim_path (str): Base path to the simulation.
         sim_type (str): The type of simulation.
         sim_name (str): Name of the simulation.
         snapshot (int): Snapshot number.
@@ -245,15 +248,26 @@ def save_data(data, sim_path, sim_type, sim_name, snapshot, feedback, p_type, n_
         n_pixels (int): Number of pixels.
         projection (str): Projection direction.
         data_type (str): Type of data ('field' or 'map').
+        base_path (str): Base path to the directory for saving data.
+        mkdir (bool): Whether to create the directory if it doesn't exist.
     """
     suffix = '_map' if data_type == 'map' else ''
     
     if sim_type == 'IllustrisTNG':
         save_name = (sim_name + '_' + str(snapshot) + '_' + 
                     p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-        np.save(f'/pscratch/sd/r/rhliu/simulations/{sim_type}/products/2D/{save_name}.npy', data)
+        
+        # savePath = Path(f'{base_path}/{sim_type}/products/2D/')
+        # savePath.mkdir(parents=True, exist_ok=True)
+        
+        # np.save(savePath / f'{save_name}.npy', data)
     elif sim_type == 'SIMBA':
         save_name = (sim_name + '_' + feedback + '_' + str(snapshot) + '_' +
                     p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-        np.save(f'/pscratch/sd/r/rhliu/simulations/{sim_type}/products/2D/{save_name}.npy', data)
+        
+    savePath = Path(f'{base_path}/{sim_type}/products/2D/')
+    if mkdir:
+        savePath.mkdir(parents=True, exist_ok=True)
+    
+    np.save(savePath / f'{save_name}.npy', data)
 

@@ -49,7 +49,7 @@ def calculate_pixel_parameters(theta_arcmin, pixelSize):
     arcminPerPixel = theta_arcmin / nPixels
     return nPixels, arcminPerPixel
 
-def create_basic_field(stacker, pType, nPixels, projection, save, load, 
+def create_basic_field(stacker, pType, nPixels, projection,  
                       weight_calculator=None, required_keys=None):
     """Create a field for any particle type with customizable weighting.
     
@@ -58,19 +58,17 @@ def create_basic_field(stacker, pType, nPixels, projection, save, load,
         pType: Particle type
         nPixels: Number of pixels
         projection: Projection direction
-        save: Whether to save the field
-        load: Whether to load existing field
         weight_calculator: Function to calculate weights from particles. 
                           If None, uses masses.
         required_keys: List of keys to load from particles. 
                       If None, uses ['Coordinates', 'Masses'].
     """
-    if load:
-        try:
-            return stacker.loadData(pType, nPixels=nPixels, projection=projection, type='field')
-        except ValueError as e:
-            print(e)
-            print("Computing the field instead...")
+    # if load:
+    #     try:
+    #         return stacker.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+    #     except ValueError as e:
+    #         print(e)
+    #         print("Computing the field instead...")
     
     # Set default keys if not provided
     if required_keys is None:
@@ -109,12 +107,12 @@ def create_basic_field(stacker, pType, nPixels, projection, save, load,
         if i % 10 == 0:
             print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
     
-    if save:
-        save_field_data(stacker, pType, nPixels, projection, field_total)
+    # if save:
+    #     save_field_data(stacker, pType, nPixels, projection, field_total)
     
     return field_total
 
-def create_sz_field(stacker, pType, nPixels, projection, save, load):
+def create_sz_field(stacker, pType, nPixels, projection):
     """Create SZ-specific fields (tSZ, kSZ, tau)
 
     Args:
@@ -122,8 +120,6 @@ def create_sz_field(stacker, pType, nPixels, projection, save, load):
         pType (str): Particle type to create the field for. Either 'tSZ', 'kSZ', or 'tau'.
         nPixels (int): Number of pixels of the map in each direction. The created field will be square.
         projection (str): Projection direction (One of 'xy', 'xz', 'yz').
-        save (bool): Whether to save the field data.
-        load (bool): Whether to load existing field data.
 
     Returns:
         2D np.ndarray: The created SZ field. 2D array of shape (nPixels, nPixels).
@@ -154,7 +150,7 @@ def create_sz_field(stacker, pType, nPixels, projection, save, load):
         return get_sz_weights(pType, sz_quantities)
     
     # Use the generalized create_basic_field function
-    return create_basic_field(stacker, pType, nPixels, projection, save, load,
+    return create_basic_field(stacker, pType, nPixels, projection, 
                              weight_calculator=sz_weight_calculator,
                              required_keys=sz_keys)
 
@@ -280,27 +276,7 @@ def get_sz_weights(pType, sz_quantities):
     else:
         raise ValueError('Particle type not recognized: ' + pType)
 
-def save_field_data(stacker, pType, nPixels, projection, field_data):
-    """Save field data to appropriate location.
-
-    Args:
-        stacker (SimulationStacker): The stacker instance.
-        pType (str): The type of particle ('tSZ', 'kSZ', or 'tau').
-        nPixels (int): The number of pixels in the map.
-        projection (str): The projection direction ('xy', 'yz', or 'xz').
-        field_data (np.ndarray): The field data to save.
-    """
-    
-    if stacker.simType == 'IllustrisTNG':
-        saveName = (stacker.sim + '_' + str(stacker.snapshot) + '_' + 
-                    pType + '_' + str(nPixels) + '_' + projection)
-        np.save(f'/pscratch/sd/r/rhliu/simulations/{stacker.simType}/products/2D/{saveName}.npy', field_data)
-    elif stacker.simType == 'SIMBA':
-        saveName = (stacker.sim + '_' + stacker.feedback + '_' + str(stacker.snapshot) + '_' +
-                    pType + '_' + str(nPixels) + '_' + projection)
-        np.save(f'/pscratch/sd/r/rhliu/simulations/{stacker.simType}/products/2D/{saveName}.npy', field_data)
-
-def create_field(stacker, pType, nPixels, projection, save, load):
+def create_field(stacker, pType, nPixels, projection):
     """Wrapper function to create the appropriate field type.
 
     Args:
@@ -318,8 +294,8 @@ def create_field(stacker, pType, nPixels, projection, save, load):
     sz_types = ['tSZ', 'kSZ', 'tau']
     
     if pType in sz_types:
-        return create_sz_field(stacker, pType, nPixels, projection, save, load)
+        return create_sz_field(stacker, pType, nPixels, projection)
     else:
-        return create_basic_field(stacker, pType, nPixels, projection, save, load)
+        return create_basic_field(stacker, pType, nPixels, projection)
 
 

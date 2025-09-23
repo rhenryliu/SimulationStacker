@@ -27,7 +27,7 @@ from utils import fft_smoothed_map
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
-from mapMaker import create_field
+from mapMaker import create_field 
 
 class SZMapStacker(SimulationStacker):
     
@@ -102,14 +102,16 @@ class SZMapStacker(SimulationStacker):
             map_ = fft_smoothed_map(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
 
         if save:
-            if self.simType == 'IllustrisTNG':
-                saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
-            elif self.simType == 'SIMBA':
-                saveName = self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' + \
-                    pType + '_' + str(nPixels) + '_' + projection + '_map'
-                np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
+            save_data(map_, self.simType, self.sim, self.snapshot, 
+                      self.feedback, pType, nPixels, projection, 'map')
+            # if self.simType == 'IllustrisTNG':
+            #     saveName = self.sim + '_' + str(self.snapshot) + '_' + \
+            #         pType + '_' + str(nPixels) + '_' + projection + '_map'
+            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
+            # elif self.simType == 'SIMBA':
+            #     saveName = self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' + \
+            #         pType + '_' + str(nPixels) + '_' + projection + '_map'
+            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
 
         return map_
 
@@ -117,7 +119,23 @@ class SZMapStacker(SimulationStacker):
     def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
         if nPixels is None:
             nPixels = self.nPixels
-        return create_field(self, pType, nPixels, projection, save, load)
+
+        
+        if load:
+            try:
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+            except ValueError as e:
+                print(e)
+                print("Computing the field instead...")
+                
+        field = create_field(self, pType, nPixels, projection)
+        
+
+        if save:
+            save_data(field, self.simType, self.sim, self.snapshot, 
+                      self.feedback, pType, nPixels, projection, 'field')
+        
+        return field
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 

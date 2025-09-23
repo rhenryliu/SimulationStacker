@@ -257,7 +257,18 @@ def calculate_sz_quantities(particles, constants, unit_dens, unit_vol, a):
     }
 
 def get_sz_weights(pType, sz_quantities):
-    """Get appropriate weights for different SZ field types."""
+    """Get appropriate weights for different SZ field types.
+
+    Args:
+        pType (str): The type of SZ field ('tSZ', 'kSZ', or 'tau').
+        sz_quantities (dict): Dictionary containing SZ-related quantities.
+
+    Raises:
+        ValueError: If the particle type is not recognized.
+
+    Returns:
+        np.ndarray: The weights for the specified SZ field type.
+    """
     if pType == 'tSZ':
         return sz_quantities['dY']
     elif pType == 'kSZ':
@@ -270,7 +281,16 @@ def get_sz_weights(pType, sz_quantities):
         raise ValueError('Particle type not recognized: ' + pType)
 
 def save_field_data(stacker, pType, nPixels, projection, field_data):
-    """Save field data to appropriate location."""
+    """Save field data to appropriate location.
+
+    Args:
+        stacker (SimulationStacker): The stacker instance.
+        pType (str): The type of particle ('tSZ', 'kSZ', or 'tau').
+        nPixels (int): The number of pixels in the map.
+        projection (str): The projection direction ('xy', 'yz', or 'xz').
+        field_data (np.ndarray): The field data to save.
+    """
+    
     if stacker.simType == 'IllustrisTNG':
         saveName = (stacker.sim + '_' + str(stacker.snapshot) + '_' + 
                     pType + '_' + str(nPixels) + '_' + projection)
@@ -281,7 +301,20 @@ def save_field_data(stacker, pType, nPixels, projection, field_data):
         np.save(f'/pscratch/sd/r/rhliu/simulations/{stacker.simType}/products/2D/{saveName}.npy', field_data)
 
 def create_field(stacker, pType, nPixels, projection, save, load):
-    """Factory function to create the appropriate field type."""
+    """Wrapper function to create the appropriate field type.
+
+    Args:
+        stacker (SimulationStacker): The stacker instance.
+        pType (str): The type of particle ('tSZ', 'kSZ', or 'tau').
+        nPixels (int): The number of pixels in the map.
+        projection (str): The projection direction ('xy', 'yz', or 'xz').
+        save (bool): Whether to save the field data.
+        load (bool): Whether to load the field data.
+
+    Returns:
+        np.ndarray: The created field data.
+    """
+    
     sz_types = ['tSZ', 'kSZ', 'tau']
     
     if pType in sz_types:

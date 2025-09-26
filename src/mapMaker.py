@@ -295,8 +295,10 @@ def create_field(stacker, pType, nPixels, projection):
     
     if pType in sz_types:
         return make_sz_field(stacker, pType, nPixels, projection)
+    elif pType == 'total':
+        return make_total_field(stacker, pType, nPixels, projection)
     else:
-        return make_basic_field(stacker, pType, nPixels, projection)
+        return make_mass_field(stacker, pType, nPixels, projection)
 
 
 def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
@@ -304,18 +306,26 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
     Much of the algo for this method comes from the SZ_TNG repo on Github authored by Boryana Hadzhiyska.
 
     Args:
-        pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'.
+        pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'. Added 'tau_DM'
             Note that in the case of 'kSZ', an optical depth (tau) map will be created instead of a velocity map.
         z (float, optional): The redshift to use for the map. Defaults to None.
         nPixels: Size of the output map in pixels. Defaults to stacker.nPixels.
         save (bool, optional): Whether to save the map to disk. Defaults to False.
         load (bool, optional): Whether to load the map from disk. Defaults to True.
         pixelSize (float, optional): The size of the pixels in the map. Defaults to 0.5.
+    
+    TODO: Implement the same functionality for DM. 
     """
     if nPixels is None:
         nPixels = stacker.nPixels
         
-    
+    if pType == 'tau_DM':
+        pType = 'tau'
+        print("Warning: 'tau_DM' is experimental.")
+        use_tau_DM = True
+    else:
+        use_tau_DM = False
+
     # If loading fails, we then compute the necessary fields. Much of the code below is the same as the SZ_TNG repo.            
     # Define some necessary parameters: (Physical units in cgs)
     gamma = 5/3. # unitless. Adiabatic Index
@@ -430,7 +440,7 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
     
     return field_total
 
-def make_basic_field(stacker, pType, nPixels=None, projection='xy'):
+def make_mass_field(stacker, pType, nPixels=None, projection='xy'):
     """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
     Args:
@@ -498,3 +508,34 @@ def make_basic_field(stacker, pType, nPixels=None, projection='xy'):
     print('Binned statistic time:', time.time() - t0)
 
     return field_total
+
+def make_total_field(stacker, pType, nPixels=None, projection='xy'):
+    """Create a total mass field by summing over all particle types.
+
+    Args:
+        stacker (SimulationStacker): The stacker instance.
+        pType (str): The type of particle to use for the map. Either 'total'.
+        nPixels (int, optional): The number of pixels in the map. Defaults to stacker.nPixels.
+        projection (str, optional): The projection direction ('xy', 'yz', or 'xz'). Defaults to 'xy'.
+
+    Raises:
+        ValueError: If pType is not 'total'.
+
+    Returns:
+        np.ndarray: The created total mass field data.
+    """
+    if nPixels is None:
+        nPixels = stacker.nPixels
+
+    if pType != 'total':
+        raise ValueError("pType must be 'total' for make_total_field.")
+
+    particle_types = ['gas', 'DM', 'Stars', 'BH']
+    total_field = np.zeros((nPixels, nPixels))
+
+    for pt in particle_types:
+        field = make_mass_field(stacker, pt, nPixels, projection)
+        total_field += field
+
+    return total_field
+

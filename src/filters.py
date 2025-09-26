@@ -33,14 +33,14 @@ def CAP(mass_grid, r_grid, r):
     inRing *= np.sum(inDisk) / np.sum(inRing)
     return float(np.sum((inDisk - inRing) * mass_grid))
 
-def delta_sigma(mass_grid, r_grid, r, dr=0.1):
+def delta_sigma(mass_grid, r_grid, r, dr=0.5):
     """Calculate the excess surface mass density (ΔΣ) for a given radius.
 
     Args:
         mass_grid (np.ndarray): The mass distribution array.
         r_grid (np.ndarray): The radial grid corresponding to the mass distribution.
         r (float): The radius at which to calculate ΔΣ.
-        dr (float, optional): The width of the annulus. Defaults to 0.1.
+        dr (float, optional): The width of the annulus. Defaults to 0.5. (arcminutes)
 
     Returns:
         float: The value of ΔΣ at the given radius.
@@ -50,6 +50,40 @@ def delta_sigma(mass_grid, r_grid, r, dr=0.1):
     r_mask = np.logical_and((r_grid >= r), (r_grid < r + dr))
     sigma_value = np.sum(mass_grid[r_mask]) / (2 * np.pi * r * dr)
     return float(mean_sigma - sigma_value)
+
+def delta_sigma_kernel_map(
+    mass_grid: np.ndarray,
+    r_grid: np.ndarray,
+    r: float,
+    dr: float = 0.5,
+    # pixsize: float = 1.0,
+) -> float:
+    """
+    * `mass_grid` – 2‑D Σ map.
+    * `r_grid`    – 2‑D array of radial distances (same shape as `mass_grid`).
+    * `r`         – aperture radius.
+    * `dr`        – thickness of the outer ring (R < r < R+dr).
+    * `pixsize`   – linear size of one pixel in *same* units as `r`.
+
+    The function builds the analytical compensated kernel and performs the
+    dot‑product (a single `np.sum`). Setting `dr` small reproduces the mean‑over‑thin‑annulus
+    estimator used in the original code; larger `dr` gives a thicker, lower‑noise ring.
+    """
+
+    if dr <= 0:
+        raise ValueError("dr must be positive.")
+
+    R_out = r + dr
+
+    # Build compensated kernel analytically from r_grid
+    kernel              = np.zeros_like(r_grid, dtype=float)
+    kernel[r_grid < r]  = +1.0 / (np.pi * r**2)
+    annulus             = (r_grid >= r) & (r_grid < R_out)
+    kernel[annulus]     = -1.0 / (np.pi * (R_out**2 - r**2))
+    # print(kernel.mean())
+    kernel             -= kernel.mean()  # ensure ∫K dA = 0 numerically
+
+    return float(np.sum(mass_grid * kernel) )#* pixsize**2)
 
 def CAP_from_mass(r, radii_2D, M_2D, k=3):
     """Calculate the Circular Averages Profile (CAP) from 1D mass distribution.

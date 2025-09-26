@@ -192,6 +192,8 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
 
     if add_mass:
         particles['Masses'] = header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
+
+    if (not 'ParticleIDs' in keys) and ('ParticleIDs' in particles):
         del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
             
     # particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h

@@ -9,7 +9,7 @@ import scipy
 from scipy.stats import binned_statistic_2d
 from scipy.ndimage import gaussian_filter
 from scipy.interpolate import InterpolatedUnivariateSpline
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import FlatLambdaCDM, Planck18
 from astropy import units as u
 
 # from abacusnbody.analysis.tsc import tsc_parallel
@@ -115,3 +115,108 @@ def format_string_sci(num):
     base, exponent = f"{num:.2e}".split('e')
     base = base.rstrip('0').rstrip('.')  # Remove trailing zeros and decimal if needed
     return f"{base}e{int(exponent)}"
+
+    
+# Unit Conversions and Cosmology
+def ksz_from_delta_sigma(
+    delta_sigma,
+    z_l,
+    v_los = 300 * u.km / u.s,
+    cosmology = Planck18,
+    mu_e = 1.14,
+    delta_sigma_is_comoving = False,
+    cov_delta_sigma = None,   # optional covariance on ΔΣ
+    return_tau = False,
+):
+    """
+    Convert weak-lensing ΔΣ(R) to kSZ ΔT(R) in μK assuming Σ_gas = f_b * ΔΣ_phys
+    with f_b = Ω_b / Ω_m and fully ionized gas.
+
+    Parameters
+    ----------
+    delta_sigma : astropy.units.Quantity
+        ΔΣ (mass surface density), any mass/area unit (e.g., 200 * u.Msun/u.pc**2).
+    z_l : float
+        Lens redshift (only used if `delta_sigma_is_comoving=True`).
+    v_los : Quantity, default 300 km/s
+        Electron-weighted LOS peculiar velocity (sign convention: +away gives -ΔT).
+    cosmology : astropy.cosmology instance
+        Cosmology to use for T_CMB, Ω_b and Ω_m.
+d    mu_e : float, default 1.14
+        Mean molecular weight per free electron.
+    delta_sigma_is_comoving : bool
+        If True, convert ΔΣ_com → ΔΣ_phys by multiplying by (1+z_l)^2.
+    cov_delta_sigma : None or array-like or astropy Quantity
+        Optional covariance matrix for ΔΣ. If a Quantity, its unit should be (mass/area)^2.
+        If comoving, the code multiplies it by (1+z_l)^4 to convert to physical units.
+    return_tau : bool
+        If True, also return τ (per element) implied by f_b * ΔΣ.
+
+    Returns
+    -------
+    dT_muK : np.ndarray or float
+        kSZ temperature in μK (same shape as `delta_sigma`).
+    tau : np.ndarray or float, optional
+        Optical depth (returned if `return_tau=True`).
+    cov_dT_muK : np.ndarray, optional
+        Covariance in μK^2 (returned if `cov_delta_sigma` is not None).
+        
+    TODO:
+    Check the correctness of the unit handling in the covariance propagation.
+    """
+    T_CMB = cosmology.Tcmb0
+    # T_CMB = 2.7255 * u.K  # FIRAS/Planck normalization
+    Omega_b = cosmology.Ob0
+    Omega_m = cosmology.Om0
+    
+    if not hasattr(delta_sigma, "unit"):
+        raise TypeError("`delta_sigma` must be an astropy Quantity with mass/area units.")
+
+    # Convert comoving ΔΣ → physical ΔΣ
+    ds_phys = delta_sigma * ((1.0 + z_l) ** 2 if delta_sigma_is_comoving else 1.0)
+    ds_phys = ds_phys.to(u.kg / u.m**2)
+
+    # Constant gas fraction
+    f_b = Omega_b / Omega_m
+
+    # Electron column and optical depth
+    Sigma_gas = f_b * ds_phys                               # kg/m^2
+    N_e = (Sigma_gas / (mu_e * const.m_p)).to(1 / u.m**2)         # 1/m^2 # type: ignore
+    tau = (const.sigma_T * N_e).decompose().value                 # dimensionless # type: ignore
+
+    # Linear coefficient α mapping Σ_tot (phys) → ΔT (μK)
+    alpha = (-T_CMB * (v_los / const.c) * const.sigma_T / (mu_e * const.m_p)) # K * m^2/kg # type: ignore
+    alpha *= f_b                                            # include f_b
+    # As μK per (kg/m^2):
+    alpha_muK_per_Sigma = alpha.to(u.uK / (u.kg / u.m**2)).value
+
+    # Mean ΔT in μK
+    dT_muK = (alpha * ds_phys).to(u.uK).value
+
+    # If covariance is provided, propagate it: Cov_T = α^2 * Cov_Σphys
+    outputs = [dT_muK]
+    if return_tau:
+        outputs.append(tau)
+
+    if cov_delta_sigma is not None:
+        cov = cov_delta_sigma
+        # If quantity, convert to (kg/m^2)^2; if plain array, assume same units as delta_sigma
+        if hasattr(cov, "unit"):
+            cov = cov.to((u.kg / u.m**2)**2).value
+        else:
+            cov = np.asarray(cov, dtype=float)
+            # If ΔΣ was comoving, rescale covariance by (1+z)^4 to get physical
+            if delta_sigma_is_comoving:
+                cov = cov * (1.0 + z_l)**4
+
+            # If ΔΣ was not a Quantity (but here it always is), we would need a unit factor.
+
+        cov_shape = np.shape(cov)
+        ds = np.atleast_1d(ds_phys.value)
+        if cov_shape != (ds.size, ds.size):
+            raise ValueError(f"`cov_delta_sigma` must be an (N,N) matrix with N={ds.size}.")
+
+        cov_dT = (alpha_muK_per_Sigma**2) * cov   # μK^2
+        outputs.append(cov_dT)
+
+    return outputs[0] if len(outputs) == 1 else tuple(outputs)

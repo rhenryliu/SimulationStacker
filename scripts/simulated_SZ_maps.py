@@ -93,11 +93,14 @@ def main(path2config, verbose=True):
                 
                 stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=0.5, maxRadius=6.0, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
 
+                print(f"Stacked {profiles0.shape[1]} maps for {sim_name} at z={redshift}")
+                print(radii0 * radDistance)
+                print(profiles0.mean(axis=1))                
 
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
@@ -118,10 +121,14 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=0.5, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                                
+                
+                print(f"Stacked {profiles0.shape[1]} maps for {sim_name_show} at z={redshift}")
+                print(radii0 * radDistance)
+                print(profiles0.mean(axis=1))                
+                
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
                 # if fractionType == 'gas':

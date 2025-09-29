@@ -220,3 +220,32 @@ d    mu_e : float, default 1.14
         outputs.append(cov_dT)
 
     return outputs[0] if len(outputs) == 1 else tuple(outputs)
+
+    
+def comoving_to_arcmin(L_com_kpch, z, cosmo=Planck18):
+    """
+    Convert a comoving length at redshift z into angular size [arcmin].
+    
+    Parameters
+    ----------
+    L_com_kpch : float
+        Comoving length in kpc/h.
+    z : float
+        Redshift.
+    
+    Returns
+    -------
+    theta_arcmin : float
+        Angular size in arcminutes.
+    """
+    # Convert kpc/h -> Mpc
+    L_com_Mpc = L_com_kpch / (1000.0 * cosmo.h)
+    
+    # Comoving distance to redshift z [Mpc]
+    chi = cosmo.comoving_distance(z).value
+    
+    # Angular size in radians
+    theta_rad = L_com_Mpc / chi
+    
+    # Convert to arcminutes
+    return theta_rad * (180.0 / np.pi) * 60.0

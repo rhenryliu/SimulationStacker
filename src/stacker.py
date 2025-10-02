@@ -25,7 +25,7 @@ import illustris_python as il
 from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import select_massive_halos, halo_ind
-from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
+from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel_map, delta_sigma_ring
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field 
 
@@ -76,6 +76,9 @@ class SimulationStacker(object):
         
         # self.Lbox = self.header['BoxSize'] # kpc/h
         self.h = self.header['HubbleParam'] # Hubble parameter
+
+        # Define cosmology
+        self.cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
         
         # self.kpcPerPixel = self.Lbox / self.nPixels # technically kpc/h per pixel
         self.fields = {}
@@ -421,7 +424,14 @@ class SimulationStacker(object):
         elif filterType == 'CAP':
             filterFunc = CAP
         elif filterType == 'DSigma':
-            filterFunc = delta_sigma
+            # filterFunc = delta_sigma_kernel_map
+            filterFunc = delta_sigma_ring
+        elif filterType == 'DSigma_mccarthy':
+            filterFunc = delta_sigma_mccarthy
+            if radDistanceUnits != 'arcmin':
+                raise ValueError('DSigma_mccarthy filter currently requires radDistanceUnits to be arcmin')
+            if z is None:
+                raise ValueError('DSigma_mccarthy filter requires a redshift z to be specified')
         else:
             raise NotImplementedError('Filter Type not implemented: ' + filterType)
 
@@ -455,16 +465,47 @@ class SimulationStacker(object):
             cutout = SimulationStacker.cutout_2d_periodic(array, haloLoc, n_vir*RadPixel)
             rr = SimulationStacker.radial_distance_grid(cutout, (-n_vir, n_vir))
             
-            # Apply filters at each radius
-            profile = []
-            for rad in radii:
-                filt_result = filterFunc(cutout, rr, rad)
-                profile.append(filt_result)
             
-            profile = np.array(profile)
+            if filterType == 'DSigma_mccarthy':
+                # Use the Delta Sigma filter from Ian McCarthy et al. 2024
+                # pass
+                if radDistanceUnits != 'arcmin':
+                    raise ValueError('DSigma_mccarthy filter currently requires radDistanceUnits to be arcmin')
+                radii, profile, _ = delta_sigma_mccarthy(cutout, rr, pixel_scale_arcmin=pixelSize, z=z, # type: ignore
+                                                         cosmo=cosmo, rmin_theta=minRadius, rmax_theta=maxRadius, n_rbins=numRadii)
+            elif filterType == 'DSigma':
+                # Use the Delta Sigma filter from Melchior et al. 2021
+                # pass
+                profile = []
+                for rad in radii:
+                    filt_result = filterFunc(cutout, rr, rad, pixel_size_pc=1.)  # dr=0.6r as in Melchior+2021
+                    profile.append(filt_result)
+                
+                profile = np.array(profile)
+            else:
+                
+                # Apply filters at each radius
+                profile = []
+                for rad in radii:
+                    filt_result = filterFunc(cutout, rr, rad)
+                    profile.append(filt_result)
+                
+                profile = np.array(profile)
+            
             profiles.append(profile)
             
         profiles = np.array(profiles).T
+
+        # if filterType == 'CAP':
+        #     # Post-process CAP profiles to convert to physical units
+        #     radii_CAP = np.linspace(minRadius, maxRadius, 25)
+        #     cap_profiles = CAP_from_mass(radii_CAP, radii, profiles.mean(axis=1))
+        #     return radii_CAP, cap_profiles
+        # if filterType == 'DSigma':
+        #     # Post-process DSigma profiles to convert to physical units
+        #     # radii_DSigma = np.linspace(minRadius, maxRadius, 9)
+        #     dsigma_profiles = DSigma_from_mass(radii, radii, profiles)
+        #     return radii, dsigma_profiles
         
         return radii, profiles
 

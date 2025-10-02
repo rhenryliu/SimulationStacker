@@ -11,6 +11,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import InterpolatedUnivariateSpline
 from astropy.cosmology import FlatLambdaCDM, Planck18
 from astropy import units as u
+import astropy.constants as const
 
 # from abacusnbody.analysis.tsc import tsc_parallel
 import time
@@ -222,30 +223,147 @@ d    mu_e : float, default 1.14
     return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
     
+
 def comoving_to_arcmin(L_com_kpch, z, cosmo=Planck18):
-    """
-    Convert a comoving length at redshift z into angular size [arcmin].
-    
-    Parameters
-    ----------
-    L_com_kpch : float
-        Comoving length in kpc/h.
-    z : float
-        Redshift.
-    
-    Returns
-    -------
-    theta_arcmin : float
-        Angular size in arcminutes.
+    """Convert a comoving length at redshift z into angular size [arcmin].
+
+    Args:
+        L_com_kpch (float or array-like): Comoving length in kpc/h.
+        z (float): Redshift.
+        cosmo (astropy.cosmology, optional): Cosmology object. Defaults to Planck18.
+
+    Returns:
+        float or array-like: Angular size in arcminutes.
     """
     # Convert kpc/h -> Mpc
-    L_com_Mpc = L_com_kpch / (1000.0 * cosmo.h)
-    
-    # Comoving distance to redshift z [Mpc]
-    chi = cosmo.comoving_distance(z).value
-    
+    L_com = (np.asarray(L_com_kpch) * u.kpc) / cosmo.h   # comoving kpc
+    L_com = L_com.to(u.Mpc)                              # comoving Mpc
+
+    # Comoving line-of-sight distance
+    DM = cosmo.comoving_transverse_distance(z)  # Mpc
+
+    # Angular size
+    theta = (L_com / DM) * u.rad
+
+    return theta.to(u.arcmin).value
+
+
+def arcmin_to_comoving(theta_arcmin, z, cosmo=Planck18):
+    """Convert an angular size [arcmin] at redshift z into comoving length [kpc/h].
+
+    Args:
+        theta_arcmin (float or array-like): Angular size in arcminutes.
+        z (float): Redshift.
+        cosmo (astropy.cosmology, optional): Cosmology object. Defaults to Planck18.
+
+    Returns:
+        float or array-like: Comoving length in kpc/h.
+    """
     # Angular size in radians
-    theta_rad = L_com_Mpc / chi
+    theta = np.asarray(theta_arcmin) * u.arcmin
+
+    # Comoving line-of-sight distance
+    DM = cosmo.comoving_transverse_distance(z)  # Mpc
+
+    # Comoving length
+    L_com = (theta.to(u.rad).value * DM).to(u.Mpc)
+
+    # Convert Mpc -> kpc/h
+    return (L_com.to(u.kpc) * cosmo.h).value
     
-    # Convert to arcminutes
-    return theta_rad * (180.0 / np.pi) * 60.0
+
+def bins_from_geomean_monotonic(r_desired, bins0=None, pick='mid'):
+    """
+    Recover strictly increasing bin edges from desired geometric-mean “centers.”
+
+    Given a positive, strictly increasing array `r_desired` of length N where each element is
+    intended to be the geometric mean of consecutive edges,
+      r_desired[i] = sqrt(bins[i] * bins[i+1]),
+    this function returns a strictly increasing array of edges `bins` (length N+1). The
+    construction depends on the choice of the leftmost edge `bins0 = bins[0]`. Monotonicity
+    imposes an open interval (lower, upper) for valid `bins0`; this function computes that
+    interval and either validates a provided `bins0` or selects one according to `pick`.
+
+    Args:
+      r_desired (array_like): Length-N positive array of target geometric means (centers).
+      bins0 (Optional[float]): Optional initial left edge b0. If provided, it must satisfy
+        lower < b0 < upper, where (lower, upper) is the allowed interval computed by this function.
+      pick (str): Strategy to choose `bins0` when it is not provided. Options:
+        - 'mid' or 'mean': arithmetic midpoint of (lower, upper) [default].
+        - 'geom' or 'geometric': geometric mean sqrt(lower * upper).
+        - 'lower': just above the lower bound (lower + 1e-12).
+        - 'upper': just below the upper bound (upper − 1e-12).
+
+    Returns:
+      Tuple[np.ndarray, Tuple[float, float]]:
+        - bins: (N+1,) strictly increasing array of edges such that
+          sqrt(bins[i] * bins[i+1]) == r_desired[i] for all i.
+        - (lower, upper): Open interval for valid `bins0`: lower < bins0 < upper.
+
+    Raises:
+      ValueError: If any element of `r_desired` is non-positive; if no monotonic solution exists
+        for the given `r_desired`; if a provided `bins0` lies outside (lower, upper); or if
+        `pick` is not recognized.
+      RuntimeError: If the constructed `bins` fail the strict monotonicity check
+        (should not occur for valid inputs).
+
+    Notes:
+      - The recurrence uses bins[i+1] = r_desired[i]**2 / bins[i]. Strictly increasing bins imply
+        bins[i] < r_desired[i] at each step, which yields alternating constraints on `bins0` that
+        define the open interval (lower, upper).
+      - `r_desired` need only be positive and increasing; it does not have to be logarithmically
+        spaced. If you want log-even **centers**, supply `r_desired` from `np.geomspace`.
+    """
+    import numpy as np
+    r_desired = np.asarray(r_desired, dtype=float)
+    if np.any(r_desired <= 0):
+        raise ValueError("r_desired must be positive")
+    n = len(r_desired)
+
+    # compute allowed interval for bins0 by propagating k_i and alternating exponent sign
+    lower = 0.0
+    upper = np.inf
+    k = 1.0
+    s = 1  # sign: +1 for even index b_i = k*b0, -1 for odd b_i = k/b0
+    for i in range(n):
+        if s == 1:
+            # constraint: k * b0 < r_desired[i]  => b0 < r_desired[i] / k
+            upper = min(upper, r_desired[i] / k)
+        else:
+            # constraint: k / b0 < r_desired[i]  => b0 > k / r_desired[i]
+            lower = max(lower, k / r_desired[i])
+        # update k and sign for next index
+        k = r_desired[i]**2 / k
+        s = -s
+
+    if not (lower < upper and upper > 0):
+        raise ValueError("No monotonic increasing solution for given r_desired")
+
+    # choose bins0 if not provided
+    if bins0 is None:
+        if pick in ('mid', 'mean'):
+            bins0 = 0.5 * (lower + upper)
+        elif pick in ('geom', 'geometric'):
+            bins0 = np.sqrt(lower * upper)
+        elif pick == 'lower':
+            bins0 = lower + 1e-12
+        elif pick == 'upper':
+            bins0 = upper - 1e-12
+        else:
+            raise ValueError("unknown pick option")
+    else:
+        bins0 = float(bins0)
+        if not (lower < bins0 < upper):
+            raise ValueError(f"bins0={bins0} outside allowed interval ({lower}, {upper})")
+
+    # build bins via recurrence
+    bins = np.empty(n + 1, dtype=float)
+    bins[0] = bins0
+    for i in range(n):
+        bins[i + 1] = r_desired[i]**2 / bins[i]
+
+    # final monotonicity check (safety)
+    if not np.all(bins[1:] > bins[:-1]):
+        raise RuntimeError("constructed bins are not strictly increasing (unexpected)")
+
+    return bins, (lower, upper)

@@ -47,7 +47,7 @@ def main(path2config, verbose=True):
         config = yaml.safe_load(f)
     
     redshift = config['redshift']
-    filterType = config['filter_type']
+    # filterType = config['filter_type']
     plotErrorBars = config['plot_error_bars']
     loadField = config['load_field']
     saveField = config['save_field']
@@ -93,11 +93,16 @@ def main(path2config, verbose=True):
                 
                 stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
+                stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
+                                               simType=sim_type_name)
+                
+                # radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0, # type: ignore
+                #                                      save=saveField, load=loadField, radDistance=radDistance,
+                #                                      projection=projection)
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-
+                radii1, profiles1 = stacker_tot.stackMap('DM', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=radDistance,
+                                                        projection=projection)
 
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
@@ -117,11 +122,17 @@ def main(path2config, verbose=True):
                 stacker = SZMapStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
+                stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
+                                               simType=sim_type_name, 
+                                               feedback=feedback)
                 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-                
+                # radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0,  # type: ignore
+                #                                      save=saveField, load=loadField, radDistance=radDistance,
+                #                                      projection=projection)
+                radii1, profiles1 = stacker_tot.stackMap('DM', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=radDistance,
+                                                        projection=projection)
+                                                
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
                 # if fractionType == 'gas':
@@ -147,11 +158,6 @@ def main(path2config, verbose=True):
             
             # Now for Plotting
             
-            # if fractionType == 'gas':
-            #     fraction = profiles0 / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-            # elif fractionType == 'baryon':
-            #     fraction = (profiles0 + profiles4) / (profiles0 + profiles1 + profiles4) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-            
             
             T_CMB = 2.7255
             # speed of light:
@@ -167,13 +173,18 @@ def main(path2config, verbose=True):
                 # SIMBA simulations have different feedback models               
                 sim_name = sim_name + '_' + sim['feedback'] 
             
-            profiles_plot = np.mean(profiles0, axis=1)
-            ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+            # plot_term = (profiles0 / (np.pi*radii0**2)[:, np.newaxis]) / profiles1 # TODO
+            plot_term = profiles1
+
+            profiles_plot = np.mean(plot_term, axis=1)
+            # profiles_plot = plot_term
+            print(radii1 * radDistance, profiles_plot)
+            ax.plot(radii1 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
-                profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                upper = np.percentile(profiles0, 75, axis=1)
-                lower = np.percentile(profiles0, 25, axis=1)
-                ax.fill_between(radii0 * radDistance, 
+                profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
+                upper = np.percentile(plot_term, 75, axis=1)
+                lower = np.percentile(plot_term, 25, axis=1)
+                ax.fill_between(radii1 * radDistance, 
                                 lower, 
                                 upper, 
                                 color=colours[j], alpha=0.2)
@@ -192,17 +203,17 @@ def main(path2config, verbose=True):
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
     ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
+    ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
     # ax.set_xscale('log')
-    ax.set_yscale('log')
+    # ax.set_yscale('log')
     # --- Secondary Y axis examples ---
 
     # 1) Multiplicative (recommended for log scale): y2 = k * y1
-    k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
-    secax = ax.secondary_yaxis('right',
-                               functions=(lambda y: y * k,      # forward
-                                          lambda y: y / k))     # inverse
-    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
+    # k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
+    # secax = ax.secondary_yaxis('right',
+    #                            functions=(lambda y: y * k,      # forward
+    #                                       lambda y: y / k))     # inverse
+    # secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
 
     # 2) If you really need an additive offset (ensure y+C > 0 on log scale):
     # C = 5.0  # additive offset in the same units
@@ -214,12 +225,12 @@ def main(path2config, verbose=True):
     ax.set_xlim(0.0, 6.5)
     # ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
+    ax.legend(loc='upper right', fontsize=12)
     ax.grid(True)
-    ax.set_title(f'{filterType} filter at z={redshift}', fontsize=18)
+    ax.set_title(f'Ratio at z={redshift}', fontsize=18)
     
     fig.tight_layout()
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

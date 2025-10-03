@@ -12,6 +12,10 @@ import astropy.units as u
 import numpy as np
 import glob
 from scipy.stats import binned_statistic_2d
+from abacusnbody.analysis.tsc import tsc_parallel #put it on a grid using tsc interpolation # type: ignore
+
+from mask_utils import get_cutout_mask_3d
+
 import time
 
 # def compute_cosmological_parameters(header, z, cosmology=Planck18):
@@ -276,7 +280,7 @@ import time
 #     else:
 #         raise ValueError('Particle type not recognized: ' + pType)
 
-def create_field(stacker, pType, nPixels, projection):
+def create_field(stacker, pType, nPixels, projection, dim='2D'):
     """Wrapper function to create the appropriate field type.
 
     Args:
@@ -294,25 +298,25 @@ def create_field(stacker, pType, nPixels, projection):
     sz_types = ['tSZ', 'kSZ', 'tau']
     
     if pType in sz_types:
-        return make_sz_field(stacker, pType, nPixels, projection)
+        return make_sz_field(stacker, pType, nPixels, projection, dim=dim)
     elif pType == 'total':
-        return make_total_field(stacker, pType, nPixels, projection)
+        return make_total_field(stacker, pType, nPixels, projection, dim=dim)
     else:
-        return make_mass_field(stacker, pType, nPixels, projection)
+        return make_mass_field(stacker, pType, nPixels, projection, dim=dim)
 
 
-def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
+def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """Create a map from the simulation data. 
     Much of the algo for this method comes from the SZ_TNG repo on Github authored by Boryana Hadzhiyska.
 
     Args:
+        stacker (SimulationStacker): The stacker instance.
         pType (str): The type of particle to use for the map. Either 'tSZ', 'kSZ', or 'tau'. Added 'tau_DM'
             Note that in the case of 'kSZ', an optical depth (tau) map will be created instead of a velocity map.
         z (float, optional): The redshift to use for the map. Defaults to None.
         nPixels: Size of the output map in pixels. Defaults to stacker.nPixels.
-        save (bool, optional): Whether to save the map to disk. Defaults to False.
-        load (bool, optional): Whether to load the map from disk. Defaults to True.
-        pixelSize (float, optional): The size of the pixels in the map. Defaults to 0.5.
+        projection (str, optional): The projection direction ('xy', 'yz', or 'xz'). Defaults to 'xy'.
+        dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
     
     TODO: Implement the same functionality for DM. 
     """
@@ -369,8 +373,15 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
         # print('Snaps:', snaps)
 
     # Convert coordinates to pixel coordinates        
-    gridSize = [nPixels, nPixels]
-    minMax = [0, stacker.header['BoxSize']]
+    if dim == '2D':
+        gridSize = [nPixels, nPixels]
+    elif dim == '3D':
+        gridSize = [nPixels, nPixels, nPixels]
+    else:
+        raise ValueError("dim must be either '2D' or '3D': " + dim)
+    
+    Lbox = stacker.header['BoxSize'] # kpc/h
+    minMax = [0, Lbox]
     field_total = np.zeros(gridSize)
     
     t0 = time.time()
@@ -401,36 +412,48 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
         # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
         dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Compton Y parameter
         b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
-        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Optical depth. This is what we use for
+        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Optical depth. This is what we use for tau
 
         # Now we make the fields:
         
-        if projection == 'xy':
-            coordinates = Co[:, :2]  # Take x and y coordinates
-        elif projection == 'xz':
-            coordinates = Co[:, [0, 2]] # Take x and z coordinates
-        elif projection == 'yz':
-            coordinates = Co[:, 1:] # Take y and z coordinates
-        else:
-            raise NotImplementedError('Projection type not implemented: ' + projection)
-
-        if pType == 'tSZ':
-            # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
-            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=dY, 
-                                        statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        elif pType == 'kSZ':
-            # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
-            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=b, 
-                                        statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        elif pType == 'tau':
-            # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
-            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=tau, 
-                                        statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        else:
-            raise ValueError('Particle type not recognized: ' + pType)
+        if dim == '2D':
         
-        field = result.statistic
-        field_total += field
+            if projection == 'xy':
+                coordinates = Co[:, :2]  # Take x and y coordinates
+            elif projection == 'xz':
+                coordinates = Co[:, [0, 2]] # Take x and z coordinates
+            elif projection == 'yz':
+                coordinates = Co[:, 1:] # Take y and z coordinates
+            else:
+                raise NotImplementedError('Projection type not implemented: ' + projection)
+
+            if pType == 'tSZ':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=dY)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=dY, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            elif pType == 'kSZ':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=b)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=b, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            elif pType == 'tau':
+                # field = hist2d_numba_seq(np.array([coordinates[:, 0], coordinates[:, 1]]), bins=gridSize, ranges=(minMax, minMax), weights=tau)
+                result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], values=tau, 
+                                            statistic='sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            else:
+                raise ValueError('Particle type not recognized: ' + pType)
+            
+            field = result.statistic
+            field_total += field
+        
+        elif dim == '3D':
+            if pType == 'tSZ':
+                field_total = tsc_parallel(Co, field_total, Lbox, weights=dY)
+            elif pType == 'kSZ':
+                field_total = tsc_parallel(Co, field_total, Lbox, weights=b)
+            elif pType == 'tau':
+                field_total = tsc_parallel(Co, field_total, Lbox, weights=tau)
+            else:
+                raise ValueError('Particle type not recognized: ' + pType)
 
         if i % 10 == 0:
             print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
@@ -440,15 +463,15 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy'):
     
     return field_total
 
-def make_mass_field(stacker, pType, nPixels=None, projection='xy'):
+def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
     Args:
+        stacker (SimulationStacker): The stacker instance.
         pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
         nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to stacker.nPixels.
         projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
-        save (bool, optional): If True, saves the field to a file. Defaults to False.
-        load (bool, optional): If True, loads the field from a file if it exists and returns the field. Defaults to True.
+        dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
 
     Raises:
         NotImplementedError: If field is not one of the ones listed above.
@@ -475,8 +498,15 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy'):
     # The code below does the statistic by chunk rather than by the whole dataset
     
     # Initialize empty maps
-    gridSize = [nPixels, nPixels]
-    minMax = [0, stacker.header['BoxSize']]
+    if dim == '2D':
+        gridSize = [nPixels, nPixels]
+    elif dim == '3D':
+        gridSize = [nPixels, nPixels, nPixels]
+    else:
+        raise ValueError("dim must be either '2D' or '3D': " + dim)
+    
+    Lbox = stacker.header['BoxSize'] # kpc/h
+    minMax = [0, Lbox]
     field_total = np.zeros(gridSize)
     
     t0 = time.time()
@@ -485,22 +515,28 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy'):
         coordinates = particles['Coordinates'] # kpc/h
         masses = particles['Masses']  * 1e10 / stacker.header['HubbleParam'] # Msun/h
         
-        if projection == 'xy':
-            coordinates = coordinates[:, :2]  # Take x and y coordinates
-        elif projection == 'xz':
-            coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
-        elif projection == 'yz':
-            coordinates = coordinates[:, 1:] # Take y and z coordinates
-        else:
-            raise NotImplementedError('Projection type not implemented: ' + projection)
         
-        # Convert coordinates to pixel coordinates        
+        if dim == '2D':
+            
+            if projection == 'xy':
+                coordinates = coordinates[:, :2]  # Take x and y coordinates
+            elif projection == 'xz':
+                coordinates = coordinates[:, [0, 2]] # Take x and z coordinates
+            elif projection == 'yz':
+                coordinates = coordinates[:, 1:] # Take y and z coordinates
+            else:
+                raise NotImplementedError('Projection type not implemented: ' + projection)
+            
+            # Convert coordinates to pixel coordinates        
 
-        result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
-                                    'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
-        field = result.statistic
-        
-        field_total += field
+            result = binned_statistic_2d(coordinates[:, 0], coordinates[:, 1], masses, 
+                                        'sum', bins=gridSize, range=[minMax, minMax]) # type: ignore
+            field = result.statistic
+            
+            field_total += field
+            
+        elif dim == '3D':
+            field_total = tsc_parallel(coordinates, field_total, Lbox, weights=masses)
 
         if i % 10 == 0:
             print(f'Processed {i} snapshots, time elapsed: {time.time() - t0:.2f} seconds')
@@ -509,7 +545,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy'):
 
     return field_total
 
-def make_total_field(stacker, pType, nPixels=None, projection='xy'):
+def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """Create a total mass field by summing over all particle types.
 
     Args:
@@ -534,8 +570,42 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy'):
     total_field = np.zeros((nPixels, nPixels))
 
     for pt in particle_types:
-        field = make_mass_field(stacker, pt, nPixels, projection)
+        field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)
         total_field += field
 
     return total_field
 
+def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy'):
+    
+    # First make the field:
+    
+    field_3D = create_field(stacker, pType, nPixels, projection, dim='3D')
+    
+    # sz_types = ['tSZ', 'kSZ', 'tau']
+    
+    # if pType in sz_types:
+    #     field_3D = make_sz_field(stacker, pType, nPixels, projection=projection, dim='3D')
+    # elif pType == 'total':
+    #     field_3D = make_total_field(stacker, pType, nPixels, projection=projection, dim='3D')
+    # else:
+    #     field_3D = make_mass_field(stacker, pType, nPixels, projection=projection, dim='3D')
+   
+    # Now we do masking
+    kpcPerPixel = stacker.header['BoxSize'] / nPixels # kpc/h per pixel
+    GroupPos = halo_cat['GroupPos'] # kpc/h
+    GroupRad = halo_cat['GroupRad'] # kpc/h
+    
+    GroupPos_masked = np.round(GroupPos / kpcPerPixel).astype(int)
+    GroupRad_masked = GroupRad / kpcPerPixel
+    cutout_mask = get_cutout_mask_3d(field_3D, GroupPos_masked, GroupRad_masked)
+    field_3D_masked = field_3D * cutout_mask
+    if projection == 'xy':
+        field_2D_masked = np.sum(field_3D_masked, axis=2)
+    elif projection == 'xz':
+        field_2D_masked = np.sum(field_3D_masked, axis=1)
+    elif projection == 'yz':
+        field_2D_masked = np.sum(field_3D_masked, axis=0)
+    else:
+        raise NotImplementedError('Projection type not implemented: ' + projection)
+    # Finalize the 2D masked field
+    return field_2D_masked

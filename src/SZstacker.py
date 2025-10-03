@@ -27,7 +27,7 @@ from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
-from mapMaker import create_field 
+from mapMaker import create_field, create_masked_field 
 
 class SZMapStacker(SimulationStacker):
     
@@ -52,7 +52,7 @@ class SZMapStacker(SimulationStacker):
         super().__init__(sim, snapshot, nPixels, simType=simType, feedback=feedback, z=z)
 
 
-    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5):
+    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5, mask=False, maskRad=3.0):
         """Create a map from the simulation data.
 
         Args:
@@ -97,7 +97,7 @@ class SZMapStacker(SimulationStacker):
                 print(e)
                 print("Computing the map instead...")    
 
-        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load)
+        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load, mask=mask, maskRad=maskRad)
 
         # Convolve the map with a Gaussian beam (only if beamsize is not None)
         if beamsize is not None:
@@ -117,8 +117,8 @@ class SZMapStacker(SimulationStacker):
 
         return map_
 
-    
-    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True):
+
+    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True, mask=False, maskRad=3.0):
         if nPixels is None:
             nPixels = self.nPixels
 
@@ -129,9 +129,20 @@ class SZMapStacker(SimulationStacker):
             except ValueError as e:
                 print(e)
                 print("Computing the field instead...")
-                
-        field = create_field(self, pType, nPixels, projection)
         
+        
+        if mask:
+            haloes = self.loadHalos(self.simType)
+            haloMass = haloes['GroupMass']
+
+            halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14)  # TODO: make this configurable from user input
+            haloes['GroupMass'] = haloes['GroupMass'][halo_mask]
+            haloes['GroupRad'] = haloes['GroupRad'][halo_mask] * maskRad  # in kpc/h
+            haloes['GroupPos'] = haloes['GroupPos'][halo_mask]
+
+            field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection)
+        else:
+            field = create_field(self, pType, nPixels, projection)
 
         if save:
             save_data(field, self.simType, self.sim, self.snapshot, 
@@ -141,7 +152,7 @@ class SZMapStacker(SimulationStacker):
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
-                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
+                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, maskRad=3.0):
         """Stack the map of a given particle type.
 
         Args:
@@ -175,7 +186,7 @@ class SZMapStacker(SimulationStacker):
         fieldKey = (pType, z, projection, pixelSize)
         if not (fieldKey in self.maps and self.maps[fieldKey] is not None):
             self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection,
-                                               save=save, load=load, pixelSize=pixelSize)
+                                               save=save, load=load, pixelSize=pixelSize, mask=mask, maskRad=maskRad)
 
         # Use the abstracted stacking function from parent class
         radii, profiles = self.stack_on_array(

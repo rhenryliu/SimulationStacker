@@ -54,6 +54,7 @@ def main(path2config, verbose=True):
     radDistance = config['rad_distance']
     pType = config['particle_type']
     projection = config.get('projection', 'xy')
+    maskRad = config.get('mask_radii', 1.0) # in units of R200c
     
     # fractionType = config['fraction_type']
 
@@ -96,7 +97,7 @@ def main(path2config, verbose=True):
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection, mask=True, maskRad=3.0)
+                                                     projection=projection, mask=True, maskRad=maskRad)
 
 
                 try:
@@ -120,7 +121,7 @@ def main(path2config, verbose=True):
                 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection, mask=True, maskRad=3.0)
+                                                     projection=projection, mask=True, maskRad=maskRad)
                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
@@ -216,10 +217,10 @@ def main(path2config, verbose=True):
     # ax.axhline(1.0, color='k', ls='--', lw=2)
     ax.legend(loc='lower right', fontsize=12)
     ax.grid(True)
-    ax.set_title(f'{filterType} filter at z={redshift}', fontsize=18)
+    ax.set_title(f'{filterType} filter (Masked {maskRad} R200c) at z={redshift}', fontsize=18)
     
     fig.tight_layout()
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masked_{maskRad:.1f}.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

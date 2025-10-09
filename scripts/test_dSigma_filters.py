@@ -157,6 +157,9 @@ def main(path2config, verbose=True):
     
     figName = config['fig_name']
     figType = config['fig_type']
+
+    maskHaloes = config.get('mask_haloes', False)
+    maskRadii = config.get('mask_radii', 2.0) # in
     
     colourmaps = ['hot', 'cool']
 
@@ -208,7 +211,8 @@ def main(path2config, verbose=True):
                     stacker.maps = {}
                 if fieldKey not in stacker.maps:
                     stacker.maps[fieldKey] = stacker.makeMap(pType, z=redshift, projection=projection,
-                                                             save=saveField, load=loadField, pixelSize=0.5)
+                                                             save=saveField, load=loadField, pixelSize=0.5, 
+                                                             mask=maskHaloes, maskRad=maskRadii)
                 
                 map_data = stacker.maps[fieldKey]
                 
@@ -281,7 +285,9 @@ def main(path2config, verbose=True):
                     stacker.maps = {}
                 if fieldKey not in stacker.maps:
                     stacker.maps[fieldKey] = stacker.makeMap(pType, z=redshift, projection=projection,
-                                                             save=saveField, load=loadField, pixelSize=0.5)
+                                                             save=saveField, load=loadField, pixelSize=0.5,
+                                                             mask=maskHaloes, maskRad=maskRadii)
+                                                             
                 
                 map_data = stacker.maps[fieldKey]
                 

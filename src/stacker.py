@@ -111,7 +111,7 @@ class SimulationStacker(object):
 
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', mask=mask, maskRad=maskRad)
             except ValueError as e:
                 print(e)
                 print("Computing the field instead...")
@@ -132,7 +132,7 @@ class SimulationStacker(object):
         if save:
             # TODO: Handle saving and loading of the fields for the masked case.
             save_data(field, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'field')
+                      self.feedback, pType, nPixels, projection, 'field', mask=mask, maskRad=maskRad)
 
         return field
     
@@ -177,7 +177,7 @@ class SimulationStacker(object):
         # Now that we know the expected pixel size, we try to load the map first before computing it:
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map')
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map', mask=mask, maskRad=maskRad)
             except ValueError as e:
                 print(e)
                 print("Computing the map instead...")    
@@ -192,7 +192,7 @@ class SimulationStacker(object):
 
         if save:
             save_data(map_, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'map')
+                      self.feedback, pType, nPixels, projection, 'map', mask=mask, maskRad=maskRad)
             # if self.simType == 'IllustrisTNG':
             #     saveName = self.sim + '_' + str(self.snapshot) + '_' + \
             #         pType + '_' + str(nPixels) + '_' + projection + '_map'
@@ -438,8 +438,8 @@ class SimulationStacker(object):
         elif filterType == 'CAP':
             filterFunc = CAP
         elif filterType == 'DSigma':
-            # filterFunc = delta_sigma_kernel_map
-            filterFunc = delta_sigma_ring
+            filterFunc = delta_sigma_kernel_map
+            # filterFunc = delta_sigma_ring
         elif filterType == 'DSigma_mccarthy':
             filterFunc = delta_sigma_mccarthy
             if radDistanceUnits != 'arcmin':
@@ -597,12 +597,12 @@ class SimulationStacker(object):
         return load_subset(self.simPath, self.snapshot, self.simType, pType, snapPath,
                           header=self.header, keys=keys, sim_name=self.sim)
 
-    def loadData(self, pType, nPixels=None, projection='xy', type='field'):
+    def loadData(self, pType, nPixels=None, projection='xy', type='field', mask=False, maskRad=3.0):
         """Load a precomputed field or map from file."""
         if nPixels is None:
             nPixels = self.nPixels
         return load_data(self.simType, self.sim, self.snapshot, 
-                         self.feedback, pType, nPixels, projection, type)
+                         self.feedback, pType, nPixels, projection, type, mask=mask, maskRad=maskRad)
 
 
 

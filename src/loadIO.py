@@ -201,7 +201,9 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
 
 
 def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
-              projection='xy', data_type='field', base_path='/pscratch/sd/r/rhliu/simulations/'):
+              projection='xy', data_type='field', 
+              mask=False, maskRad=2.0,
+              base_path='/pscratch/sd/r/rhliu/simulations/'):
     """Load a precomputed field or map from file.
 
     Args:
@@ -214,12 +216,18 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
         n_pixels (int): Number of pixels.
         projection (str): Projection direction.
         data_type (str): Type of data to load ('field' or 'map').
+        mask (bool): Whether to apply halo masking.
+        maskRad (float): Radius for masking in units of R200c.
+        base_path (str): Base path to the directory containing data.
 
     Returns:
         np.ndarray: 2D numpy array of the field or map.
     """
     suffix = '_map' if data_type == 'map' else ''
-    
+
+    if mask:
+        suffix += f'_masked{maskRad}R200c'
+
     try:
         if sim_type == 'IllustrisTNG':
             save_name = (sim_name + '_' + str(snapshot) + '_' + 
@@ -236,8 +244,9 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
 
 
 def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
-              projection='xy', data_type='field', base_path='/pscratch/sd/r/rhliu/simulations/',
-              mkdir=True):
+              projection='xy', data_type='field', 
+              mask=False, maskRad=2.0,
+              base_path='/pscratch/sd/r/rhliu/simulations/', mkdir=True):
     """Save a field or map to file.
 
     Args:
@@ -250,10 +259,18 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
         n_pixels (int): Number of pixels.
         projection (str): Projection direction.
         data_type (str): Type of data ('field' or 'map').
+        mask (bool): Whether to apply halo masking.
+        maskRad (float): Radius for masking in units of R200c.
         base_path (str): Base path to the directory for saving data.
         mkdir (bool): Whether to create the directory if it doesn't exist.
+    Returns:
+        None
     """
     suffix = '_map' if data_type == 'map' else ''
+    
+    if mask:
+        suffix += f'_masked{maskRad}R200c'
+    
     
     if sim_type == 'IllustrisTNG':
         save_name = (sim_name + '_' + str(snapshot) + '_' + 

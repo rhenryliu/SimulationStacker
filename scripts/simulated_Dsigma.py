@@ -62,10 +62,14 @@ def main(path2config, verbose=True):
     
     figName = config['fig_name']
     figType = config['fig_type']
+
+    maskHaloes = config.get('mask_haloes', False)
+    maskRadii = config.get('mask_radii', 2.0) # in
     
     colourmaps = ['hot', 'cool']
 
     fig, ax = plt.subplots(figsize=(10,8))
+    # fig, ax = plt.subplots(1, 2, figsize=(12,6))
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -91,21 +95,21 @@ def main(path2config, verbose=True):
             
             if sim_type_name == 'IllustrisTNG':
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
                 stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                simType=sim_type_name)
                 
-                # radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0, # type: ignore
-                #                                      save=saveField, load=loadField, radDistance=radDistance,
-                #                                      projection=projection)
+                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0, # type: ignore
+                                                     save=saveField, load=loadField, radDistance=radDistance,
+                                                     projection=projection)
 
-                radii1, profiles1 = stacker_tot.stackMap('DM', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii1, profiles1 = stacker_tot.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
-                                                        projection=projection)
+                                                        projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                 try:
-                    OmegaBaryon = stacker.header['OmegaBaryon']
+                    OmegaBaryon = stacker_tot.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
 
@@ -119,19 +123,19 @@ def main(path2config, verbose=True):
                 if verbose:
                     print(f"Processing feedback model: {feedback}")
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift,
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                simType=sim_type_name, 
                                                feedback=feedback)
                 
-                # radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0,  # type: ignore
-                #                                      save=saveField, load=loadField, radDistance=radDistance,
-                #                                      projection=projection)
-                radii1, profiles1 = stacker_tot.stackMap('DM', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0,  # type: ignore
+                                                     save=saveField, load=loadField, radDistance=radDistance,
+                                                     projection=projection)
+                radii1, profiles1 = stacker_tot.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
-                                                        projection=projection)
+                                                        projection=projection, mask=maskHaloes, maskRad=maskRadii)
                                                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
@@ -173,15 +177,36 @@ def main(path2config, verbose=True):
                 # SIMBA simulations have different feedback models               
                 sim_name = sim_name + '_' + sim['feedback'] 
             
-            # plot_term = (profiles0 / (np.pi*radii0**2)[:, np.newaxis]) / profiles1 # TODO
-            plot_term = profiles1
+            # plot_term = (profiles0 / (np.pi*radii0**2)[:, np.newaxis]) / profiles1 # TODO: units
+            plot_term0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis] # in micro-Kelvin / arcmin^2
+            plot_term1 = profiles1 # in Msun / pc^2
+            plot_term = plot_term0 / plot_term1 / (OmegaBaryon / stacker.header['Omega0'])#  / (T_CMB * v_c * 1e6) # unitless
+            # plot_term = profiles1
 
-            profiles_plot = np.mean(plot_term, axis=1)
+            profiles_plot = np.median(plot_term, axis=1)
+            #
+            profiles_plot0 = np.mean(plot_term0, axis=1)
+            profiles_plot1 = np.mean(plot_term1, axis=1)
             # profiles_plot = plot_term
-            print(radii1 * radDistance, profiles_plot)
+            # print(radii1 * radDistance, profiles_plot)
             ax.plot(radii1 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+            # ax[0].plot(radii1 * radDistance, profiles_plot0, label=sim_name, color=colours[j], lw=2, marker='o')
+            # ax[1].plot(radii1 * radDistance, profiles_plot1, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
-                profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
+                # profiles_err0 = np.std(plot_term0, axis=1) / np.sqrt(plot_term0.shape[1])
+                # upper0 = np.percentile(plot_term0, 75, axis=1)
+                # lower0 = np.percentile(plot_term0, 25, axis=1)
+                # ax[0].fill_between(radii1 * radDistance, 
+                #                 lower0, 
+                #                 upper0, 
+                #                 color=colours[j], alpha=0.2)
+                # profiles_err1 = np.std(plot_term1, axis=1) / np.sqrt(plot_term1.shape[1])
+                # upper1 = np.percentile(plot_term1, 75, axis=1)
+                # lower1 = np.percentile(plot_term1, 25, axis=1)
+                # ax[1].fill_between(radii1 * radDistance, 
+                #                 lower1, 
+                #                 upper1, 
+                #                 color=colours[j], alpha=0.2)
                 upper = np.percentile(plot_term, 75, axis=1)
                 lower = np.percentile(plot_term, 25, axis=1)
                 ax.fill_between(radii1 * radDistance, 
@@ -200,10 +225,11 @@ def main(path2config, verbose=True):
         profile_err = np.sqrt(np.diag(data['cov']))
         plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=config['data_label'], markersize=8)
 
-    # ax.set_xlabel('Radius (arcmin)')
-    # ax.set_ylabel('f')
-    ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
+    ax.set_xlabel('Radius (arcmin)')
+    ax.set_ylabel('f')
+    # ax[0].set_xlabel('R [arcmin]', fontsize=18)
+    # ax[1].set_xlabel('R [arcmin]', fontsize=18)
+    # ax[1].set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     # --- Secondary Y axis examples ---
@@ -222,12 +248,16 @@ def main(path2config, verbose=True):
     #                                     lambda y: y - C))     # inverse
     # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
 
-    ax.set_xlim(0.0, 6.5)
-    # ax.set_ylim(0, 1.2)
+    # ax[0].set_xlim(0.0, 6.5)
+    # ax[1].set_xlim(0.0, 6.5)
+    ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)
     ax.legend(loc='upper right', fontsize=12)
+    # ax[1].legend(loc='upper right', fontsize=12)
     ax.grid(True)
-    ax.set_title(f'Ratio at z={redshift}', fontsize=18)
+    # ax[0].grid(True)
+    # ax[1].grid(True)
+    fig.suptitle(f'Ratio at z={redshift}', fontsize=18)
     
     fig.tight_layout()
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore

@@ -553,6 +553,7 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         pType (str): The type of particle to use for the map. Either 'total'.
         nPixels (int, optional): The number of pixels in the map. Defaults to stacker.nPixels.
         projection (str, optional): The projection direction ('xy', 'yz', or 'xz'). Defaults to 'xy'.
+        dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
 
     Raises:
         ValueError: If pType is not 'total'.
@@ -567,7 +568,13 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         raise ValueError("pType must be 'total' for make_total_field.")
 
     particle_types = ['gas', 'DM', 'Stars', 'BH']
-    total_field = np.zeros((nPixels, nPixels))
+    if dim == '2D':
+        gridSize = [nPixels, nPixels]
+    elif dim == '3D':
+        gridSize = [nPixels, nPixels, nPixels]
+    else:
+        raise ValueError("dim must be either '2D' or '3D': " + dim)
+    total_field = np.zeros(gridSize)
 
     for pt in particle_types:
         field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)

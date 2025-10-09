@@ -92,7 +92,7 @@ class SZMapStacker(SimulationStacker):
         # Now that we know the expected pixel size, we try to load the map first before computing it:
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map')
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map', mask=mask, maskRad=maskRad)
             except ValueError as e:
                 print(e)
                 print("Computing the map instead...")    
@@ -105,7 +105,7 @@ class SZMapStacker(SimulationStacker):
 
         if save:
             save_data(map_, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'map')
+                      self.feedback, pType, nPixels, projection, 'map', mask=mask, maskRad=maskRad)
             # if self.simType == 'IllustrisTNG':
             #     saveName = self.sim + '_' + str(self.snapshot) + '_' + \
             #         pType + '_' + str(nPixels) + '_' + projection + '_map'
@@ -125,7 +125,7 @@ class SZMapStacker(SimulationStacker):
         
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field')
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', mask=mask, maskRad=maskRad)
             except ValueError as e:
                 print(e)
                 print("Computing the field instead...")
@@ -146,7 +146,7 @@ class SZMapStacker(SimulationStacker):
 
         if save:
             save_data(field, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'field')
+                      self.feedback, pType, nPixels, projection, 'field', mask=mask, maskRad=maskRad)
         
         return field
 

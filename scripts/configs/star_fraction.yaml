@@ -6,7 +6,7 @@ save_field: false
 rad_distance: 1.0 # in arcmin
 mask_radii: 2.0 # Number of virial radii to mask out for haloes. In units of R200c
 
-load: false
+load: true
 load_path: '../figures/2025-09/star_fraction_z0.5_star_fraction.yaml'
 
 plot_data: false

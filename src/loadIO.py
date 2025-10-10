@@ -203,7 +203,7 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
 def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
               projection='xy', data_type='field', 
               mask=False, maskRad=2.0,
-              base_path='/pscratch/sd/r/rhliu/simulations/'):
+              base_path=None):
     """Load a precomputed field or map from file.
 
     Args:
@@ -223,6 +223,10 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     Returns:
         np.ndarray: 2D numpy array of the field or map.
     """
+    if base_path is None:
+        # Handle default base path
+        base_path = '/pscratch/sd/r/rhliu/simulations/'
+
     suffix = '_map' if data_type == 'map' else ''
 
     if mask:
@@ -246,7 +250,7 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
 def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
               projection='xy', data_type='field', 
               mask=False, maskRad=2.0,
-              base_path='/pscratch/sd/r/rhliu/simulations/', mkdir=True):
+              base_path=None, mkdir=True):
     """Save a field or map to file.
 
     Args:
@@ -266,6 +270,10 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     Returns:
         None
     """
+    if base_path is None:
+        # Handle default base path
+        base_path = '/pscratch/sd/r/rhliu/simulations/'
+    
     suffix = '_map' if data_type == 'map' else ''
     
     if mask:

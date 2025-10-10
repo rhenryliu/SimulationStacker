@@ -12,6 +12,20 @@ from matplotlib.colors import SymLogNorm
 import matplotlib
 import matplotlib.cm as cm
 
+# --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
+matplotlib.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    # Base font sizes (adjust as desired)
+    "font.size": 14,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 12,
+})
+# --- END NEW ---
+
 # from abacusnbody.analysis.tsc import tsc_parallel
 import time
 
@@ -71,7 +85,11 @@ def main(path2config, verbose=True):
     
     colourmaps = ['hot', 'cool']
 
-    fig, ax = plt.subplots(figsize=(16,6))
+    fig, ax = plt.subplots(figsize=(12,8))
+    
+    # --- NEW: ensure axis tick labels use the intended fontsize (per-axis enforcement) ---
+    ax.tick_params(axis='both', which='both', labelsize=14)
+    # --- END NEW ---
     
     plot_dict = {}
     t0 = time.time()
@@ -281,7 +299,7 @@ def main(path2config, verbose=True):
     # ax.axhline(1.0, color='k', ls='--', lw=2)
     # ax.legend(loc='lower right', fontsize=12)
     ax.grid(True)
-    ax.set_title(f'Baryon Star Fraction', fontsize=18)
+    ax.set_title(f'Baryon Star Fraction, z = {redshift}', fontsize=18)
     ax.set_xticklabels(labels, rotation=60, ha='right')
     
     # --- NEW: print and save plot_dict ---
@@ -315,7 +333,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/config_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/star_fraction.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

@@ -84,11 +84,13 @@ class SimulationStacker(object):
         self.fields = {}
         self.maps = {}
 
-    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True, mask=False, maskRad=3.0):
+    def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True, 
+                  mask=False, maskRad=3.0, base_path=None):
         """Uses a histogram binning to make projected 2D fields of a given particle type from the simulation.
 
         Args:
-            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
+            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', 'BH' for mass maps, 'tSZ', 'kSZ', or 'tau' for SZ maps,
+                and 'total' for all masses combined.
             nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to self.nPixels.
             projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
             save (bool, optional): If True, saves the field to a file. Defaults to False.
@@ -96,6 +98,7 @@ class SimulationStacker(object):
             mask (bool, optional): If True, masks out areas outside of haloes in the field. Defaults to False.
             maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True. 
                 Defaults to 3x virial radii.
+            base_path (str, optional): Base path for loading/saving data. Defaults to None, which uses the default path.
 
         Raises:
             NotImplementedError: If field is not one of the ones listed above.
@@ -111,7 +114,8 @@ class SimulationStacker(object):
 
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', mask=mask, maskRad=maskRad)
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', 
+                                     mask=mask, maskRad=maskRad, base_path=base_path)
             except ValueError as e:
                 print(e)
                 print("Computing the field instead...")
@@ -132,16 +136,19 @@ class SimulationStacker(object):
         if save:
             # TODO: Handle saving and loading of the fields for the masked case.
             save_data(field, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'field', mask=mask, maskRad=maskRad)
+                      self.feedback, pType, nPixels, projection, 'field', 
+                      mask=mask, maskRad=maskRad, base_path=base_path)
 
         return field
-    
-    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, pixelSize=0.5, mask=False, maskRad=3.0):
-        """Make a 2D map convolved with a beam for a given particle type. 
+
+    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, 
+                pixelSize=0.5, mask=False, maskRad=3.0, base_path=None):
+        """Make a 2D map convolved with a beam for a given particle type.
         This is more realistic than makeField
 
         Args:
-            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
+            pType (str): Particle Type. One of 'gas', 'DM', 'Stars', 'BH' for mass maps, 'tSZ', 'kSZ', or 'tau' for SZ maps,
+                and 'total' for all masses combined.
             z (float, optional): Redshift of the snapshot. Defaults to None, in which case self.z is used.
             # nPixels (int, optional): Number of pixels in each direction of the 2D map. Defaults to self.nPixels.
             projection (str, optional): Direction of the map projection. Currently only 'xy' is implemented. Defaults to 'xy'.
@@ -149,6 +156,10 @@ class SimulationStacker(object):
             save (bool, optional): If True, saves the map to a file. Defaults to False.
             load (bool, optional): If True, loads the map from a file if it exists and returns the map. Defaults to True.
             pixelSize (float, optional): The theoretical expected size of each pixel in arcminutes. Defaults to 0.5. arcminPerPixel overrides this to the exact size.
+            mask (bool, optional): If True, masks out areas outside of haloes in the map. Defaults to False.
+            maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True.
+                Defaults to 3x virial radii.
+            base_path (str, optional): Base path for loading/saving data. Defaults to None, which uses the default path.
 
         Returns:
             np.ndarray: 2D numpy array of the map for the given particle type.
@@ -177,14 +188,16 @@ class SimulationStacker(object):
         # Now that we know the expected pixel size, we try to load the map first before computing it:
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map', mask=mask, maskRad=maskRad)
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='map', 
+                                     mask=mask, maskRad=maskRad, base_path=base_path)
             except ValueError as e:
                 print(e)
                 print("Computing the map instead...")    
         
         # If we don't have the map pre-saved, we then make the map. 
         # Since this is before doing beam convolution, this step is fine to do using makeField.
-        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load, mask=mask, maskRad=maskRad)
+        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load, 
+                              mask=mask, maskRad=maskRad, base_path=base_path)
 
         # Convolve the map with a Gaussian beam (only if beamsize is not None)
         if beamsize is not None:
@@ -192,15 +205,9 @@ class SimulationStacker(object):
 
         if save:
             save_data(map_, self.simType, self.sim, self.snapshot, 
-                      self.feedback, pType, nPixels, projection, 'map', mask=mask, maskRad=maskRad)
-            # if self.simType == 'IllustrisTNG':
-            #     saveName = self.sim + '_' + str(self.snapshot) + '_' + \
-            #         pType + '_' + str(nPixels) + '_' + projection + '_map'
-            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
-            # elif self.simType == 'SIMBA':
-            #     saveName = (self.sim + '_' + self.feedback + '_' + str(self.snapshot) + '_' +  # type: ignore
-            #                 pType + '_' + str(nPixels) + '_' + projection + '_map')
-            #     np.save(f'/pscratch/sd/r/rhliu/simulations/{self.simType}/products/2D/{saveName}.npy', map_)
+                      self.feedback, pType, nPixels, projection, 'map', 
+                      mask=mask, maskRad=maskRad, base_path=base_path)
+
 
         return map_
 
@@ -295,7 +302,7 @@ class SimulationStacker(object):
                                                save=save, load=load, pixelSize=pixelSize, mask=mask, maskRad=maskRad)
 
         # Use the abstracted stacking function
-        return self.stack_on_array(
+        radii, profiles = self.stack_on_array(
             array=self.maps[fieldKey],
             filterType=filterType,
             minRadius=minRadius,
@@ -309,6 +316,25 @@ class SimulationStacker(object):
             z=z,
             pixelSize=pixelSize
         )
+        
+       # Unit Conversion specific to SZ maps:
+        T_CMB = 2.7255
+        if pType == 'tau':
+            # In the case of the tau field, we want to do unit conversion from optical depth units to micro-Kelvin.
+            # This is done by multiplying the tau field by T_CMB * (v/c)
+            v_c = 300000 / 299792458 # velocity over speed of light.
+            profiles = profiles * T_CMB * 1e6 * v_c # Convert to micro-Kelvin, the units for kSZ in data.
+        elif pType == 'kSZ':
+            # TODO: kSZ unit conversion
+            pass
+        elif pType == 'tSZ':
+            # TODO: tSZ unit conversion
+            pass
+        else:
+            # No unit conversion for other fields.
+            pass
+        
+        return radii, profiles 
 
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                    projection='xy', nPixels=None, save=False, load=True, radDistance=1000, mask=False, maskRad=3.0):
@@ -597,12 +623,14 @@ class SimulationStacker(object):
         return load_subset(self.simPath, self.snapshot, self.simType, pType, snapPath,
                           header=self.header, keys=keys, sim_name=self.sim)
 
-    def loadData(self, pType, nPixels=None, projection='xy', type='field', mask=False, maskRad=3.0):
+    def loadData(self, pType, nPixels=None, projection='xy', type='field', 
+                 mask=False, maskRad=3.0, base_path=None):
         """Load a precomputed field or map from file."""
         if nPixels is None:
             nPixels = self.nPixels
         return load_data(self.simType, self.sim, self.snapshot, 
-                         self.feedback, pType, nPixels, projection, type, mask=mask, maskRad=maskRad)
+                         self.feedback, pType, nPixels, projection, type, 
+                         mask=mask, maskRad=maskRad, base_path=base_path)
 
 
 

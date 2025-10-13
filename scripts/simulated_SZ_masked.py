@@ -22,7 +22,7 @@ import astropy.units as u
 
 sys.path.append('../src/')
 # from filter_utils import *
-from SZstacker import SZMapStacker # type: ignore
+# from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
 sys.path.append('../../illustrisPython/')
@@ -92,7 +92,7 @@ def main(path2config, verbose=True):
             
             if sim_type_name == 'IllustrisTNG':
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
@@ -115,7 +115,7 @@ def main(path2config, verbose=True):
                 if verbose:
                     print(f"Processing feedback model: {feedback}")
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift,
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 

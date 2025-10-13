@@ -92,7 +92,7 @@ def main(path2config, verbose=True):
             
             if sim_type_name == 'IllustrisTNG':
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
                 stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                simType=sim_type_name)
@@ -125,7 +125,7 @@ def main(path2config, verbose=True):
                 if verbose:
                     print(f"Processing feedback model: {feedback}")
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift,
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 

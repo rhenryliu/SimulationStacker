@@ -22,7 +22,7 @@ import astropy.units as u
 
 sys.path.append('../src/')
 # from filter_utils import *
-from SZstacker import SZMapStacker # type: ignore
+# from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
 sys.path.append('../../illustrisPython/')
@@ -91,7 +91,7 @@ def main(path2config, verbose=True):
             
             if sim_type_name == 'IllustrisTNG':
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift, 
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
@@ -114,7 +114,7 @@ def main(path2config, verbose=True):
                 if verbose:
                     print(f"Processing feedback model: {feedback}")
                 
-                stacker = SZMapStacker(sim_name, snapshot, z=redshift,
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 
@@ -227,7 +227,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/config_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

@@ -22,7 +22,7 @@ import astropy.units as u
 
 sys.path.append('../src/')
 # from filter_utils import *
-from SZstacker import SZMapStacker # type: ignore
+# from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
 sys.path.append('../../illustrisPython/')

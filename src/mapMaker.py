@@ -387,7 +387,10 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     t0 = time.time()
     for i, snap in enumerate(snaps):
 
-        particles = stacker.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
+        # particles = stacker.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
+        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
+                                snap_path=snap, header=stacker.header, sim_name=stacker.sim,
+                                keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
 
         Co = particles['Coordinates']
         EA = particles['ElectronAbundance']
@@ -511,7 +514,9 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     
     t0 = time.time()
     for i, snap in enumerate(snaps):
-        particles = stacker.loadSubset(pType, snapPath=snap)
+        # particles = stacker.loadSubset(pType, snapPath=snap)
+        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
+                                snap_path=snap, header=stacker.header, sim_name=stacker.sim)
         coordinates = particles['Coordinates'] # kpc/h
         masses = particles['Masses']  * 1e10 / stacker.header['HubbleParam'] # Msun/h
         

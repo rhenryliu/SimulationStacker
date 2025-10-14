@@ -47,24 +47,29 @@ def main(path2config, verbose=True):
     with open(path2config) as f:
         config = yaml.safe_load(f)
     
-    redshift = config['redshift']
-    # filterType = config['filter_type']
-    plotErrorBars = config['plot_error_bars']
-    loadField = config['load_field']
-    saveField = config['save_field']
-    radDistance = config['rad_distance']
-    pType = config['particle_type']
-    projection = config.get('projection', 'xy')
+    stack_config = config.get('stack', {})
+    plot_config = config.get('plot', {})
     
+    # Stacking parameters
+    redshift = stack_config.get('redshift', 0.5)
+    filterType = stack_config.get('filter_type', 'CAP')
+    loadField = stack_config.get('load_field', True)
+    saveField = stack_config.get('save_field', True)
+    radDistance = stack_config.get('rad_distance', 1.0)
+    pType = stack_config.get('particle_type', 'tau')
+    projection = stack_config.get('projection', 'xy')
+
     # fractionType = config['fraction_type']
 
-    figPath = Path(config['fig_path'])
+    # Plotting parameters
+    figPath = Path(plot_config.get('fig_path'))
     figPath.mkdir(parents=False, exist_ok=True)
-    
-    figName = config['fig_name']
-    figType = config['fig_type']
-    
+    plotErrorBars = plot_config.get('plot_error_bars', True)
+    figName = plot_config.get('fig_name', 'default_figure')
+    figType = plot_config.get('fig_type', 'pdf')
+
     colourmaps = ['hot', 'cool']
+    colourmaps = ['hsv', 'twilight']
 
     fig, ax = plt.subplots(figsize=(10,8))
     t0 = time.time()
@@ -201,13 +206,13 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
 
-    if config['plot_data']:
-        data_path = config['data_path']
+    if plot_config['plot_data']:
+        data_path = plot_config['data_path']
         data = np.load(data_path)
         r_data = data['theta_arcmins']
         profile_data = data['prof']
         profile_err = np.sqrt(np.diag(data['cov']))
-        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=config['data_label'], markersize=8)
+        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')

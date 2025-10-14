@@ -32,6 +32,29 @@ import yaml
 import argparse
 from pathlib import Path
 
+
+# --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
+matplotlib.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    "text.usetex": True,
+    "mathtext.fontset": "cm",
+    # Base font sizes (adjust as desired)
+    "font.size": 20,
+    "axes.titlesize": 20,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 20,
+    "ytick.labelsize": 20,
+    "legend.fontsize": 20,
+})
+# --- END NEW ---
+
+# # Set matplotlib to use Computer Modern font
+# plt.rcParams['font.family'] = 'serif'
+# plt.rcParams['font.serif'] = ['Computer Modern Roman']
+# plt.rcParams['text.usetex'] = True
+# plt.rcParams['mathtext.fontset'] = 'cm'
+
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
 
@@ -46,26 +69,35 @@ def main(path2config, verbose=True):
     with open(path2config) as f:
         config = yaml.safe_load(f)
     
-    redshift = config['redshift']
-    filterType = config['filter_type']
-    plotErrorBars = config['plot_error_bars']
-    loadField = config['load_field']
-    saveField = config['save_field']
-    radDistance = config['rad_distance']
-    pType = config['particle_type']
-    projection = config.get('projection', 'xy')
-    
+    stack_config = config.get('stack', {})
+    plot_config = config.get('plot', {})
+
+    # Stacking parameters
+    redshift = stack_config.get('redshift', 0.5)
+    filterType = stack_config.get('filter_type', 'CAP')
+    loadField = stack_config.get('load_field', True)
+    saveField = stack_config.get('save_field', True)
+    radDistance = stack_config.get('rad_distance', 1.0)
+    pType = stack_config.get('particle_type', 'tau')
+    projection = stack_config.get('projection', 'xy')
+
+    maskHaloes = stack_config.get('mask_haloes', False)
+    maskRadii = stack_config.get('mask_radii', 2.0) # in
+
     # fractionType = config['fraction_type']
 
-    figPath = Path(config['fig_path'])
+    # Plotting parameters
+    figPath = Path(plot_config.get('fig_path'))
     figPath.mkdir(parents=False, exist_ok=True)
-    
-    figName = config['fig_name']
-    figType = config['fig_type']
-    
-    colourmaps = ['hot', 'cool']
+    plotErrorBars = plot_config.get('plot_error_bars', True)
+    figName = plot_config.get('fig_name', 'default_figure')
+    figType = plot_config.get('fig_type', 'pdf')
 
-    fig, ax = plt.subplots(figsize=(10,8))
+    colourmaps = ['hot', 'cool']
+    colourmaps = ['hsv', 'twilight']
+
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -75,9 +107,11 @@ def main(path2config, verbose=True):
         if sim_type_name == 'IllustrisTNG':
             TNG_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
+            ax = ax_tng  # Plot TNG on left subplot
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            ax = ax_simba  # Plot SIMBA on right subplot
 
         if verbose:
             print(f"Processing simulations of type: {sim_type_name}")
@@ -120,7 +154,7 @@ def main(path2config, verbose=True):
                 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
+                                                     projection=projection, mask=maskHaloes, maskRad=maskRadii)
                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
 
@@ -171,8 +205,11 @@ def main(path2config, verbose=True):
             ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
                 profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                upper = np.percentile(profiles0, 75, axis=1)
-                lower = np.percentile(profiles0, 25, axis=1)
+                # upper = np.percentile(profiles0, 75, axis=1)
+                # lower = np.percentile(profiles0, 25, axis=1)
+
+                upper = profiles_plot + profiles_err
+                lower = profiles_plot - profiles_err
                 ax.fill_between(radii0 * radDistance, 
                                 lower, 
                                 upper, 
@@ -181,45 +218,50 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
 
-    if config['plot_data']:
-        data_path = config['data_path']
+    if plot_config['plot_data']:
+        data_path = plot_config['data_path']
         data = np.load(data_path)
         r_data = data['theta_arcmins']
         profile_data = data['prof']
         profile_err = np.sqrt(np.diag(data['cov']))
-        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=config['data_label'], markersize=8)
+        # Plot data on both subplots
+        ax_tng.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
+                       label=plot_config['data_label'], markersize=8, zorder=10)
+        ax_simba.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
+                         label=plot_config['data_label'], markersize=8, zorder=10)
 
-    # ax.set_xlabel('Radius (arcmin)')
-    # ax.set_ylabel('f')
-    ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
-    # ax.set_xscale('log')
-    ax.set_yscale('log')
-    # --- Secondary Y axis examples ---
+    # Configure both subplots
+    for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
+        ax.set_xlabel('R [arcmin]', fontsize=18)
+        ax.set_yscale('log')
+        
+        # Set tick label font size
+        # ax.tick_params(axis='both', which='major', labelsize=14)
+        # ax.tick_params(axis='both', which='minor', labelsize=12)
 
-    # 1) Multiplicative (recommended for log scale): y2 = k * y1
-    k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
-    secax = ax.secondary_yaxis('right',
-                               functions=(lambda y: y * k,      # forward
-                                          lambda y: y / k))     # inverse
-    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
+        if title == 'IllustrisTNG':
+            ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
+        elif title == 'SIMBA':
+            secax = ax.secondary_yaxis('right',
+                                   functions=(lambda y: y * k,
+                                             lambda y: y / k))
+            secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
+            # secax.tick_params(axis='y', which='major', labelsize=14)
+        
+        # Secondary Y axis
+        k = 1 / (T_CMB * v_c * 1e6)
 
-    # 2) If you really need an additive offset (ensure y+C > 0 on log scale):
-    # C = 5.0  # additive offset in the same units
-    # secax = ax.secondary_yaxis('right',
-    #                          functions=(lambda y: y + C,      # forward
-    #                                     lambda y: y - C))     # inverse
-    # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
+        
+        ax.set_xlim(0.0, 6.5)
+        ax.legend(loc='lower right')#, fontsize=20)
+        ax.grid(True)
+        ax.set_title(f'{title}: {filterType} at z={redshift}')#, fontsize=20)
 
-    ax.set_xlim(0.0, 6.5)
-    # ax.set_ylim(0, 1.2)
-    # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
-    ax.grid(True)
-    ax.set_title(f'{filterType} filter at z={redshift}', fontsize=18)
-    
     fig.tight_layout()
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300) # type: ignore
+    if maskHaloes:
+        fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masked_{maskRadii:.1f}.{figType}', dpi=300) # type: ignore
+    else:
+        fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

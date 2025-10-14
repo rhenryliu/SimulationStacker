@@ -46,24 +46,28 @@ def main(path2config, verbose=True):
     with open(path2config) as f:
         config = yaml.safe_load(f)
     
-    redshift = config['redshift']
-    filterType = config['filter_type']
-    plotErrorBars = config['plot_error_bars']
-    loadField = config['load_field']
-    saveField = config['save_field']
-    radDistance = config['rad_distance']
-    pType = config['particle_type']
-    projection = config.get('projection', 'xy')
-    maskRad = config.get('mask_radii', 1.0) # in units of R200c
-    
-    # fractionType = config['fraction_type']
+    stack_config = config.get('stack', {})
+    plot_config = config.get('plot', {})
 
-    figPath = Path(config['fig_path'])
+    # Stacking parameters
+    redshift = stack_config['redshift']
+    filterType = stack_config['filter_type']
+    loadField = stack_config['load_field']
+    saveField = stack_config['save_field']
+    radDistance = stack_config['rad_distance']
+    pType = stack_config['particle_type']
+    projection = stack_config.get('projection', 'xy')
+    maskRad = stack_config.get('mask_radii', 1.0) # in units of R200c
+
+    # fractionType = stack_config['fraction_type']
+
+    # Plotting parameters
+    figPath = Path(plot_config['fig_path'])
     figPath.mkdir(parents=False, exist_ok=True)
-    
-    figName = config['fig_name']
-    figType = config['fig_type']
-    
+    plotErrorBars = plot_config['plot_error_bars']
+    figName = plot_config['fig_name']
+    figType = plot_config['fig_type']
+
     colourmaps = ['hot', 'cool']
 
     fig, ax = plt.subplots(figsize=(10,8))
@@ -182,13 +186,13 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
 
-    if config['plot_data']:
-        data_path = config['data_path']
+    if plot_config['plot_data']:
+        data_path = plot_config['data_path']
         data = np.load(data_path)
         r_data = data['theta_arcmins']
         profile_data = data['prof']
         profile_err = np.sqrt(np.diag(data['cov']))
-        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=config['data_label'], markersize=8)
+        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
@@ -228,7 +232,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/config_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP_masked.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

@@ -177,7 +177,7 @@ class SimulationStacker(object):
         # Get the box size in angular units.
         # theta_arcmin = np.degrees(self.header['BoxSize'] / dA) * 60  # Convert to arcminutes # TODO: this is wrong for sure!! Change ASAP
         theta_arcmin = comoving_to_arcmin(self.header['BoxSize'], z, cosmo=cosmo)
-        print(f"Map size at z={z}: {theta_arcmin:.2f} arcmin")
+        print(f"Box size: {self.header['BoxSize']} kpc/h , Map size at z={z}: {theta_arcmin:.2f} arcmin")
 
         # Round up to the nearest integer, pixel size is 0.5 arcmin as in ACT
         nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)

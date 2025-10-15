@@ -6,21 +6,22 @@ from astropy import cosmology
 from typing import Optional, Tuple, Union
 ArrayLike = Union[float, np.ndarray]
 
-def total_mass(mass_grid, r_grid, r):
+def total_mass(mass_grid, r_grid, r, pixel_size=1.0):
     """Calculate the total mass within a given radius.
 
     Args:
         mass_grid (np.ndarray): The mass distribution array.
         r_grid (np.ndarray): The radial grid corresponding to the mass distribution.
         r (float): The radius at which to calculate the total mass.
+        pixel_size (float, optional): Physical pixel size (Typically in arcminutes)
 
     Returns:
         float: The total mass within the given radius.
     """
-    
-    return float(np.sum(mass_grid[r_grid < r]))
+    pixArea = (pixel_size)**2
+    return float(np.sum(mass_grid[r_grid < r]) * pixArea)
 
-def CAP(mass_grid, r_grid, r):
+def CAP(mass_grid, r_grid, r, pixel_size=1.0):
     """Calculate the Circular Averages Profile (CAP) for a given radius.
 
     Args:
@@ -36,9 +37,12 @@ def CAP(mass_grid, r_grid, r):
     inDisk = 1.0 * (r_grid <= r)
     inRing = 1.0 * (r_grid > r) * (r_grid <= r1)
     inRing *= np.sum(inDisk) / np.sum(inRing)
-    return float(np.sum((inDisk - inRing) * mass_grid))
 
-def delta_sigma(mass_grid, r_grid, r, dr=0.6, pixel_size_pc=1.0):
+    pixArea = (pixel_size)**2
+    
+    return float(np.sum((inDisk - inRing) * mass_grid) * pixArea)
+
+def delta_sigma(mass_grid, r_grid, r, dr=0.6, pixel_size=1.0):
     """Calculate the excess surface mass density (ΔΣ) for a given radius.
 
     Args:
@@ -46,7 +50,7 @@ def delta_sigma(mass_grid, r_grid, r, dr=0.6, pixel_size_pc=1.0):
         r_grid (np.ndarray): The radial grid corresponding to the mass distribution.
         r (float): The radius at which to calculate ΔΣ.
         dr (float, optional): The width of the annulus. Defaults to 0.6. (arcminutes)
-        pixel_size_pc (float, optional): Physical pixel size (pc). Currently unused but kept for API consistency.
+        pixel_size (float, optional): Physical pixel size (pc or arcmin). Currently unused but kept for API consistency.
 
     Returns:
         float: The value of ΔΣ at the given radius.
@@ -69,7 +73,7 @@ def delta_sigma_kernel_map(
     r_grid: np.ndarray,
     r: float,
     dr: float = 0.5,
-    pixel_size_pc: float = 1,
+    pixel_size: float = 1,
 ) -> float:
     """Compute ΔΣ using an analytical compensated kernel.
 
@@ -85,8 +89,8 @@ def delta_sigma_kernel_map(
         r (float): Aperture radius at which to evaluate ΔΣ.
         dr (float, optional): Thickness of the outer annulus (R < r < R+dr).
             Must be positive. Defaults to 0.5.
-        pixel_size_pc (float, optional): Linear size of one pixel in physical
-            units (pc). Used to scale the summed kernel value to physical area.
+        pixel_size (float, optional): Linear size of one pixel in physical
+            units (pc or arcmin). Used to scale the summed kernel value to physical area.
             Defaults to 1.
 
     Returns:
@@ -114,8 +118,10 @@ def delta_sigma_kernel_map(
     kernel[annulus]     = -1.0 / (np.pi * (R_out**2 - r**2))
     # print(kernel.mean())
     kernel             -= kernel.mean()  # ensure ∫K dA = 0 numerically
+    
+    pixArea = (pixel_size)**2
 
-    return float(np.sum(mass_grid * kernel) * pixel_size_pc**2)
+    return float(np.sum(mass_grid * kernel) * pixArea)
 
 def delta_sigma_ring(
                     mass_grid: np.ndarray,

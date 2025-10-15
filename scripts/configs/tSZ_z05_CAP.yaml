@@ -1,21 +1,25 @@
-redshift: 0.5
-filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
-# filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
-load_field: false
-save_field: true
-rad_distance: 1.0 # in arcmin
+stack:
+  redshift: 0.5
+  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
+  # filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
+  load_field: true
+  save_field: true
+  rad_distance: 1.0 # in arcmin
+  particle_type: 'tSZ'
+  projection: 'xy' # 'xy', 'xz', 'yz'
+  mask_haloes: false
+  mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
+  pixel_size: 0.5 # in arcmin
 
-fig_path: '../figures/2025-08/'
-fig_name: 'CAP_profiles'
-fig_type: 'png'
-plot_error_bars: true
+plot:
+  plot_data: true
+  data_path: '../data/fig4.csv'
+  data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
+  fig_path: '../figures/2025-10/good/'
+  fig_name: 'profiles_xy'
+  fig_type: 'pdf'
+  plot_error_bars: true
 
-# fraction_type: 'baryon' # gas or baryon
-# particle_types: 
-#   - 'tau'
-  # - 'kSZ'
-  # - 'tSZ'
-particle_type: 'tSZ'
 
 
 simulations:
@@ -39,11 +43,13 @@ simulations:
       - name: 'm100n1024'
         snapshot: 125
         feedback: 's50'
-  # - sim_type: 'IllustrisTNG'
-  #   sims:
-  #     - name: 'TNG100-1'
-  #       snapshot: 67
-  #     - name: 'TNG300-1'
-  #       snapshot: 67
-  #     - name: 'Illustris-2'
-  #       snapshot: 103
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'TNG300-2'
+        snapshot: 67
+      - name: 'Illustris-2'
+        snapshot: 103

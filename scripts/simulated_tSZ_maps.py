@@ -84,6 +84,8 @@ def main(path2config, verbose=True):
     maskHaloes = stack_config.get('mask_haloes', False)
     maskRadii = stack_config.get('mask_radii', 2.0) # in
 
+    pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
+
     # fractionType = config['fraction_type']
 
     # Plotting parameters
@@ -128,7 +130,7 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0, # type: ignore
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
 
@@ -151,8 +153,8 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, maxRadius=6.0,  # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection, mask=maskHaloes, maskRad=maskRadii)
                 
@@ -220,10 +222,11 @@ def main(path2config, verbose=True):
 
     if plot_config['plot_data']:
         data_path = plot_config['data_path']
-        data = np.load(data_path)
-        r_data = data['theta_arcmins']
-        profile_data = data['prof']
-        profile_err = np.sqrt(np.diag(data['cov']))
+        # data = np.load(data_path)
+        data = pd.read_csv(data_path)
+        r_data = data['RApArcmin']
+        profile_data = data['pz1_act_dr6_fiducial']
+        profile_err = data['pz1_act_dr6_fiducial_err']
         # Plot data on both subplots
         ax_tng.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
                        label=plot_config['data_label'], markersize=8, zorder=10)
@@ -233,19 +236,19 @@ def main(path2config, verbose=True):
     # Configure both subplots
     for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
         ax.set_xlabel('R [arcmin]', fontsize=18)
-        ax.set_yscale('log')
+        # ax.set_yscale('log')
         
         # Set tick label font size
         # ax.tick_params(axis='both', which='major', labelsize=14)
         # ax.tick_params(axis='both', which='minor', labelsize=12)
 
         if title == 'IllustrisTNG':
-            ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
-        elif title == 'SIMBA':
-            secax = ax.secondary_yaxis('right',
-                                   functions=(lambda y: y * k,
-                                             lambda y: y / k))
-            secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
+            ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')#, fontsize=18)
+        # elif title == 'SIMBA':
+        #     secax = ax.secondary_yaxis('right',
+        #                            functions=(lambda y: y * k,
+        #                                      lambda y: y / k))
+        #     secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
             # secax.tick_params(axis='y', which='major', labelsize=14)
         
         # Secondary Y axis
@@ -253,23 +256,23 @@ def main(path2config, verbose=True):
 
         
         ax.set_xlim(0.0, 6.5)
-        ax.legend(loc='lower right')#, fontsize=20)
+        ax.legend(loc='best')#, fontsize=20)
         ax.grid(True)
-        ax.set_title(f'{title}: {filterType} at z={redshift}')#, fontsize=20)
+        ax.set_title(f'{title}')#, fontsize=20)
 
+    fig.suptitle(f'Stacked {pType} profiles, {filterType} filter, z={redshift}', fontsize=20)
     fig.tight_layout()
     if maskHaloes:
         fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masked_{maskRadii:.1f}.{figType}', dpi=300) # type: ignore
     else:
         fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300) # type: ignore
     plt.close(fig)
-    
     print('Done!!!')
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tSZ_z05_CAP.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

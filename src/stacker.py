@@ -323,12 +323,17 @@ class SimulationStacker(object):
             # In the case of the tau field, we want to do unit conversion from optical depth units to micro-Kelvin.
             # This is done by multiplying the tau field by T_CMB * (v/c)
             v_c = 300000 / 299792458 # velocity over speed of light.
+            # factor = (pixelSize**2) # Convert to arcmin^2 units
+            # factor = 1
             profiles = profiles * T_CMB * 1e6 * v_c # Convert to micro-Kelvin, the units for kSZ in data.
         elif pType == 'kSZ':
             # TODO: kSZ unit conversion
             pass
         elif pType == 'tSZ':
             # TODO: tSZ unit conversion
+            # factor = (180.*60./np.pi)**2
+            # factor = (pixelSize**2) # Convert to arcmin^2 units
+            # profiles = profiles # Convert to arcmin^2 units
             pass
         else:
             # No unit conversion for other fields.
@@ -444,6 +449,7 @@ class SimulationStacker(object):
         if radDistanceUnits == 'kpc/h':
             kpcPerPixel = self.header['BoxSize'] / nPixels
             RadPixel = radDistance / kpcPerPixel
+            pixelSize_true = kpcPerPixel
         elif radDistanceUnits == 'arcmin':
             if z is None:
                 z = self.z
@@ -455,6 +461,7 @@ class SimulationStacker(object):
             theta_arcmin = comoving_to_arcmin(self.header['BoxSize'], z, cosmo=cosmo)
             arcminPerPixel = theta_arcmin / nPixels
             RadPixel = radDistance / arcminPerPixel
+            pixelSize_true = arcminPerPixel
         else:
             raise ValueError(f"radDistanceUnits must be 'kpc/h' or 'arcmin', got: {radDistanceUnits}")
         
@@ -514,11 +521,11 @@ class SimulationStacker(object):
                 radii, profile, _ = delta_sigma_mccarthy(cutout, rr, pixel_scale_arcmin=pixelSize, z=z, # type: ignore
                                                          cosmo=cosmo, rmin_theta=minRadius, rmax_theta=maxRadius, n_rbins=numRadii)
             elif filterType == 'DSigma':
-                # Use the Delta Sigma filter from Melchior et al. 2021
                 # pass
                 profile = []
                 for rad in radii:
-                    filt_result = filterFunc(cutout, rr, rad, pixel_size_pc=1.)  # type: ignore
+                    # TODO: pixel_size unit conversions!! Important
+                    filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)  # type: ignore
                     profile.append(filt_result)
                 
                 profile = np.array(profile)
@@ -527,7 +534,7 @@ class SimulationStacker(object):
                 # Apply filters at each radius
                 profile = []
                 for rad in radii:
-                    filt_result = filterFunc(cutout, rr, rad)
+                    filt_result = filterFunc(cutout, rr, rad, pixel_size=pixelSize_true) # type: ignore
                     profile.append(filt_result)
                 
                 profile = np.array(profile)

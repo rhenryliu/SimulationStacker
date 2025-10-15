@@ -3,7 +3,7 @@ stack:
   filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
   # filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
   load_field: true
-  save_field: true
+  save_field: false
   rad_distance: 1.0 # in arcmin
   particle_type: 'tSZ'
   projection: 'xy' # 'xy', 'xz', 'yz'
@@ -15,10 +15,11 @@ plot:
   plot_data: true
   data_path: '../data/fig4.csv'
   data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
-  fig_path: '../figures/2025-10/good/'
+  fig_path: '../figures/2025-10/test2/'
   fig_name: 'profiles_xy'
   fig_type: 'pdf'
   plot_error_bars: true
+  yscale: 'linear'
 
 
 

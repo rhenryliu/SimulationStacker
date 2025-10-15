@@ -236,7 +236,7 @@ def main(path2config, verbose=True):
     # Configure both subplots
     for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
         ax.set_xlabel('R [arcmin]', fontsize=18)
-        # ax.set_yscale('log')
+        ax.set_yscale(plot_config.get('yscale', 'log'))
         
         # Set tick label font size
         # ax.tick_params(axis='both', which='major', labelsize=14)

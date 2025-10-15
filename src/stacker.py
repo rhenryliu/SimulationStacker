@@ -323,18 +323,20 @@ class SimulationStacker(object):
             # In the case of the tau field, we want to do unit conversion from optical depth units to micro-Kelvin.
             # This is done by multiplying the tau field by T_CMB * (v/c)
             v_c = 300000 / 299792458 # velocity over speed of light.
-            # factor = (pixelSize**2) # Convert to arcmin^2 units
+            pixArea = (pixelSize**2) # Convert to arcmin^2 units
             # factor = 1
-            profiles = profiles * T_CMB * 1e6 * v_c # Convert to micro-Kelvin, the units for kSZ in data.
+            profiles = profiles * T_CMB * 1e6 * v_c * pixArea # Convert to micro-Kelvin, the units for kSZ in data.
         elif pType == 'kSZ':
             # TODO: kSZ unit conversion
-            pass
+            pixArea = (pixelSize**2) # Convert to arcmin^2 units
+            profiles = profiles * pixArea # Convert to arcmin^2 units
+            # pass
         elif pType == 'tSZ':
             # TODO: tSZ unit conversion
             # factor = (180.*60./np.pi)**2
-            # factor = (pixelSize**2) # Convert to arcmin^2 units
-            # profiles = profiles # Convert to arcmin^2 units
-            pass
+            pixArea = (pixelSize**2) # Convert to arcmin^2 units
+            profiles = profiles * pixArea # Convert to arcmin^2 units
+            # pass
         else:
             # No unit conversion for other fields.
             pass
@@ -534,7 +536,8 @@ class SimulationStacker(object):
                 # Apply filters at each radius
                 profile = []
                 for rad in radii:
-                    filt_result = filterFunc(cutout, rr, rad, pixel_size=pixelSize_true) # type: ignore
+                    # TODO: pixel_size here is placeholder. Carefully check units!
+                    filt_result = filterFunc(cutout, rr, rad, pixel_size=1.) # type: ignore
                     profile.append(filt_result)
                 
                 profile = np.array(profile)

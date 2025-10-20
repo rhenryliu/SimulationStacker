@@ -25,7 +25,7 @@ import illustris_python as il
 from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import select_massive_halos, halo_ind
-from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel_map, delta_sigma_ring
+from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring
 from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field, create_masked_field
 
@@ -473,7 +473,7 @@ class SimulationStacker(object):
         elif filterType == 'CAP':
             filterFunc = CAP
         elif filterType == 'DSigma':
-            filterFunc = delta_sigma_kernel_map
+            filterFunc = delta_sigma_kernel
             # filterFunc = delta_sigma_ring
         elif filterType == 'DSigma_mccarthy':
             filterFunc = delta_sigma_mccarthy

@@ -13,11 +13,13 @@ stack:
 
 plot:
   plot_data: true
-  data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
-  data_label: 'Hadzhiyska 2024 pz1'
+  # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_sigmaz0.0500_dr6_corr_pzbin1.npz'
+  data_path: '../data/Fig2_sim.npz'
+  # data_label: 'Hadzhiyska 2024 pz1'
+  data_label: 'Hadzhiyska 2024'
   fig_path: '../figures/2025-10/test2/'
   fig_name: 'profiles_xy'
-  fig_type: 'pdf'
+  fig_type: 'png'
   plot_error_bars: true
 
 

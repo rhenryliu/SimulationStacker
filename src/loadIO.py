@@ -279,7 +279,6 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     if mask:
         suffix += f'_masked{maskRad}R200c'
     
-    
     if sim_type == 'IllustrisTNG':
         save_name = (sim_name + '_' + str(snapshot) + '_' + 
                     p_type + '_' + str(n_pixels) + '_' + projection + suffix)
@@ -293,6 +292,9 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
                     p_type + '_' + str(n_pixels) + '_' + projection + suffix)
         
     savePath = Path(f'{base_path}/{sim_type}/products/2D/')
+    if mask:
+        savePath = savePath / 'masked'
+    
     if mkdir:
         savePath.mkdir(parents=True, exist_ok=True)
     

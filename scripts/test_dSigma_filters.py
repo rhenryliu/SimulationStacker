@@ -141,36 +141,46 @@ def main(path2config, verbose=True):
     with open(path2config) as f:
         config = yaml.safe_load(f)
     
-    redshift = config['redshift']
-    # filterType = config['filter_type']
-    plotErrorBars = config['plot_error_bars']
-    loadField = config['load_field']
-    saveField = config['save_field']
-    radDistance = config['rad_distance']
-    pType = config['particle_type']
-    projection = config.get('projection', 'xy')
+    stack_config = config.get('stack', {})
+    plot_config = config.get('plot', {})
+
+    # Stacking parameters
+    redshift = stack_config.get('redshift', 0.5)
+    filterType = stack_config.get('filter_type', 'CAP')
+    loadField = stack_config.get('load_field', True)
+    saveField = stack_config.get('save_field', True)
+    radDistance = stack_config.get('rad_distance', 1.0)
+    pType = stack_config.get('particle_type', 'tau')
+    projection = stack_config.get('projection', 'xy')
+
+    maskHaloes = stack_config.get('mask_haloes', False)
+    maskRadii = stack_config.get('mask_radii', 2.0) # in virial radii
     
+    pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
+
     # fractionType = config['fraction_type']
 
-    figPath = Path(config['fig_path'])
+    # Plotting parameters
+    figPath = Path(plot_config.get('fig_path'))
     figPath.mkdir(parents=False, exist_ok=True)
+    plotErrorBars = plot_config.get('plot_error_bars', True)
+    figName = plot_config.get('fig_name', 'default_figure')
+    figType = plot_config.get('fig_type', 'pdf')
     
-    figName = config['fig_name']
-    figType = config['fig_type']
-
     maskHaloes = config.get('mask_haloes', False)
     maskRadii = config.get('mask_radii', 2.0) # in
     
     colourmaps = ['hot', 'cool']
 
     # Create a figure with subplots for each filter type
-    from filters import delta_sigma, delta_sigma_ring, delta_sigma_kernel_map, CAP
+    from filters import delta_sigma, delta_sigma_ring, delta_sigma_kernel_map, CAP, delta_sigma_kernel
     
     filter_dict = {
-        'delta_sigma': delta_sigma,
+        # 'delta_sigma': delta_sigma,
         # 'delta_sigma_ring': delta_sigma_ring,
         'delta_sigma_compensated': delta_sigma_kernel_map,
         'CAP': CAP,
+        'delta_sigma_kernel': delta_sigma_kernel,
     }
 
     fig, axes = plt.subplots(1, len(filter_dict), figsize=(len(filter_dict.keys())*6, 6), sharey=True)
@@ -223,11 +233,13 @@ def main(path2config, verbose=True):
                     # Set filter-specific kwargs
                     filter_kwargs = {}
                     if filter_name == 'delta_sigma':
-                        filter_kwargs = {'dr': 0.6, 'pixel_size_pc': 1.0}
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 1.0}
                     elif filter_name == 'delta_sigma_ring':
-                        filter_kwargs = {'pixel_size_pc': 0.5, 'connectivity': 8}
+                        filter_kwargs = {'pixel_size': 0.5, 'connectivity': 8}
                     elif filter_name == 'delta_sigma_compensated':
-                        filter_kwargs = {'dr': 0.6, 'pixel_size_pc': 1.0}
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 1.0}
+                    elif filter_name == 'delta_sigma_kernel' or filter_name == 'delta_sigma_kernel_map':
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 0.5}
                     elif filter_name == 'CAP':
                         filter_kwargs = {}
                     
@@ -295,16 +307,19 @@ def main(path2config, verbose=True):
                 for ax_idx, (filter_name, filter_func) in enumerate(filter_dict.items()):
                     print(f"Testing filter: {filter_name} on {sim_name_show}")
                     
+                    # Set filter-specific kwargs
                     filter_kwargs = {}
                     if filter_name == 'delta_sigma':
-                        filter_kwargs = {'dr': 0.6, 'pixel_size_pc': 1.0}
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 1.0}
                     elif filter_name == 'delta_sigma_ring':
-                        filter_kwargs = {'pixel_size_pc': 1.0, 'connectivity': 8}
+                        filter_kwargs = {'pixel_size': 0.5, 'connectivity': 8}
                     elif filter_name == 'delta_sigma_compensated':
-                        filter_kwargs = {'dr': 0.6, 'pixel_size_pc': 1.0}
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 1.0}
+                    elif filter_name == 'delta_sigma_kernel' or filter_name == 'delta_sigma_kernel_map':
+                        filter_kwargs = {'dr': 0.6, 'pixel_size': 0.5}
                     elif filter_name == 'CAP':
                         filter_kwargs = {}
-                    
+                                        
                     radii0, profiles0 = test_filter_on_array(
                         stacker=stacker,
                         array=map_data,
@@ -392,15 +407,20 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
 
-    if config['plot_data']:
-        data_path = config['data_path']
+    # if plot_config['plot_data']:
+    if False:
+        data_path = plot_config['data_path']
         data = np.load(data_path)
         r_data = data['theta_arcmins']
-        profile_data = data['prof']
-        profile_err = np.sqrt(np.diag(data['cov']))
+        # profile_data = data['prof']
+        # profile_err = np.sqrt(np.diag(data['cov']))
+
+        profile_data = data['signal']
+        profile_err = data['noise']
+        
         for ax in axes:
             ax.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
-                       label=config['data_label'], markersize=8)
+                       label=plot_config['data_label'], markersize=8)
 
     # Configure each subplot
     for ax_idx, (filter_name, _) in enumerate(filter_dict.items()):
@@ -421,7 +441,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/config_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

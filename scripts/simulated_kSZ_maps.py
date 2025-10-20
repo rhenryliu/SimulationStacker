@@ -224,8 +224,13 @@ def main(path2config, verbose=True):
         data_path = plot_config['data_path']
         data = np.load(data_path)
         r_data = data['theta_arcmins']
-        profile_data = data['prof']
-        profile_err = np.sqrt(np.diag(data['cov']))
+
+        # profile_data = data['prof']
+        # profile_err = np.sqrt(np.diag(data['cov']))
+
+        profile_data = data['signal']
+        profile_err = data['noise']
+                
         # Plot data on both subplots
         ax_tng.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
                        label=plot_config['data_label'], markersize=8, zorder=10)

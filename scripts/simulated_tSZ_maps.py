@@ -82,7 +82,7 @@ def main(path2config, verbose=True):
     projection = stack_config.get('projection', 'xy')
 
     maskHaloes = stack_config.get('mask_haloes', False)
-    maskRadii = stack_config.get('mask_radii', 2.0) # in
+    maskRadii = stack_config.get('mask_radii', 2.0) # in virial radii
 
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
 
@@ -128,11 +128,11 @@ def main(path2config, verbose=True):
             if sim_type_name == 'IllustrisTNG':
                 
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
-                                       simType=sim_type_name)
+                                            simType=sim_type_name)
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
+                                                     projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
 
                 try:
@@ -151,8 +151,8 @@ def main(path2config, verbose=True):
                     print(f"Processing feedback model: {feedback}")
                 
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift,
-                                       simType=sim_type_name, 
-                                       feedback=feedback)
+                                            simType=sim_type_name, 
+                                            feedback=feedback)
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,

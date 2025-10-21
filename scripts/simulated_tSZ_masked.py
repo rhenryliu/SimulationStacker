@@ -194,10 +194,11 @@ def main(path2config, verbose=True):
         # Plot data only on the last column (col_idx == 3)
         if col_idx == 3 and plot_config['plot_data']:
             data_path = plot_config['data_path']
-            data = np.load(data_path)
-            r_data = data['theta_arcmins']
-            profile_data = data['signal']
-            profile_err = data['noise']
+
+            data = pd.read_csv(data_path)
+            r_data = data['RApArcmin']
+            profile_data = data['pz1_act_dr6_fiducial']
+            profile_err = data['pz1_act_dr6_fiducial_err']
                     
             # Plot data on both rows of the last column
             for row_idx in range(2):
@@ -219,20 +220,21 @@ def main(path2config, verbose=True):
             
             # Set y-label only on leftmost column
             if col_idx == 0:
-                ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')
+                ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
+                # ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')
             
             # Set secondary y-axis only on rightmost column
             if col_idx == 3:
-                ax.legend(loc='lower right', fontsize=12)
+                ax.legend(loc='lower right', fontsize=18)
                 secax = ax.secondary_yaxis('right',
-                                           functions=(lambda y: y * k,
-                                                     lambda y: y / k))
+                                           functions=(lambda y: y ,
+                                                     lambda y: y))
                 if row_idx == 0:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
+                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
                 else:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
+                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
             
-            ax.set_yscale('log')
+            ax.set_yscale(plot_config.get('yscale', 'log'))
             ax.set_xlim(0.0, 6.5)
             ax.grid(True)
             
@@ -247,7 +249,7 @@ def main(path2config, verbose=True):
     fig.text(0.02, 0.75, 'IllustrisTNG', fontsize=20, va='center', rotation=90, ha='center')
     fig.text(0.02, 0.25, 'SIMBA', fontsize=20, va='center', rotation=90, ha='center')
 
-    fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
+    fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
     fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
@@ -257,7 +259,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP_masked.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tSZ_z05_CAP_masked.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

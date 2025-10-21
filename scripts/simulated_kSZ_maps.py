@@ -249,14 +249,15 @@ def main(path2config, verbose=True):
         if title == 'IllustrisTNG':
             ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
         elif title == 'SIMBA':
+            # Secondary Y axis
+            k = 1 / (T_CMB * v_c * 1e6)
+            
             secax = ax.secondary_yaxis('right',
                                    functions=(lambda y: y * k,
                                              lambda y: y / k))
             secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
             # secax.tick_params(axis='y', which='major', labelsize=14)
         
-        # Secondary Y axis
-        k = 1 / (T_CMB * v_c * 1e6)
 
         
         ax.set_xlim(0.0, 6.5)

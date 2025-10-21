@@ -252,7 +252,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/config_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

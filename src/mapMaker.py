@@ -587,12 +587,48 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
 
     return total_field
 
-def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy'):
+def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy', 
+                        save3D=False, load3D=False, base_path=None):
+    """Create a masked field, where objects outside of n radii of the halo catalogue
+    is masked out.
+
+    Args:
+        stacker (SimulationStacker): The stacker instance.
+        pType (str): The type of particle to use for the map.
+        nPixels (int): The number of pixels in the map.
+        halo_cat (dict): The halo catalog containing halo positions and radii.
+        projection (str, optional): The projection direction ('xy', 'yz', or 'xz'). Defaults to 'xy'.
+        save3D (bool, optional): Whether to save the 3D field. Defaults to False.
+        load3D (bool, optional): Whether to load the 3D field. Defaults to False.
+        base_path (str, optional): The base path for saving/loading data. Defaults to None.
+
+    Raises:
+        NotImplementedError: If the projection type is not implemented.
+
+    Returns:
+        np.ndarray: The created masked field data.
+    """
     
     # First make the field:
     
-    field_3D = create_field(stacker, pType, nPixels, projection, dim='3D')
-    
+    if load3D:
+        try:
+            field_3D = load_data(stacker.simType, stacker.sim, stacker.snapshot, stacker.feedback,
+                                 pType, nPixels, projection, data_type='field', dim='3D', base_path=base_path)
+            save3D = False # No need to save if we loaded
+            print('Loaded 3D field successfully.')
+        except ValueError as e:
+            print(e)
+            print("Computing the 3D field instead...")
+            field_3D = create_field(stacker, pType, nPixels, projection, dim='3D')
+    else:
+        field_3D = create_field(stacker, pType, nPixels, projection, dim='3D')
+
+
+    if save3D:
+        save_data(field_3D, stacker.simType, stacker.sim, stacker.snapshot, stacker.feedback,
+                   pType, nPixels, projection, data_type='field', dim='3D', base_path=base_path)
+
     # sz_types = ['tSZ', 'kSZ', 'tau']
     
     # if pType in sz_types:

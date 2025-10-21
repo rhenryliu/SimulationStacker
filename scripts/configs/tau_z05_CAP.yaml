@@ -3,10 +3,10 @@ stack:
   filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
   # filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
   load_field: true
-  save_field: false
+  save_field: true
   rad_distance: 1.0 # in arcmin
   particle_type: 'tau'
-  projection: 'xy' # 'xy', 'xz', 'yz'
+  projection: 'yz' # 'xy', 'xz', 'yz'
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
@@ -18,7 +18,7 @@ plot:
   # data_label: 'Hadzhiyska 2024 pz1'
   data_label: 'Hadzhiyska 2024'
   fig_path: '../figures/2025-10/test2/'
-  fig_name: 'profiles_xy'
+  fig_name: 'profiles_yz'
   fig_type: 'png'
   plot_error_bars: true
 

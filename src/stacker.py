@@ -129,7 +129,8 @@ class SimulationStacker(object):
             haloes['GroupRad'] = haloes['GroupRad'][halo_mask] * maskRad # in kpc/h
             haloes['GroupPos'] = haloes['GroupPos'][halo_mask]
 
-            field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection)
+            field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection,
+                                        save3D=True, load3D=load, base_path=base_path) # TODO: make save3D and load3D configurable
         else:
             field = create_field(self, pType, nPixels, projection)
         

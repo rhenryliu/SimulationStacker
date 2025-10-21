@@ -200,8 +200,63 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     return particles
 
 
+def _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
+                       projection='xy', data_type='field', dim='2D',
+                       mask=False, maskRad=2.0, base_path=None):
+    """Generate the file path for saving/loading data.
+
+    Args:
+        sim_type (str): The type of simulation.
+        sim_name (str): Name of the simulation.
+        snapshot (int): Snapshot number.
+        feedback (str): Feedback type (for SIMBA).
+        p_type (str): Particle type.
+        n_pixels (int): Number of pixels.
+        projection (str): Projection direction.
+        data_type (str): Type of data ('field' or 'map').
+        dim (str): Dimension of the data ('2D' or '3D').
+        mask (bool): Whether to apply halo masking.
+        maskRad (float): Radius for masking in units of R200c.
+        base_path (str): Base path to the directory.
+
+    Returns:
+        Path: Full file path for the data file.
+    """
+    if base_path is None:
+        base_path = '/pscratch/sd/r/rhliu/simulations/'
+    
+    if dim == '3D' and data_type == 'map':
+        raise ValueError("3D maps are not supported. Please use 'field' for 3D data.")
+    
+    # Build suffix
+    suffix = '_map' if data_type == 'map' else ''
+    if mask:
+        suffix += f'_masked{maskRad}R200c'
+    
+    # Build filename
+    if sim_type == 'IllustrisTNG':
+        if dim == '2D':
+            filename = f'{sim_name}_{snapshot}_{p_type}_{n_pixels}_{projection}{suffix}.npy'
+        else:  # 3D
+            filename = f'{sim_name}_{snapshot}_{p_type}_{n_pixels}{suffix}.npy'
+    elif sim_type == 'SIMBA':
+        if dim == '2D':
+            filename = f'{sim_name}_{feedback}_{snapshot}_{p_type}_{n_pixels}_{projection}{suffix}.npy'
+        else:  # 3D
+            filename = f'{sim_name}_{feedback}_{snapshot}_{p_type}_{n_pixels}{suffix}.npy'
+    else:
+        raise ValueError(f"Unknown sim_type: {sim_type}")
+    
+    # Build directory path
+    dir_path = Path(f'{base_path}/{sim_type}/products/{dim}/')
+    if mask:
+        dir_path = dir_path / 'masked'
+    
+    return dir_path / filename
+
+
 def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
-              projection='xy', data_type='field', 
+              projection='xy', data_type='field', dim='2D', 
               mask=False, maskRad=2.0,
               base_path=None):
     """Load a precomputed field or map from file.
@@ -216,6 +271,7 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
         n_pixels (int): Number of pixels.
         projection (str): Projection direction.
         data_type (str): Type of data to load ('field' or 'map').
+        dim (str): Dimension of the data ('2D' or '3D'). For 3D, only 'field' is supported.
         mask (bool): Whether to apply halo masking.
         maskRad (float): Radius for masking in units of R200c.
         base_path (str): Base path to the directory containing data.
@@ -223,32 +279,19 @@ def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     Returns:
         np.ndarray: 2D numpy array of the field or map.
     """
-    if base_path is None:
-        # Handle default base path
-        base_path = '/pscratch/sd/r/rhliu/simulations/'
-
-    suffix = '_map' if data_type == 'map' else ''
-
-    if mask:
-        suffix += f'_masked{maskRad}R200c'
-
+    filepath = _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
+                                   projection, data_type, dim, mask, maskRad, base_path)
+    
     try:
-        if sim_type == 'IllustrisTNG':
-            save_name = (sim_name + '_' + str(snapshot) + '_' + 
-                        p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-            data = np.load(f'{base_path}/{sim_type}/products/2D/{save_name}.npy')
-        elif sim_type == 'SIMBA':
-            save_name = (sim_name + '_' + feedback + '_' + str(snapshot) + '_' +
-                        p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-            data = np.load(f'{base_path}/{sim_type}/products/2D/{save_name}.npy')
+        data = np.load(filepath)
     except FileNotFoundError:
-        raise ValueError(f"Data for file '{save_name}' not found. Please compute it first.")
+        raise ValueError(f"Data file '{filepath}' not found. Please compute it first.")
 
     return data
 
 
 def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
-              projection='xy', data_type='field', 
+              projection='xy', data_type='field', dim='2D',
               mask=False, maskRad=2.0,
               base_path=None, mkdir=True):
     """Save a field or map to file.
@@ -263,6 +306,7 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
         n_pixels (int): Number of pixels.
         projection (str): Projection direction.
         data_type (str): Type of data ('field' or 'map').
+        dim (str): Dimension of the data ('2D' or '3D'). For 3D, only 'field' is supported.
         mask (bool): Whether to apply halo masking.
         maskRad (float): Radius for masking in units of R200c.
         base_path (str): Base path to the directory for saving data.
@@ -270,33 +314,12 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     Returns:
         None
     """
-    if base_path is None:
-        # Handle default base path
-        base_path = '/pscratch/sd/r/rhliu/simulations/'
-    
-    suffix = '_map' if data_type == 'map' else ''
-    
-    if mask:
-        suffix += f'_masked{maskRad}R200c'
-    
-    if sim_type == 'IllustrisTNG':
-        save_name = (sim_name + '_' + str(snapshot) + '_' + 
-                    p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-        
-        # savePath = Path(f'{base_path}/{sim_type}/products/2D/')
-        # savePath.mkdir(parents=True, exist_ok=True)
-        
-        # np.save(savePath / f'{save_name}.npy', data)
-    elif sim_type == 'SIMBA':
-        save_name = (sim_name + '_' + feedback + '_' + str(snapshot) + '_' +
-                    p_type + '_' + str(n_pixels) + '_' + projection + suffix)
-        
-    savePath = Path(f'{base_path}/{sim_type}/products/2D/')
-    if mask:
-        savePath = savePath / 'masked'
+    filepath = _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
+                                   projection, data_type, dim, mask, maskRad, base_path)
     
     if mkdir:
-        savePath.mkdir(parents=True, exist_ok=True)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
     
-    np.save(savePath / f'{save_name}.npy', data)
+    print('Saving data to:', filepath)
+    np.save(filepath, data)
 

@@ -244,8 +244,8 @@ def main(path2config, verbose=True):
                     ax.set_title('No Masking')
     
     # Set row labels
-    fig.text(0.02, 0.75, 'IllustrisTNG', fontsize=20, va='center', rotation=90, ha='center')
-    fig.text(0.02, 0.25, 'SIMBA', fontsize=20, va='center', rotation=90, ha='center')
+    fig.text(0.02, 0.25, 'IllustrisTNG', fontsize=20, va='center', rotation=90, ha='center')
+    fig.text(0.02, 0.75, 'SIMBA', fontsize=20, va='center', rotation=90, ha='center')
 
     fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
     fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title

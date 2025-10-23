@@ -58,6 +58,10 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
+    
+    filterType2 = stack_config.get('filter_type_2', 'DSigma')
+    pType2 = stack_config.get('particle_type_2', 'total')
+
 
     # fractionType = config['fraction_type']
 
@@ -101,15 +105,14 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name)
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0, # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
 
-                radii1, profiles1 = stacker.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
-
                 
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
@@ -117,8 +120,8 @@ def main(path2config, verbose=True):
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 
 
@@ -136,19 +139,20 @@ def main(path2config, verbose=True):
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name, 
                 #                                feedback=feedback)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0,  # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                radii1, profiles1 = stacker.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                print('Stacker2')
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
                                                                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
                 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 # if fractionType == 'gas':
                 #     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
@@ -188,20 +192,23 @@ def main(path2config, verbose=True):
                 # SIMBA simulations have different feedback models               
                 sim_name = sim_name + '_' + sim['feedback'] 
             
-            # plot_term = (profiles0 / (np.pi*radii0**2)[:, np.newaxis]) / profiles1 # TODO
+            # If we want area-averaged CAP profile:
+            profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
+            # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
+            plot_term = profiles0 / profiles1 # TODO
             # plot_term = profiles1
 
             # profiles_plot = np.mean(plot_term, axis=1)
-            profiles_plot = np.mean((profiles0 / (np.pi*radii0**2)[:, np.newaxis]), axis=1) / np.mean(profiles1, axis=1)
+            profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
             # profiles_plot = np.median(plot_term, axis=1)
             ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
-                err0 = np.std(profiles0 / (np.pi*radii0**2)[:, np.newaxis], axis=1) / np.sqrt(profiles0.shape[1])
+                err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
                 err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
                 # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0 / (np.pi*radii0**2)[:, np.newaxis], axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
-                
-                
+                profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
+
+
                 # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
                 # upper = np.percentile(plot_term, 75, axis=1)
                 # lower = np.percentile(plot_term, 25, axis=1)
@@ -227,6 +234,7 @@ def main(path2config, verbose=True):
     # ax.set_ylabel('f')
     ax.set_xlabel('R [arcmin]', fontsize=18)
     ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
+    plt.axhline(1.0, color='k', ls='--', lw=2)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     # --- Secondary Y axis examples ---
@@ -253,7 +261,8 @@ def main(path2config, verbose=True):
     ax.set_title(f'Ratio at z={redshift}', fontsize=18)
     
     fig.tight_layout()
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
+    # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')
@@ -261,7 +270,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/kSZ_ratio_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/mass_ratio_z05.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

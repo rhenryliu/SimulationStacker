@@ -203,7 +203,7 @@ def main(path2config, verbose=True):
             # Plot data on both rows of the last column
             for row_idx in range(2):
                 axes[row_idx, col_idx].errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
-                                                 label=plot_config['data_label'], markersize=8, zorder=10)
+                                                 label=plot_config['data_label'], markersize=5, zorder=10)
 
     # Configure all subplots
     T_CMB = 2.7255
@@ -225,7 +225,7 @@ def main(path2config, verbose=True):
             
             # Set secondary y-axis only on rightmost column
             if col_idx == 3:
-                ax.legend(loc='lower right', fontsize=18)
+                ax.legend(loc='best', fontsize=12)
                 secax = ax.secondary_yaxis('right',
                                            functions=(lambda y: y ,
                                                      lambda y: y))
@@ -250,8 +250,8 @@ def main(path2config, verbose=True):
     fig.text(0.02, 0.75, 'SIMBA', fontsize=20, va='center', rotation=90, ha='center')
 
     fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
-    fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
+    fig.tight_layout(rect=(0.03, 0, 1, 1))  # Leave space on left for row labels and top for title
+    fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

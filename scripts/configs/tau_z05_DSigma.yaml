@@ -9,12 +9,13 @@ stack:
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   particle_type: 'gas'
   projection: 'yz' # 'xy', 'xz', 'yz'
+  pixel_size: 0.5 # in arcmin
 
 plot:
   plot_data: false
   data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_label: 'Hadzhiyska 2024 pz1'
-  fig_path: '../figures/2025-10/test2/'
+  fig_path: '../figures/2025-10/test3/'
   fig_name: 'DSigma_profiles_yz'
   fig_type: 'png'
   plot_error_bars: true

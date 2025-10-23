@@ -15,7 +15,7 @@ plot:
   plot_data: true
   data_path: '../data/fig4.csv'
   data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
-  fig_path: '../figures/2025-10/test2/'
+  fig_path: '../figures/2025-10/test3/'
   fig_name: 'profiles_xy'
   fig_type: 'pdf'
   plot_error_bars: true

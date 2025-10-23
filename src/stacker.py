@@ -528,7 +528,8 @@ class SimulationStacker(object):
                 profile = []
                 for rad in radii:
                     # TODO: pixel_size unit conversions!! Important
-                    filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)  # type: ignore
+                    # filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)  # type: ignore
+                    filt_result = filterFunc(cutout, rr, rad, pixel_size=pixelSize_true)  # type: ignore
                     profile.append(filt_result)
                 
                 profile = np.array(profile)

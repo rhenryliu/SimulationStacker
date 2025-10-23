@@ -6,7 +6,7 @@ stack:
   save_field: true
   rad_distance: 1.0 # in arcmin
   particle_type: 'tSZ'
-  projection: 'yz' # 'xy', 'xz', 'yz'
+  projection: 'xz' # 'xy', 'xz', 'yz'
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
@@ -17,7 +17,7 @@ plot:
   data_path: '../data/fig4.csv'
   data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
   fig_path: '../figures/2025-10/compare/'
-  fig_name: 'profiles_yz_masked'
+  fig_name: 'profiles_xz_masked'
   fig_type: 'png'
   plot_error_bars: true
   yscale: 'linear'

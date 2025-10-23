@@ -6,7 +6,7 @@ stack:
   save_field: true
   rad_distance: 1.0 # in arcmin
   particle_type: 'tau'
-  projection: 'yz' # 'xy', 'xz', 'yz'
+  projection: 'xy' # 'xy', 'xz', 'yz'
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
@@ -17,7 +17,7 @@ plot:
   data_path: '../data/Fig2_sim.npz'
   data_label: 'Hadzhiyska 2024'
   fig_path: '../figures/2025-10/compare/'
-  fig_name: 'profiles_yz_masked'
+  fig_name: 'profiles_xy_masked'
   fig_type: 'png'
   plot_error_bars: true
 

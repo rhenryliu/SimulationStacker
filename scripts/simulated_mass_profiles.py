@@ -58,6 +58,9 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
+    
+    filterType2 = stack_config.get('filter_type_2', 'DSigma')
+    pType2 = stack_config.get('particle_type_2', 'total')
 
     # fractionType = config['fraction_type']
 
@@ -71,7 +74,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    fig, ax = plt.subplots(figsize=(10,8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), sharey=True)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -101,15 +104,14 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name)
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0, # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
 
-                radii1, profiles1 = stacker.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
-
                 
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
@@ -117,8 +119,8 @@ def main(path2config, verbose=True):
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 
 
@@ -136,19 +138,19 @@ def main(path2config, verbose=True):
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name, 
                 #                                feedback=feedback)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType='CAP', minRadius=1.0, maxRadius=6.0,  # type: ignore
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                radii1, profiles1 = stacker.stackMap('total', filterType='DSigma', minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
                                                                 
                 OmegaBaryon = 0.048  # Default value for SIMBA
                 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 # if fractionType == 'gas':
                 #     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
@@ -187,30 +189,28 @@ def main(path2config, verbose=True):
             if sim_type_name == 'SIMBA':
                 # SIMBA simulations have different feedback models               
                 sim_name = sim_name + '_' + sim['feedback'] 
-            
-            # plot_term = (profiles0 / (np.pi*radii0**2)[:, np.newaxis]) / profiles1 # TODO
-            # plot_term = profiles1
 
-            # profiles_plot = np.mean(plot_term, axis=1)
-            profiles_plot = np.mean((profiles0 / (np.pi*radii0**2)[:, np.newaxis]), axis=1) / np.mean(profiles1, axis=1)
-            # profiles_plot = np.median(plot_term, axis=1)
-            ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+            # If we want area-averaged CAP profile:
+            profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
+            # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
+            
+            # Plot profiles0 on left subplot
+            profiles_plot0 = np.mean(profiles0, axis=1)
+            ax1.plot(radii0 * radDistance, profiles_plot0, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
-                err0 = np.std(profiles0 / (np.pi*radii0**2)[:, np.newaxis], axis=1) / np.sqrt(profiles0.shape[1])
+                err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                upper0 = profiles_plot0 + err0
+                lower0 = profiles_plot0 - err0
+                ax1.fill_between(radii0 * radDistance, lower0, upper0, color=colours[j], alpha=0.2)
+            
+            # Plot profiles1 on right subplot
+            profiles_plot1 = np.mean(profiles1, axis=1)
+            ax2.plot(radii1 * radDistance, profiles_plot1, label=sim_name, color=colours[j], lw=2, marker='o')
+            if plotErrorBars:
                 err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0 / (np.pi*radii0**2)[:, np.newaxis], axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
-                
-                
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                # upper = np.percentile(plot_term, 75, axis=1)
-                # lower = np.percentile(plot_term, 25, axis=1)
-                upper = profiles_plot + profiles_err
-                lower = profiles_plot - profiles_err
-                ax.fill_between(radii0 * radDistance, 
-                                lower, 
-                                upper, 
-                                color=colours[j], alpha=0.2)
+                upper1 = profiles_plot1 + err1
+                lower1 = profiles_plot1 - err1
+                ax2.fill_between(radii1 * radDistance, lower1, upper1, color=colours[j], alpha=0.2)
 
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
@@ -221,39 +221,26 @@ def main(path2config, verbose=True):
         r_data = data['theta_arcmins']
         profile_data = data['prof']
         profile_err = np.sqrt(np.diag(data['cov']))
-        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
+        ax1.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
+        # Optionally also plot on ax2 if relevant
 
-    # ax.set_xlabel('Radius (arcmin)')
-    # ax.set_ylabel('f')
-    ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
-    # ax.set_xscale('log')
-    # ax.set_yscale('log')
-    # --- Secondary Y axis examples ---
-
-    # 1) Multiplicative (recommended for log scale): y2 = k * y1
-    # k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
-    # secax = ax.secondary_yaxis('right',
-    #                            functions=(lambda y: y * k,      # forward
-    #                                       lambda y: y / k))     # inverse
-    # secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
-
-    # 2) If you really need an additive offset (ensure y+C > 0 on log scale):
-    # C = 5.0  # additive offset in the same units
-    # secax = ax.secondary_yaxis('right',
-    #                          functions=(lambda y: y + C,      # forward
-    #                                     lambda y: y - C))     # inverse
-    # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
-
-    ax.set_xlim(0.0, 6.5)
-    # ax.set_ylim(0, 1.2)
-    # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
-    ax.grid(True)
-    ax.set_title(f'Ratio at z={redshift}', fontsize=18)
+    # Configure left subplot (profiles0)
+    ax1.set_xlabel('R [arcmin]', fontsize=18)
+    ax1.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
+    ax1.set_xlim(0.0, 6.5)
+    ax1.legend(loc='best', fontsize=12)
+    ax1.grid(True)
+    ax1.set_title(f'{pType} {filterType} profiles at z={redshift}', fontsize=18)
+    
+    # Configure right subplot (profiles1)
+    ax2.set_xlabel('R [arcmin]', fontsize=18)
+    ax2.set_xlim(0.0, 6.5)
+    ax2.legend(loc='best', fontsize=12)
+    ax2.grid(True)
+    ax2.set_title(f'{pType2} {filterType2} profiles at z={redshift}', fontsize=18)
     
     fig.tight_layout()
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')
@@ -261,7 +248,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/kSZ_ratio_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/mass_ratio_z05.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

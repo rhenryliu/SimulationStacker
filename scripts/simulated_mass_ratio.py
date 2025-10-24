@@ -22,7 +22,7 @@ import astropy.units as u
 
 sys.path.append('../src/')
 # from filter_utils import *
-from utils import ksz_from_delta_sigma
+from utils import ksz_from_delta_sigma, arcmin_to_comoving
 from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
@@ -105,22 +105,27 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name)
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name)
-
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-
-                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=radDistance,
-                                                        projection=projection)
-                
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
-
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
+                                                     save=saveField, load=loadField, radDistance=radDistance,
+                                                     projection=projection)
+                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=radDistance,
+                #                                         projection=projection)
+                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
+                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
+                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=1000, nPixels=1000,
+                                                        projection=projection)
+                
+
+                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
                 # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 
@@ -139,18 +144,22 @@ def main(path2config, verbose=True):
                 # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
                 #                                simType=sim_type_name, 
                 #                                feedback=feedback)
+                OmegaBaryon = 0.048  # Default value for SIMBA
+                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
 
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                print('Stacker2')
-                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=radDistance,
+                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=radDistance,
+                #                                         projection=projection)
+                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
+                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
+                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=1000, nPixels=1000,
                                                         projection=projection)
                                                                 
-                OmegaBaryon = 0.048  # Default value for SIMBA
-                
-                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
                 # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
                 # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
@@ -200,11 +209,12 @@ def main(path2config, verbose=True):
 
             # profiles_plot = np.mean(plot_term, axis=1)
             profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
+            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1)
             # profiles_plot = np.median(plot_term, axis=1)
             ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
                 err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
+                err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1]) # type: ignore
                 # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
                 profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
 

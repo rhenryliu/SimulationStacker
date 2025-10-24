@@ -524,12 +524,18 @@ class SimulationStacker(object):
                 radii, profile, _ = delta_sigma_mccarthy(cutout, rr, pixel_scale_arcmin=pixelSize, z=z, # type: ignore
                                                          cosmo=cosmo, rmin_theta=minRadius, rmax_theta=maxRadius, n_rbins=numRadii)
             elif filterType == 'DSigma':
-                # pass
+                # TODO: This does not work with stackField for some reason.
+                if radDistanceUnits == 'arcmin':
+                    dr = 0.5 # 0.5 arcmin in pixels
+                else:
+                    # dr = 0.2 # 0.2 kpc/h in pixels
+                    dr = 3 / RadPixel
+                
                 profile = []
                 for rad in radii:
                     # TODO: pixel_size unit conversions!! Important
                     # filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)  # type: ignore
-                    filt_result = filterFunc(cutout, rr, rad, pixel_size=pixelSize_true)  # type: ignore
+                    filt_result = filterFunc(cutout, rr, rad, dr=dr, pixel_size=pixelSize_true)  # type: ignore
                     profile.append(filt_result)
                 
                 profile = np.array(profile)

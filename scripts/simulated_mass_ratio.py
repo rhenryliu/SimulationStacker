@@ -22,7 +22,7 @@ import astropy.units as u
 
 sys.path.append('../src/')
 # from filter_utils import *
-from utils import ksz_from_delta_sigma, arcmin_to_comoving
+from utils import ksz_from_delta_sigma, arcmin_to_comoving, comoving_to_arcmin
 from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
@@ -32,6 +32,22 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+
+# --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
+matplotlib.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    "text.usetex": True,
+    "mathtext.fontset": "cm",
+    # Base font sizes (adjust as desired)
+    "font.size": 20,
+    "axes.titlesize": 20,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 20,
+    "ytick.labelsize": 20,
+    "legend.fontsize": 20,
+})
+# --- END NEW ---
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -62,6 +78,10 @@ def main(path2config, verbose=True):
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
 
+    minRadius = stack_config.get('min_radius', 1.0)
+    maxRadius = stack_config.get('max_radius', 10.0)
+    # nRadii = stack_config.get('num_radii', 11)
+
 
     # fractionType = config['fraction_type']
 
@@ -75,7 +95,8 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    fig, ax = plt.subplots(figsize=(10,8))
+    # fig, ax = plt.subplots(figsize=(10,8))
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -85,9 +106,11 @@ def main(path2config, verbose=True):
         if sim_type_name == 'IllustrisTNG':
             TNG_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
+            ax = ax_tng
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            ax = ax_simba
 
         if verbose:
             print(f"Processing simulations of type: {sim_type_name}")
@@ -109,23 +132,23 @@ def main(path2config, verbose=True):
                     OmegaBaryon = stacker.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
-                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
+                cosmo_tng = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=radDistance,
-                #                                         projection=projection)
-                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=1000, nPixels=1000,
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
+                # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
+                # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
+                # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+                # radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=1000, nPixels=1000,
+                #                                         projection=projection)
                 
 
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
                 # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
                 
@@ -145,20 +168,20 @@ def main(path2config, verbose=True):
                 #                                simType=sim_type_name, 
                 #                                feedback=feedback)
                 OmegaBaryon = 0.048  # Default value for SIMBA
-                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
+                cosmo_simba = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0,  # type: ignore
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius,  # type: ignore
                                                      save=saveField, load=loadField, radDistance=radDistance,
                                                      projection=projection)
-                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=1.0, maxRadius=6.0, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=radDistance,
-                #                                         projection=projection)
-                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=1000, nPixels=1000,
+                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                        save=saveField, load=loadField, radDistance=radDistance,
                                                         projection=projection)
+                # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
+                # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
+                # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+                # radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=1000, nPixels=1000,
+                #                                         projection=projection)
                                                                 
                 # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
                 # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
@@ -202,7 +225,7 @@ def main(path2config, verbose=True):
                 sim_name = sim_name + '_' + sim['feedback'] 
             
             # If we want area-averaged CAP profile:
-            profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
+            # profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
             # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
             plot_term = profiles0 / profiles1 # TODO
             # plot_term = profiles1
@@ -232,6 +255,11 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
 
+    def forward_arcmin(arcmin):
+        return arcmin_to_comoving(arcmin, redshift, cosmo_tng)
+    def inverse_arcmin(comoving):
+        return comoving_to_arcmin(comoving, redshift, cosmo_tng)
+
     if plot_config['plot_data']:
         data_path = plot_config['data_path']
         data = np.load(data_path)
@@ -242,9 +270,12 @@ def main(path2config, verbose=True):
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
-    ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
-    plt.axhline(1.0, color='k', ls='--', lw=2)
+    # ax_simba.set_xlabel('R [arcmin]', fontsize=18)
+    # ax_tng.set_xlabel('R [arcmin]', fontsize=18)
+    # ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
+    # ax_tng.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
+    # ax_simba.axhline(1.0, color='k', ls='--', lw=2)
+    # ax_tng.axhline(1.0, color='k', ls='--', lw=2)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     # --- Secondary Y axis examples ---
@@ -263,12 +294,49 @@ def main(path2config, verbose=True):
     #                                     lambda y: y - C))     # inverse
     # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
 
-    ax.set_xlim(0.0, 6.5)
+    # ax.set_xlim(0.0, 6.5)
     # ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
-    ax.grid(True)
-    ax.set_title(f'Ratio at z={redshift}', fontsize=18)
+    # ax_tng.legend(loc='lower right', fontsize=12)
+    # ax_simba.legend(loc='lower right', fontsize=12)
+    # ax_tng.grid(True)
+    # ax_simba.grid(True)
+    # ax_tng.set_title('IllustrisTNG', fontsize=16)
+    # ax_simba.set_title('SIMBA', fontsize=16)
+    
+    # Configure both subplots
+    for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
+        ax.set_xlabel('R [arcmin]', fontsize=18)
+        # ax.set_yscale('log')
+        
+        # Set tick label font size
+        # ax.tick_params(axis='both', which='major', labelsize=14)
+        # ax.tick_params(axis='both', which='minor', labelsize=12)
+
+        if title == 'IllustrisTNG':
+            # ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
+            ax.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
+        elif title == 'SIMBA':
+            # Secondary Y axis
+            k = 1 / (T_CMB * v_c * 1e6)
+            
+            secax = ax.secondary_yaxis('right',
+                                   functions=(lambda y: y * k,
+                                             lambda y: y / k))
+            secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
+            # secax.tick_params(axis='y', which='major', labelsize=14)
+        
+        secax_x = ax.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
+        secax_x.set_xlabel('R [comoving kpc/h]', fontsize=18)
+        # secax_x.tick_params(axis='x', which='major', labelsize=14)
+
+        ax.axhline(1.0, color='k', ls='--', lw=2)
+        ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
+        ax.legend(loc='lower right', fontsize=12)
+        ax.grid(True)
+        ax.set_title(f'{title}')#, fontsize=20)
+    
+    fig.suptitle(f'Ratio at z={redshift}', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore

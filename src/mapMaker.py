@@ -296,11 +296,12 @@ def create_field(stacker, pType, nPixels, projection, dim='2D'):
     """
     
     sz_types = ['tSZ', 'kSZ', 'tau']
+    combined_types = ['total', 'baryon']
     
     if pType in sz_types:
         return make_sz_field(stacker, pType, nPixels, projection, dim=dim)
-    elif pType == 'total':
-        return make_total_field(stacker, pType, nPixels, projection, dim=dim)
+    elif pType in combined_types:
+        return make_combined_field(stacker, pType, nPixels, projection, dim=dim)
     else:
         return make_mass_field(stacker, pType, nPixels, projection, dim=dim)
 
@@ -550,12 +551,12 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
 
     return field_total
 
-def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
-    """Create a total mass field by summing over all particle types.
+def make_combined_field(stacker, pType, nPixels=None, projection='xy', dim='2D', load=True, base_path=None):
+    """Create a combined mass field by summing over all particle types.
 
     Args:
         stacker (SimulationStacker): The stacker instance.
-        pType (str): The type of particle to use for the map. Either 'total'.
+        pType (str): The type of particle to use for the map. Either 'total' (for all particle types) or 'baryon' (for gas and stars only).
         nPixels (int, optional): The number of pixels in the map. Defaults to stacker.nPixels.
         projection (str, optional): The projection direction ('xy', 'yz', or 'xz'). Defaults to 'xy'.
         dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
@@ -569,10 +570,13 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     if nPixels is None:
         nPixels = stacker.nPixels
 
-    if pType != 'total':
-        raise ValueError("pType must be 'total' for make_total_field.")
+    if pType == 'total':
+        particle_types = ['gas', 'DM', 'Stars', 'BH']
+    elif pType == 'baryon':
+        particle_types = ['gas', 'Stars', 'BH']
+    else:
+        raise ValueError("pType must be 'total' or 'baryon' for make_combined_field.")
 
-    particle_types = ['gas', 'DM', 'Stars', 'BH']
     if dim == '2D':
         gridSize = [nPixels, nPixels]
     elif dim == '3D':
@@ -582,7 +586,16 @@ def make_total_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     total_field = np.zeros(gridSize)
 
     for pt in particle_types:
-        field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)
+        print("Processing particle type:", pt)
+        if load:
+            try:
+                field = load_data(stacker.simType, stacker.sim, stacker.snapshot, 
+                                  stacker.feedback, pt, nPixels, projection, 'field', dim=dim, 
+                                  base_path=base_path)
+            except ValueError as e:
+                print(e)
+                print("Computing the field instead...")
+                field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)
         total_field += field
 
     return total_field

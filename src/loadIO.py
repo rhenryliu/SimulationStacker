@@ -182,7 +182,7 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     elif actual_p_type == 'BH':
         p_type_val = 'PartType5'
     else:
-        raise NotImplementedError('Particle Type not implemented')
+        raise NotImplementedError(f'Particle Type not implemented: {actual_p_type}')
 
     particles = {}
     with h5py.File(snap_path, 'r') as f:

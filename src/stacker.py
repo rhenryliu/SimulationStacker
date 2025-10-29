@@ -85,8 +85,8 @@ class SimulationStacker(object):
         self.maps = {}
 
     def makeField(self, pType, nPixels=None, projection='xy', save=False, load=True, 
-                  mask=False, maskRad=3.0, base_path=None):
-        """Uses a histogram binning to make projected 2D fields of a given particle type from the simulation.
+                  mask=False, maskRad=3.0, base_path=None, dim='2D'):
+        """Uses a histogram binning to make projected fields (either 2D or 3D) of a given particle type from the simulation.
 
         Args:
             pType (str): Particle Type. One of 'gas', 'DM', 'Stars', 'BH' for mass maps, 'tSZ', 'kSZ', or 'tau' for SZ maps,
@@ -99,12 +99,13 @@ class SimulationStacker(object):
             maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True. 
                 Defaults to 3x virial radii.
             base_path (str, optional): Base path for loading/saving data. Defaults to None, which uses the default path.
+            dim (str, optional): Dimension of the field to create. Either '2D' or '3D'. Defaults to '2D'.
 
         Raises:
             NotImplementedError: If field is not one of the ones listed above.
 
         Returns:
-            np.ndarray: 2D numpy array of the field for the given particle type.
+            np.ndarray: 2D or 3D numpy array of the field for the given particle type.
 
         TODO: Handle saving and loading of the fields for the masked case.
         """
@@ -115,7 +116,7 @@ class SimulationStacker(object):
         if load:
             try:
                 return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', 
-                                     mask=mask, maskRad=maskRad, base_path=base_path)
+                                     mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
             except ValueError as e:
                 print(e)
                 print("Computing the field instead...")
@@ -130,15 +131,15 @@ class SimulationStacker(object):
             haloes['GroupPos'] = haloes['GroupPos'][halo_mask]
 
             field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection,
-                                        save3D=True, load3D=load, base_path=base_path) # TODO: make save3D and load3D configurable
+                                        save3D=True, load3D=load, base_path=base_path, dim=dim) # TODO: make save3D and load3D configurable
         else:
-            field = create_field(self, pType, nPixels, projection)
+            field = create_field(self, pType, nPixels, projection, dim=dim)
         
         if save:
             # TODO: Handle saving and loading of the fields for the masked case.
             save_data(field, self.simType, self.sim, self.snapshot, 
                       self.feedback, pType, nPixels, projection, 'field', 
-                      mask=mask, maskRad=maskRad, base_path=base_path)
+                      mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
 
         return field
 
@@ -642,13 +643,13 @@ class SimulationStacker(object):
                           header=self.header, keys=keys, sim_name=self.sim)
 
     def loadData(self, pType, nPixels=None, projection='xy', type='field', 
-                 mask=False, maskRad=3.0, base_path=None):
+                 mask=False, maskRad=3.0, base_path=None, dim='2D'):
         """Load a precomputed field or map from file."""
         if nPixels is None:
             nPixels = self.nPixels
         return load_data(self.simType, self.sim, self.snapshot, 
                          self.feedback, pType, nPixels, projection, type, 
-                         mask=mask, maskRad=maskRad, base_path=base_path)
+                         mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
 
 
 

@@ -601,7 +601,7 @@ def make_combined_field(stacker, pType, nPixels=None, projection='xy', dim='2D',
     return total_field
 
 def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy', 
-                        save3D=False, load3D=False, base_path=None):
+                        save3D=False, load3D=False, base_path=None, dim='2D'):
     """Create a masked field, where objects outside of n radii of the halo catalogue
     is masked out.
 
@@ -614,6 +614,7 @@ def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy',
         save3D (bool, optional): Whether to save the 3D field. Defaults to False.
         load3D (bool, optional): Whether to load the 3D field. Defaults to False.
         base_path (str, optional): The base path for saving/loading data. Defaults to None.
+        dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
 
     Raises:
         NotImplementedError: If the projection type is not implemented.
@@ -622,6 +623,9 @@ def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy',
         np.ndarray: The created masked field data.
     """
     
+    if dim not in ['2D', '3D']:
+        raise ValueError("dim must be either '2D' or '3D': " + dim)
+
     # First make the field:
     
     if load3D:
@@ -660,6 +664,11 @@ def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy',
     GroupRad_masked = GroupRad / kpcPerPixel
     cutout_mask = get_cutout_mask_3d(field_3D, GroupPos_masked, GroupRad_masked)
     field_3D_masked = field_3D * cutout_mask
+    
+    if dim == '3D':
+        return field_3D_masked
+    # Project to 2D
+    
     if projection == 'xy':
         field_2D_masked = np.sum(field_3D_masked, axis=2)
     elif projection == 'xz':

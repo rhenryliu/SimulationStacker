@@ -17,7 +17,7 @@ plot:
   plot_data: false
   data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_label: 'Hadzhiyska 2024 pz1'
-  fig_path: '../figures/2025-10/10-27/'
+  fig_path: '../figures/2025-10/10-29/'
   fig_name: 'ratios_yz'
   fig_type: 'png'
   plot_error_bars: true
@@ -50,5 +50,7 @@ simulations:
         snapshot: 67
       - name: 'TNG300-2'
         snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
       - name: 'Illustris-2'
         snapshot: 103

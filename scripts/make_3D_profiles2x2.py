@@ -33,6 +33,7 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 # --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
 matplotlib.rcParams.update({
@@ -91,7 +92,11 @@ def main(path2config, verbose=True):
     # fractionType = config['fraction_type']
 
     # Plotting parameters
-    figPath = Path(plot_config.get('fig_path'))
+    # get the datetime for file naming
+    now = datetime.now()
+    dt_string = now.strftime("%m-%d")
+
+    figPath = Path(plot_config.get('fig_path')) / dt_string
     figPath.mkdir(parents=False, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
@@ -101,7 +106,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # Create 2x2 subplot grid with shared axes
-    fig, axes = plt.subplots(2, 2, figsize=(20, 12), sharex='col', sharey='row')
+    fig, axes = plt.subplots(2, 2, figsize=(13, 12), sharex='col', sharey='row')
     
     # Define particle type configurations for each row
     ptype_configs = [
@@ -360,14 +365,14 @@ def main(path2config, verbose=True):
             ax.axvline(R200C, color='gray', ls=':', lw=2, label=r'$R_{200c}$')
             ax.axhline(1.0, color='k', ls='--', lw=2)
             ax.set_xlim(0.0, None)
-            ax.legend(loc='lower right', fontsize=10)
+            ax.legend(loc='lower right', fontsize=20)
             ax.grid(True)
             
             # Add title only to top row
             if row_idx == 0:
                 ax.set_title(f'{title}', fontsize=20)
     
-    fig.suptitle(f'Profile Ratios at z={redshift}', fontsize=22, y=0.995)
+    # fig.suptitle(f'Profile Ratios at z={redshift}', fontsize=22, y=0.995)
     
     fig.tight_layout()
     fig.savefig(figPath / f'2x2_{figName}_z{redshift}_3D_ratio.{figType}', dpi=300) # type: ignore

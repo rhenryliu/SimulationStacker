@@ -32,6 +32,7 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 # --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
 matplotlib.rcParams.update({
@@ -88,7 +89,11 @@ def main(path2config, verbose=True):
     # fractionType = config['fraction_type']
 
     # Plotting parameters
-    figPath = Path(plot_config.get('fig_path'))
+    # get the datetime for file naming
+    now = datetime.now()
+    dt_string = now.strftime("%m-%d")
+
+    figPath = Path(plot_config.get('fig_path')) / dt_string
     figPath.mkdir(parents=False, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
@@ -98,7 +103,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # Create 2x2 subplot grid with shared axes
-    fig, axes = plt.subplots(2, 2, figsize=(20, 12), sharex='col', sharey='row')
+    fig, axes = plt.subplots(2, 2, figsize=(13, 12), sharex='col', sharey='row')
     
     # Define particle type configurations for each row
     ptype_configs = [
@@ -324,14 +329,14 @@ def main(path2config, verbose=True):
                 ax.set_ylabel(rf'$\frac{{{pType_current}}}{{{pType2_current}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
             
             # Add secondary y-axis only for right column (SIMBA)
-            if col_idx == 1:
-                k = 1 / (T_CMB * v_c * 1e6)
-                secax = ax.secondary_yaxis('right',
-                                       functions=(lambda y: y * k,
-                                                 lambda y: y / k))
-                # Only label the top-right secondary axis to avoid clutter
-                if row_idx == 0:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
+            # if col_idx == 1:
+            #     k = 1 / (T_CMB * v_c * 1e6)
+            #     secax = ax.secondary_yaxis('right',
+            #                            functions=(lambda y: y * k,
+            #                                      lambda y: y / k))
+            #     # Only label the top-right secondary axis to avoid clutter
+            #     if row_idx == 0:
+            #         secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
             
             # Add secondary x-axis only for top row
             if row_idx == 0:
@@ -340,14 +345,14 @@ def main(path2config, verbose=True):
 
             ax.axhline(1.0, color='k', ls='--', lw=2)
             ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
-            ax.legend(loc='lower right', fontsize=10)
+            ax.legend(loc='lower right', fontsize=20)
             ax.grid(True)
             
             # Add title only to top row
             if row_idx == 0:
                 ax.set_title(f'{title}', fontsize=20)
     
-    fig.suptitle(f'Profile Ratios at z={redshift}', fontsize=22, y=0.995)
+    # fig.suptitle(f'Profile Ratios at z={redshift}', fontsize=22, y=0.995)
     
     fig.tight_layout()
     fig.savefig(figPath / f'2x2_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore

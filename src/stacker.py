@@ -267,7 +267,8 @@ class SimulationStacker(object):
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
-                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, maskRad=3.0):
+                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, maskRad=3.0,
+                 subtract_mean=False):
         """Stack the map of a given particle type.
 
         Args:
@@ -285,6 +286,10 @@ class SimulationStacker(object):
             pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
             halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
+            mask (bool, optional): If True, masks out areas outside of haloes in the map. Defaults to False.
+            maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True.
+                Defaults to 3x virial radii.
+            subtract_mean (bool, optional): If True, subtracts the mean of the map before stacking. Defaults to False.
 
         Returns:
             radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
@@ -303,6 +308,11 @@ class SimulationStacker(object):
             self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection,
                                                save=save, load=load, pixelSize=pixelSize, mask=mask, maskRad=maskRad)
 
+        # If subtract_mean is True, subtract the mean of the map before stacking.
+        if subtract_mean:
+            map_mean = np.mean(self.maps[fieldKey])
+            self.maps[fieldKey] -= map_mean
+
         # Use the abstracted stacking function
         radii, profiles = self.stack_on_array(
             array=self.maps[fieldKey],
@@ -319,6 +329,10 @@ class SimulationStacker(object):
             pixelSize=pixelSize
         )
         
+        # restore the mean if subtracted
+        if subtract_mean:
+            self.maps[fieldKey] += map_mean
+
        # Unit Conversion specific to SZ maps:
         T_CMB = 2.7255
         if pType == 'tau':
@@ -346,7 +360,8 @@ class SimulationStacker(object):
         return radii, profiles 
 
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000, mask=False, maskRad=3.0):
+                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000, 
+                   mask=False, maskRad=3.0, subtract_mean=False):
         """Do stacking on the computed field.
 
         Args:
@@ -361,6 +376,10 @@ class SimulationStacker(object):
             load (bool, optional): If True, loads the stacked field from a file if it exists. Defaults to True.
             radDistance (float, optional): Radial distance units for stacking. Defaults to 1000 kpc/h (so converts to 1 Mpc/h).
                 If None, uses the mean halo radius from the halo catalog.
+            mask (bool, optional): If True, masks out areas outside of haloes in the field. Defaults to False.
+            maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True. 
+                Defaults to 3x virial radii.
+            subtract_mean (bool, optional): If True, subtracts the mean of the field before stacking. Defaults to False.
 
         Raises:
             NotImplementedError: If pType is not one of the ones listed above.
@@ -388,6 +407,11 @@ class SimulationStacker(object):
             halo_mask = np.where(np.logical_and((haloes['GroupMass'] > mass_min), (haloes['GroupMass'] < mass_max)))[0]
             radDistance = haloes['GroupRad'][halo_mask].mean()
 
+        # If subtract_mean is True, subtract the mean of the map before stacking.
+        if subtract_mean:
+            field_mean = np.mean(self.fields[fieldKey])
+            self.fields[fieldKey] -= field_mean
+
         # Use the abstracted stacking function
         radii, profiles = self.stack_on_array(
             array=self.fields[fieldKey],
@@ -400,6 +424,11 @@ class SimulationStacker(object):
             radDistanceUnits='kpc/h'
         )
         
+        # restore the mean if subtracted
+        # TODO: this may introduce weird numerics behaviour, check later
+        if subtract_mean:
+            self.fields[fieldKey] += field_mean
+
         # Apply post-processing for CAP filter
         # This is taken care of in the `stack_on_array` function now
         # if filterType == 'CAP':

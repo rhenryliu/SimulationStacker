@@ -32,6 +32,7 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -66,7 +67,11 @@ def main(path2config, verbose=True):
     # fractionType = config['fraction_type']
 
     # Plotting parameters
-    figPath = Path(plot_config.get('fig_path'))
+    # get the datetime for file naming
+    now = datetime.now()
+    dt_string = now.strftime("%m-%d")
+
+    figPath = Path(plot_config.get('fig_path')) / dt_string
     figPath.mkdir(parents=False, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
@@ -202,7 +207,7 @@ def main(path2config, verbose=True):
                 sim_name = sim_name + '_' + sim['feedback'] 
             
             # If we want area-averaged CAP profile:
-            profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
+            # profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
             # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
             plot_term = profiles0 / profiles1 # TODO
             # plot_term = profiles1

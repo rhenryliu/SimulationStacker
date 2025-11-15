@@ -1,15 +1,15 @@
 stack:
   redshift: 0.5
-  filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
+  filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma'
   load_field: true
   save_field: true
   rad_distance: 1.0 # in arcmin
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
-  particle_type: 'baryon'
+  particle_type: 'total'
   projection: 'yz' # 'xy', 'xz', 'yz'
   pixel_size: 0.5 # in arcmin
-  filter_type_2: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma
+  filter_type_2: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma'
   particle_type_2: 'total'
   subtract_mean: false
 

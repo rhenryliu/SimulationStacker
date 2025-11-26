@@ -1,6 +1,5 @@
 stack:
   redshift: 0.5
-  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
   load_field: true
   save_field: true
   rad_distance: 1.0 # in arcmin
@@ -9,14 +8,14 @@ stack:
   particle_type: 'gas'
   projection: 'yz' # 'xy', 'xz', 'yz'
   pixel_size: 0.5 # in arcmin
-  filter_type_2: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
-  particle_type_2: 'total'
+  particle_type_2: 'DM'
+  subtract_mean: false
   n_pixels: 1000
-  min_radius: 200.0 # in comoving kpc/h
-  max_radius: 4000.0 # in comoving kpc/h
-  num_radii: 11
-  subtract_mean: true
-
+  halo_mass_avg: 1.6595869074377206e+13
+  halo_mass_upper: 500000000000000.
+  min_radius: 1.0
+  max_radius: 6.0
+  num_radii: 9
 
 plot:
   plot_data: false
@@ -24,7 +23,7 @@ plot:
   data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/2025-11/'
   fig_name: 'ratios_yz'
-  fig_type: 'png'
+  fig_type: 'pdf'
   plot_error_bars: true
 
 

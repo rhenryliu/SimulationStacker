@@ -45,6 +45,7 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -73,8 +74,10 @@ def main(path2config, verbose=True):
     nPixels = config.get('n_pixels', 4)
     
     # fractionType = config['fraction_type']
+    now = datetime.now()
+    dt_string = now.strftime("%m-%d")
 
-    figPath = Path(config['fig_path'])
+    figPath = Path(config.get('fig_path')) / dt_string
     figPath.mkdir(parents=False, exist_ok=True)
     
     figName = config['fig_name']

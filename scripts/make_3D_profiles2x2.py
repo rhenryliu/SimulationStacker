@@ -220,7 +220,7 @@ def main(path2config, verbose=True):
                 haloes['GroupMass'] = haloes['GroupMass'][halo_mask]
                 haloes['GroupRad'] = haloes['GroupRad'][halo_mask] # in comoving kpc/h
                 GroupPos_masked = np.round(haloes['GroupPos'][halo_mask] / kpcPerPixel).astype(int) % nPixels
-                if sim_name == 'TNG300-1':
+                if sim_name == 'TNG100-1':
                     R200C = np.mean(haloes['GroupRad']) # in comoving kpc/h
                 
                 # GroupPos_masked = np.random.randint(0, nPixels, size=GroupPos_masked.shape) # For testing purposes only

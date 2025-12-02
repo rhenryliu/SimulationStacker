@@ -1,21 +1,27 @@
 stack:
   redshift: 0.5
-  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
   load_field: true
   save_field: true
-  rad_distance: 1.0 # in arcmin
+
+  stack_field: true # If false, stacks maps instead of fields
+  rad_distance: 1000.0 # in arcmin, or comoving kpc/h if stack_field is true
+  min_radius: 0.5 # in rad_distance units
+  max_radius: 4.0 # in rad_distance units
+  num_radii: 11 # Number of radial bins between min_radius and max_radius
+  
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
-  particle_type: 'gas'
+
+  pixel_size: 0.5 # in arcmin if stack_field is false
+  n_pixels: 1000 # Number of pixels on a side if stack_field is true
   projection: 'yz' # 'xy', 'xz', 'yz'
-  pixel_size: 0.5 # in arcmin
-  filter_type_2: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
+
+  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma'
+  particle_type: 'gas'
+  filter_type_2: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma'
   particle_type_2: 'total'
-  n_pixels: 1000
-  min_radius: 200.0 # in comoving kpc/h
-  max_radius: 4000.0 # in comoving kpc/h
-  num_radii: 11
-  subtract_mean: true
+
+  subtract_mean: false # Whether to subtract the mean of the field before stacking
 
 
 plot:
@@ -57,6 +63,8 @@ simulations:
         snapshot: 67
       - name: 'TNG300-2'
         snapshot: 67
+      # - name: 'TNG50-3'
+      #   snapshot: 67
       - name: 'Illustris-1'
         snapshot: 103
       - name: 'Illustris-2'

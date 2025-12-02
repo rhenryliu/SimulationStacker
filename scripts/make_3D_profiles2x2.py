@@ -106,7 +106,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # Create 2x2 subplot grid with shared axes
-    fig, axes = plt.subplots(2, 2, figsize=(13, 12), sharex='col', sharey='row')
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12), sharex='col', sharey='row')
     
     # Define particle type configurations for each row
     ptype_configs = [
@@ -212,7 +212,7 @@ def main(path2config, verbose=True):
                 print(f'{sim_name} kpcPerPixel: {kpcPerPixel}')
                                               
                 # Halo selection:
-                haloes = stacker.loadHalos(stacker.simType)
+                haloes = stacker.loadHalos()
                 haloMass = haloes['GroupMass']
                 
                 halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input

@@ -134,7 +134,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(20, 8), sharey=False)
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(20, 8), sharey=True)
     
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
@@ -195,7 +195,7 @@ def main(path2config, verbose=True):
 
             field_0 = stacker.makeField(pType, nPixels=nPixels, save=True, load=True, dim='3D')
 
-            haloes = stacker.loadHalos(stacker.simType)
+            haloes = stacker.loadHalos()
             haloMass = haloes['GroupMass']
             haloPos = haloes['GroupPos']
             halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
@@ -203,7 +203,8 @@ def main(path2config, verbose=True):
             kpcPerPixel = stacker.header['BoxSize'] / nPixels # kpc/h per pixel
             
             GroupMass_masked = haloes['GroupMass'][halo_mask]
-            GroupRad_masked = haloes['GroupRad'][halo_mask] / kpcPerPixel # in pixels
+            # GroupRad_masked = haloes['GroupRad'][halo_mask] / kpcPerPixel # in pixels
+            GroupRad_masked = np.ones_like(GroupMass_masked) / kpcPerPixel * 1000 # in pixels, assuming 1 Mpc/h radius for all halos.
             GroupPos_masked = np.round(haloes['GroupPos'][halo_mask] / kpcPerPixel).astype(int)
             
             fraction_0 = np.zeros_like(radii)
@@ -240,7 +241,7 @@ def main(path2config, verbose=True):
 
 
             # Plot the ratio:
-            ax.plot(radii, fraction_0 / fraction_1, label=sim_name, color=colours[j], lw=2, marker='o')
+            ax.plot(radii * 1000, fraction_0 / fraction_1, label=sim_name, color=colours[j], lw=2, marker='o')
             
             # If we want area-averaged CAP profile:
             # profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
@@ -277,7 +278,8 @@ def main(path2config, verbose=True):
     #     # Optionally also plot on ax2 if relevant
 
     # Configure left subplot (profiles0)
-    ax_tng.set_xlabel('R [virial radii]', fontsize=18)
+    ax_tng.set_xlabel('R [kpc/h]', fontsize=18)
+    ax_tng.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
     # ax_tng.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
     # ax_tng.set_xlim(0.0, maxRadius * radDistance + 0.5)
     ax_tng.legend(loc='best', fontsize=12)
@@ -285,7 +287,7 @@ def main(path2config, verbose=True):
     # ax_tng.set_title(f'{pType} {filterType} profiles at z={redshift}', fontsize=18)
     
     # Configure right subplot (profiles1)
-    ax_simba.set_xlabel('R [virial radii]', fontsize=18)
+    ax_simba.set_xlabel('R [kpc/h]', fontsize=18)
     # ax_simba.set_xlim(0.0, maxRadius * radDistance + 0.5)
     ax_simba.legend(loc='best', fontsize=12)
     ax_simba.grid(True)

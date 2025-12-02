@@ -188,7 +188,7 @@ def main(path2config, verbose=True):
             print(f'{sim_name} kpcPerPixel: {kpcPerPixel}')
                                           
             # Halo selection:
-            haloes = stacker.loadHalos(stacker.simType)
+            haloes = stacker.loadHalos()
             haloMass = haloes['GroupMass']
             
             halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input

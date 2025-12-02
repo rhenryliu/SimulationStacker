@@ -50,8 +50,8 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
     if sim_type == 'IllustrisTNG':
         haloes = {}
         haloes_cat = il.groupcat.loadHalos(sim_path, snapshot)
-        haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
         haloes['GroupPos'] = haloes_cat['GroupPos']
+        haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
         haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
         
     elif sim_type == 'SIMBA':
@@ -60,13 +60,53 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         
         halo_path = sim_path + 'catalogs/' + sim_name + '_' + str(snapshot) + '.hdf5'
         haloes = {}
-        with h5py.File(halo_path, 'r') as f:
-            haloes['GroupPos'] = f['halo_data']['pos'][:] * header['HubbleParam']  # kpc/h # type: ignore
-            haloes['GroupMass'] = f['halo_data']['dicts']['masses.total'][:] * header['HubbleParam']  # Msun/h # type: ignore
-            haloes['GroupRad'] = f['halo_data']['dicts']['virial_quantities.r200c'][:] * header['HubbleParam']  # kpc/h # type: ignore
+        # Load entire halo catalog - this is doable since catalogs are small
+        haloes_cat = load_as_dict(halo_path, 'halo_data')
+        haloes['GroupPos'] = haloes_cat['pos'] * header['HubbleParam']  # kpc/h
+        haloes['GroupMass'] = haloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
+        haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200c'] * header['HubbleParam']  # kpc/h
 
+    del haloes_cat  # free memory
     return haloes
 
+def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
+    """Load subhalo data for the specified simulation type.
+
+    Args:
+        sim_path (str): Base path to the simulation.
+        snapshot (int): Snapshot number.
+        sim_type (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
+        sim_name (str, optional): Name of the simulation (for SIMBA).
+        header (dict, optional): Simulation header (required for SIMBA).
+
+    Returns:
+        dict: A dictionary containing subhalo properties (e.g., mass, position).
+    """
+    if sim_type == 'IllustrisTNG':
+        subhaloes = {}
+        subhaloes_cat = il.groupcat.loadSubhalos(sim_path, snapshot)
+        
+        subhaloes['SubhaloPos'] = subhaloes_cat['SubhaloPos']
+        subhaloes['SubhaloMass'] = subhaloes_cat['SubhaloMass'] * 1e10  # Convert to Msun/h
+        subhaloes['SubhaloGrNr'] = subhaloes_cat['SubhaloGrNr']
+        # subhaloes['SubhaloID'] = subhaloes_cat['SubhaloID']
+        subhaloes['SubhaloMStar'] = subhaloes_cat['SubhaloMassType'][:, 4] * 1e10  # Stellar mass in Msun/h
+        
+    elif sim_type == 'SIMBA':
+        if header is None:
+            raise ValueError("Header is required for SIMBA simulations")
+        
+        subhalo_path = sim_path + 'catalogs/' + sim_name + '_' + str(snapshot) + '.hdf5'
+        subhaloes = {}
+        subhaloes_cat = load_as_dict(subhalo_path, 'galaxy_data')
+        
+        subhaloes['SubhaloPos'] = subhaloes_cat['pos'] * header['HubbleParam'] # kpc/h
+        subhaloes['SubhaloMass'] = subhaloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
+        subhaloes['SubhaloGrNr'] = subhaloes_cat['parent_halo_index']  # Assuming this is the correct key
+        subhaloes['SubhaloID'] = subhaloes_cat['GroupID']
+        subhaloes['SubhaloMStar'] = subhaloes_cat['dicts']['masses.stellar'] * header['HubbleParam']  # Msun/h
+
+    return subhaloes
 
 def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=None, header=None, keys=None):
     """Load particle subsets for the specified particle type.
@@ -323,3 +363,35 @@ def save_data(data, sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     print('Saving data to:', filepath)
     np.save(filepath, data)
 
+
+def load_group_to_dict(group):
+    """Recursively load an HDF5 group into nested dicts of NumPy arrays.
+
+    Args:
+        group (h5py.Group): The HDF5 group to load, e.g. f['galaxy_data'].
+
+    Returns:
+        dict: Nested dict with datasets as NumPy arrays and subgroups as dicts.
+    """
+    out = {}
+    for key, item in group.items():
+        if isinstance(item, h5py.Dataset):
+            out[key] = item[:]  # fully load dataset into memory
+        elif isinstance(item, h5py.Group):
+            out[key] = load_group_to_dict(item)
+        # you can add an `else` branch if you care about other HDF5 object types
+    return out
+
+def load_as_dict(file_path, group_name):
+    """Load an HDF5 file group into nested dicts of NumPy arrays.
+
+    Args:
+        file_path (str): Path to the HDF5 file.
+        group_name (str): Name of the group to load.
+
+    Returns:
+        dict: Nested dict with datasets as NumPy arrays and subgroups as dicts.
+    """
+    with h5py.File(file_path, 'r') as f:
+        group = f[group_name]
+        return load_group_to_dict(group)

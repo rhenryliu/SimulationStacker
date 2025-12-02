@@ -164,7 +164,7 @@ def main(path2config, verbose=True):
                         # Use IllustrisTNG cosmology for plot later.
                         cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
                         
-                        haloes = stacker.loadHalos(stacker.simType)
+                        haloes = stacker.loadHalos()
                         haloMass = haloes['GroupMass']
                         
                         halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input

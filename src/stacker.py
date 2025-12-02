@@ -26,7 +26,7 @@ from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import select_massive_halos, halo_ind
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring
-from loadIO import snap_path, load_halos, load_subsets, load_subset, load_data, save_data
+from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field, create_masked_field
 
 
@@ -70,7 +70,7 @@ class SimulationStacker(object):
         self.z = z
         
         # with h5py.File(il.snapshot.snapPath(self.simPath, self.snapshot), 'r') as f:
-        with h5py.File(self.snapPath(self.simType), 'r') as f:
+        with h5py.File(self.snapPath(), 'r') as f:
         
             self.header = dict(f['Header'].attrs.items())
         
@@ -122,7 +122,7 @@ class SimulationStacker(object):
                 print("Computing the field instead...")
                 
         if mask:
-            haloes = self.loadHalos(self.simType)
+            haloes = self.loadHalos()
             haloMass = haloes['GroupMass']
             
             halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input
@@ -402,7 +402,7 @@ class SimulationStacker(object):
 
         # Handle radDistance = None case
         if radDistance is None:
-            haloes = self.loadHalos(self.simType)
+            haloes = self.loadHalos()
             mass_min, mass_max, _ = halo_ind(2)
             halo_mask = np.where(np.logical_and((haloes['GroupMass'] > mass_min), (haloes['GroupMass'] < mass_max)))[0]
             radDistance = haloes['GroupRad'][halo_mask].mean()
@@ -465,7 +465,7 @@ class SimulationStacker(object):
         assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
 
         # Load the halo catalog and select halos
-        haloes = self.loadHalos(self.simType)
+        haloes = self.loadHalos()
         haloMass = haloes['GroupMass']
         haloPos = haloes['GroupPos']
         
@@ -650,16 +650,21 @@ class SimulationStacker(object):
     
     # Some tools for file handling and loading:
 
-    def snapPath(self, simType, chunkNum=0, pathOnly=False):
+    def snapPath(self, chunkNum=0, pathOnly=False):
         """Get the snapshot path for the given simulation type."""
-        return snap_path(self.simPath, self.snapshot, simType, 
+        return snap_path(self.simPath, self.snapshot, self.simType, 
                         sim_name=self.sim, feedback=self.feedback, 
                         chunk_num=chunkNum, path_only=pathOnly)
 
-    def loadHalos(self, simType):
+    def loadHalos(self):
         """Load halo data for the specified simulation type."""
-        return load_halos(self.simPath, self.snapshot, simType, 
+        return load_halos(self.simPath, self.snapshot, self.simType, 
                          sim_name=self.sim, header=self.header)
+    
+    def loadSubHalos(self):
+        """Load subhalo data for the specified simulation type."""
+        return load_subhalos(self.simPath, self.snapshot, self.simType, 
+                            sim_name=self.sim, header=self.header)
 
     def loadSubsets(self, pType, keys=None):
         """Load particle subsets for the specified particle type."""

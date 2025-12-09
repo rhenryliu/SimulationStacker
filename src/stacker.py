@@ -24,7 +24,7 @@ import illustris_python as il
 
 from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
-from halos import select_massive_halos, halo_ind
+from halos import select_massive_halos, halo_ind, select_abundance_subhalos
 from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring
 from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field, create_masked_field
@@ -439,7 +439,7 @@ class SimulationStacker(object):
         return radii, profiles
 
     def stack_on_array(self, array, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                       projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', 
+                       projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', use_subhalos=False,
                        halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), z=None, pixelSize=0.5):
         """Abstract stacking function that works on any 2D array.
 
@@ -465,14 +465,24 @@ class SimulationStacker(object):
         assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
 
         # Load the halo catalog and select halos
-        haloes = self.loadHalos()
-        haloMass = haloes['GroupMass']
-        haloPos = haloes['GroupPos']
+
+        # TODO: Clean up this code for halo selection. Maybe factor out halo selection into its own function?
+        if use_subhalos:
+            subhalos = self.loadSubHalos()
+            haloMass = subhalos['SubhaloMass']
+            haloPos = subhalos['SubhaloPos']
+        else:
+            haloes = self.loadHalos()
+            haloMass = haloes['GroupMass']
+            haloPos = haloes['GroupPos']
         
         if halo_mass_avg is None:
             # Use legacy selection method for backward compatibility
             mass_min, mass_max, _ = halo_ind(2)
             halo_mask = np.where(np.logical_and((haloMass > mass_min), (haloMass < mass_max)))[0]
+        elif use_subhalos:
+            #TODO: Not done!!!!
+            halo_mask = select_abundance_subhalos(haloMass, halo_mass_avg, halo_mass_upper)
         else:
             halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
         

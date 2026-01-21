@@ -92,10 +92,11 @@ def main(path2config, verbose=True):
     # Plotting parameters
     # get the datetime for file naming
     now = datetime.now()
+    yr_string = now.strftime("%Y-%m")
     dt_string = now.strftime("%m-%d")
 
-    figPath = Path(plot_config.get('fig_path')) / dt_string
-    figPath.mkdir(parents=False, exist_ok=True)
+    figPath = Path(plot_config.get('fig_path', '../figures/')) / yr_string / dt_string
+    figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
@@ -108,8 +109,8 @@ def main(path2config, verbose=True):
     
     # Define particle type configurations for each row
     ptype_configs = [
-        {'pType': 'gas', 'pType2': 'total'},
-        {'pType': 'baryon', 'pType2': 'total'}
+        {'pType': pType, 'pType2': 'total'},
+        {'pType': pType2, 'pType2': 'total'}
     ]
     
     t0 = time.time()
@@ -117,9 +118,9 @@ def main(path2config, verbose=True):
     # Loop over rows (particle type configurations)
     for row_idx, ptype_config in enumerate(ptype_configs):
         pType_current = ptype_config['pType']
-        pType2_current = ptype_config['pType2']
+        # pType2_current = ptype_config['pType2']
         
-        print(f"\nProcessing configuration: {pType_current}/{pType2_current}")
+        print(f"\nProcessing configuration: {pType_current}")
         
         for i, sim_type in enumerate(config['simulations']):
             sim_type_name = sim_type['sim_type']
@@ -181,17 +182,17 @@ def main(path2config, verbose=True):
                     radii0, profiles0 = stacker.stackField(pType_current, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
                                                            save=saveField, load=loadField, radDistance=radDistance, nPixels=nPixels,
                                                            projection=projection) 
-                    radii1, profiles1 = stacker.stackField(pType2_current, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
-                                                           save=saveField, load=loadField, radDistance=radDistance, nPixels=nPixels,
-                                                           projection=projection)
+                    # radii1, profiles1 = stacker.stackField(pType2_current, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
+                    #                                        save=saveField, load=loadField, radDistance=radDistance, nPixels=nPixels,
+                    #                                        projection=projection)
                 else:
                 
                     radii0, profiles0 = stacker.stackMap(pType_current, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
                                                         save=saveField, load=loadField, radDistance=radDistance, pixelSize=pixelSize,
                                                         projection=projection, subtract_mean=subtract_mean)
-                    radii1, profiles1 = stacker.stackMap(pType2_current, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
-                                                         save=saveField, load=loadField, radDistance=radDistance, pixelSize=pixelSize,
-                                                         projection=projection, subtract_mean=subtract_mean)
+                    # radii1, profiles1 = stacker.stackMap(pType2_current, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
+                    #                                      save=saveField, load=loadField, radDistance=radDistance, pixelSize=pixelSize,
+                    #                                      projection=projection, subtract_mean=subtract_mean)
                 # Convert delta Sigma profiles to kSZ profiles if needed
                                                                 
                 # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
@@ -227,7 +228,7 @@ def main(path2config, verbose=True):
                 ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
                     err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                    err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1]) # type: ignore
+                    # err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
                     profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
                     # profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
 
@@ -297,7 +298,7 @@ def main(path2config, verbose=True):
     # Configure all subplots
     for row_idx in range(2):
         pType_current = ptype_configs[row_idx]['pType']
-        pType2_current = ptype_configs[row_idx]['pType2']
+        # pType2_current = ptype_configs[row_idx]['pType2']
         
         for col_idx, title in enumerate(['IllustrisTNG', 'SIMBA']):
             ax = axes[row_idx, col_idx]
@@ -305,7 +306,8 @@ def main(path2config, verbose=True):
             
             # Only set y-label on left column
             if col_idx == 0:
-                ax.set_ylabel(rf'$\frac{{{pType_current}}}{{{pType2_current}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
+                ax.set_ylabel(f'{pType_current} profile', fontsize=18)
+                # ax.set_ylabel(rf'$\frac{{{pType_current}}}{{{pType2_current}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
             
             # Add secondary y-axis only for right column (SIMBA)
             # if col_idx == 1:
@@ -331,7 +333,7 @@ def main(path2config, verbose=True):
                     secax_x = ax.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
                     secax_x.set_xlabel('R [comoving kpc/h]', fontsize=18)
 
-            ax.axhline(1.0, color='k', ls='--', lw=2)
+            # ax.axhline(1.0, color='k', ls='--', lw=2)
             ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
             ax.legend(loc='lower right', fontsize=20)
             ax.grid(True)
@@ -342,9 +344,9 @@ def main(path2config, verbose=True):
     
     # fig.suptitle(f'Profile Ratios at z={redshift}', fontsize=22, y=0.995)
     if stackField:
-        figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{filterType2}_field_profiles.{figType}'
+        figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{pType}_{filterType2}_{pType2}_field_profiles.{figType}'
     else:
-        figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{filterType2}_profiles.{figType}'
+        figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{pType}_{filterType2}_{pType2}_profiles.{figType}'
     
     fig.tight_layout()
     fig.savefig(figName_all, dpi=300) # type: ignore

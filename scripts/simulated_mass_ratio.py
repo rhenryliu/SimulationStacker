@@ -81,7 +81,7 @@ def main(path2config, verbose=True):
 
     minRadius = stack_config.get('min_radius', 1.0)
     maxRadius = stack_config.get('max_radius', 10.0)
-    # nRadii = stack_config.get('num_radii', 11)
+    nRadii = stack_config.get('num_radii', 11)
 
 
     # fractionType = config['fraction_type']
@@ -89,10 +89,11 @@ def main(path2config, verbose=True):
     # Plotting parameters
     # get the datetime for file naming
     now = datetime.now()
+    yr_string = now.strftime("%Y-%m")
     dt_string = now.strftime("%m-%d")
 
-    figPath = Path(plot_config.get('fig_path')) / dt_string
-    figPath.mkdir(parents=False, exist_ok=True)
+    figPath = Path(plot_config.get('fig_path', '../figures/')) / yr_string / dt_string
+    figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
@@ -101,7 +102,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # fig, ax = plt.subplots(figsize=(10,8))
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=False)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -345,7 +346,7 @@ def main(path2config, verbose=True):
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
-    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

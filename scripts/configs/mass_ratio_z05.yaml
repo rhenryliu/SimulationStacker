@@ -16,9 +16,9 @@ stack:
   n_pixels: 1000 # Number of pixels on a side if stack_field is true
   projection: 'yz' # 'xy', 'xz', 'yz'
 
-  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma'
-  particle_type: 'gas'
-  filter_type_2: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma'
+  filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma'
+  particle_type: 'tau'
+  filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma'
   particle_type_2: 'total'
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
@@ -28,7 +28,7 @@ plot:
   plot_data: false
   data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_label: 'Hadzhiyska 2024 pz1'
-  fig_path: '../figures/2025-12/'
+  fig_path: '../figures/'
   fig_name: 'ratios_yz'
   fig_type: 'png'
   plot_error_bars: true
@@ -65,7 +65,7 @@ simulations:
         snapshot: 67
       # - name: 'TNG50-3'
       #   snapshot: 67
-      - name: 'Illustris-1'
-        snapshot: 103
+      # - name: 'Illustris-1'
+      #   snapshot: 103
       - name: 'Illustris-2'
         snapshot: 103

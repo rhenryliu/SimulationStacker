@@ -5,7 +5,7 @@ stack:
   rad_distance: 1.0 # in arcmin
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
-  particle_type: 'baryon'
+  particle_type: 'gas'
   projection: 'yz' # 'xy', 'xz', 'yz'
   pixel_size: 0.5 # in arcmin
   particle_type_2: 'total'
@@ -21,7 +21,7 @@ plot:
   plot_data: false
   data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_label: 'Hadzhiyska 2024 pz1'
-  fig_path: '../figures/2025-12/'
+  fig_path: '../figures/'
   fig_name: 'ratios_yz'
   fig_type: 'pdf'
   plot_error_bars: true

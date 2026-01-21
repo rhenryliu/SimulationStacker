@@ -15,14 +15,15 @@ import matplotlib.cm as cm
 # from abacusnbody.analysis.tsc import tsc_parallel
 import time
 
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import FlatLambdaCDM, Planck18
+import astropy.constants as const
 import astropy.units as u
 
 # Import packages
 
 sys.path.append('../src/')
 # from filter_utils import *
-from utils import ksz_from_delta_sigma, arcmin_to_comoving
+from utils import ksz_from_delta_sigma, arcmin_to_comoving, comoving_to_arcmin
 from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
 
@@ -33,6 +34,50 @@ import yaml
 import argparse
 from pathlib import Path
 from datetime import datetime
+
+
+def mass_to_temp(mass_density, z, cosmology=Planck18):
+    """Convert mass profile units to kSZ temperature fluctuation units
+
+    Args:
+        mass_density (ndarray): Mass density in Msun/area. Area does not change, so can be arcmin^2 or kpc^2.
+        z (float): Redshift.
+        delta_sigma_is_comoving (bool, optional): If True, delta_sigma is in comoving units. Defaults to True.
+        cosmology (FlatLambdaCDM, optional): Cosmology object. Required if delta_sigma_is_comoving is True.
+
+    Returns:
+        ndarray: kSZ temperature fluctuation in micro-Kelvin.
+    """
+    mu_e = 1.14  # Mean molecular weight per free electron, assuming primordial composition
+    T_CMB = 2.7255 * u.K
+    c = 299792458 * u.m / u.s
+    v_rms = 300000 * u.m / u.s  # Example velocity, adjust as needed
+    Omega_b = cosmology.Ob0
+    Omega_m = cosmology.Om0
+    
+    # Constant gas fraction
+    f_b = Omega_b / Omega_m
+
+    # Electron column and optical depth
+    Sigma_gas = f_b * mass_density                               # kg/m^2
+    N_e = (Sigma_gas / (mu_e * const.m_p)).value #.to(1 / u.m**2)         # 1/m^2 # type: ignore
+    tau = (const.sigma_T * N_e).decompose().value                 # dimensionless # type: ignore
+
+    factor = const.sigma_T.value / (mu_e * const.m_p)  # 1/kg # type: ignore
+    
+    # if delta_sigma_is_comoving:
+    #     if cosmology is None:
+    #         raise ValueError("Cosmology must be provided if delta_sigma_is_comoving is True.")
+    #     E_z = cosmology.efunc(z)
+    #     factor = (1 + z)**2 * E_z
+    # else:
+    #     factor = 1.0
+    print(factor)
+    print(mass_density)
+    # print(T_CMB * (v_rms / c) * mass_density * factor)
+    kSZ_temp = (T_CMB * (v_rms / c) * mass_density.to(u.kg) * factor).to(u.uK).value
+    #.to(u.microkelvin, equivalencies=u.temperature_energy())
+    return kSZ_temp
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -63,22 +108,31 @@ def main(path2config, verbose=True):
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
 
-    
+    minRadius = stack_config.get('min_radius', 1.0)
+    maxRadius = stack_config.get('max_radius', 10.0)
+    nRadii = stack_config.get('num_radii', 11)
+
     # fractionType = config['fraction_type']
 
     # Plotting parameters
     # get the datetime for file naming
     now = datetime.now()
+    yr_string = now.strftime("%Y-%m")
     dt_string = now.strftime("%m-%d")
 
-    figPath = Path(plot_config.get('fig_path')) / dt_string
-    figPath.mkdir(parents=False, exist_ok=True)
+    figPath = Path(plot_config.get('fig_path', '../figures/')) / yr_string / dt_string
+    figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
 
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
+
+    star_fraction_dict_path = '../figures/2025-10/star_fraction_z0.5_star_fraction.yaml'
+    load_path_obj = Path(star_fraction_dict_path)
+    with open(load_path_obj, 'r') as f:
+        star_fraction_dict = yaml.safe_load(f)
 
     fig, ax = plt.subplots(figsize=(10,8))
     t0 = time.time()
@@ -114,24 +168,6 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name)
                 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-                # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
-                #                                simType=sim_type_name)
-                
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-
-                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                                                       save=saveField, load=loadField, radDistance=1000, nPixels=1000,
-                                                       projection=projection)
-
-                h = stacker.header['HubbleParam']
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
-
                 
 
             elif sim_type_name == 'SIMBA':
@@ -147,27 +183,8 @@ def main(path2config, verbose=True):
                                        simType=sim_type_name, 
                                        feedback=feedback)
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
-                # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
-                #                                simType=sim_type_name, 
-                #                                feedback=feedback)
                 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0,  # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-
-                minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=1000, nPixels=1000,
-                                                        projection=projection)
-                                                                
-                h = stacker.header['HubbleParam']
-                # print(profiles1)
-                profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                # print(profiles1)
-                profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
-
+                
                 # if fractionType == 'gas':
                 #     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
                 # elif fractionType == 'baryon':
@@ -187,6 +204,41 @@ def main(path2config, verbose=True):
                 #                     color=colours[j], alpha=0.2)
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
+
+            # Now we do the stacking after configuring the stacker
+            # TEST!!! making a map without beam smoothing.
+            map_ = stacker.makeMap(pType, projection=projection, save=False, load=False,
+                                   beamsize=None) # type: ignore
+            map_ = map_ / (1 - star_fraction_dict[sim_name])
+            stacker.setMap(pType, map_, z=redshift)
+            
+            radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, 
+                                                 maxRadius=maxRadius, numRadii=nRadii, # type: ignore
+                                                 save=saveField, load=loadField, radDistance=radDistance,
+                                                 projection=projection)
+
+            # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, 
+            #                                      maxRadius=maxRadius, numRadii=nRadii, # type: ignore
+            #                                      save=saveField, load=loadField, radDistance=radDistance,
+            #                                      projection=projection)
+            # profiles1 = mass_to_temp(profiles1 * u.Msun, z=redshift, cosmology=cosmo) # convert to kSZ
+                                                    
+            minRad_mpch = arcmin_to_comoving(minRadius, redshift, cosmo) / 1000.0
+            maxRad_mpch = arcmin_to_comoving(maxRadius, redshift, cosmo) / 1000.0
+            
+            theta_arcmin = comoving_to_arcmin(stacker.header['BoxSize'], redshift, cosmo=cosmo)
+            pixelSize = 0.5
+            nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
+
+            # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+            radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, 
+                                                   maxRadius=maxRad_mpch, numRadii=nRadii, # type: ignore
+                                                   save=saveField, load=loadField, radDistance=1000, nPixels=nPixels,
+                                                   projection=projection)
+
+            h = stacker.header['HubbleParam']
+            profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+            profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
             
             # Now for Plotting
@@ -267,7 +319,7 @@ def main(path2config, verbose=True):
     #                                     lambda y: y - C))     # inverse
     # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
 
-    ax.set_xlim(0.0, 6.5)
+    ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
     # ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)
     ax.legend(loc='lower right', fontsize=12)
@@ -276,7 +328,7 @@ def main(path2config, verbose=True):
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
-    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'nosmoothing_scaled_{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

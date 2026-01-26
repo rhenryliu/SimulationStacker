@@ -178,6 +178,43 @@ def delta_sigma_kernel(
     
     return float(np.sum(mass_grid * kernel))
 
+def upsilon(
+    mass_grid: np.ndarray,
+    r_grid: np.ndarray,
+    r: float,
+    r0: float = 1.0,
+    dr: float = 0.5,
+    pixel_size: float = 1,
+) -> float:
+    """Compute Υ(R, r0) = ΔΣ(R) - (r0/R)^2 * ΔΣ(r0).
+
+    Args:
+        mass_grid (np.ndarray): 2-D surface mass density map (same shape as
+            ``r_grid``), in mass units per pixel.
+        r_grid (np.ndarray): 2-D array of radial distances from the center for
+            each pixel (same shape as ``mass_grid``). Units must match the units
+            used for ``r``, ``r0``, and ``dr``.
+        r (float): Aperture radius at which to evaluate Υ.
+        r0 (float): Inner radius for Υ calculation.
+        dr (float, optional): Thickness of the outer annulus (R < r < R+dr).
+            Must be positive. Defaults to 0.5.
+        pixel_size (float, optional): Linear size of one pixel in physical
+            units (pc or arcmin). Used to scale the summed kernel value to physical area.
+            Defaults to 1.
+    Returns:
+        float: The computed Υ value (mass per unit area) as a Python float.
+    """
+
+    delta_sigma_R  = delta_sigma_kernel(
+        mass_grid, r_grid, r, dr=dr, pixel_size=pixel_size
+    )
+    delta_sigma_r0 = delta_sigma_kernel(
+        mass_grid, r_grid, r0, dr=dr, pixel_size=pixel_size
+    )
+
+    upsilon_value = delta_sigma_R - (r0 / r)**2 * delta_sigma_r0
+    return upsilon_value
+
 def delta_sigma_ring(
                     mass_grid: np.ndarray,
                     r_grid: np.ndarray,

@@ -42,6 +42,28 @@ def CAP(mass_grid, r_grid, r, pixel_size=1.0):
     
     return float(np.sum((inDisk - inRing) * mass_grid) * pixArea)
 
+def CAP_ringring(mass_grid, r_grid, r, r0=1.0, pixel_size=1.0):
+    """Calculate the Circular Averages Profile (CAP) for a given radius.
+
+    Args:
+        mass_grid (np.ndarray): The mass distribution array.
+        r_grid (np.ndarray): The radial grid corresponding to the mass distribution.
+        r (float): The radius at which to calculate the CAP.
+        r0 (float): The inner radius of the ring. Defaults to 1.0.
+
+    Returns:
+        float: The value of the CAP at the given radius.
+    """
+    
+    r1 = r * np.sqrt(2.0)
+    innerRing = 1.0  * (r_grid > r0)*(r_grid <= r)
+    inRing = 1.0 * (r_grid > r) * (r_grid <= r1)
+    inRing *= np.sum(innerRing) / np.sum(inRing)
+
+    pixArea = (pixel_size)**2
+    
+    return float(np.sum((innerRing - inRing) * mass_grid) * pixArea)
+
 def delta_sigma(mass_grid, r_grid, r, dr=0.6, pixel_size=1.0):
     """Calculate the excess surface mass density (ΔΣ) for a given radius.
 
@@ -166,6 +188,7 @@ def delta_sigma_kernel(
 
     R_out = r + dr
     pixArea = (pixel_size)**2
+    # TODO: Change the pixel area in the case of stacking on fields to be the area of each pixel in physical units.
 
     # Build compensated kernel analytically from r_grid
     kernel              = np.zeros_like(r_grid, dtype=float)

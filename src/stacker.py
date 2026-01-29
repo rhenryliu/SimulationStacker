@@ -22,10 +22,10 @@ import glob
 # sys.path.append('../../illustrisPython/')
 import illustris_python as il 
 
-from tools import numba_tsc_3D, hist2d_numba_seq
+# from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import select_massive_halos, halo_ind, select_abundance_subhalos
-from filters import total_mass, delta_sigma, CAP, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon
+from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon
 from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field, create_masked_field
 
@@ -133,7 +133,7 @@ class SimulationStacker(object):
             field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection,
                                         save3D=True, load3D=load, base_path=base_path, dim=dim) # TODO: make save3D and load3D configurable
         else:
-            field = create_field(self, pType, nPixels, projection, dim=dim)
+            field = create_field(self, pType, nPixels, projection, dim=dim, load=load)
         
         if save:
             # TODO: Handle saving and loading of the fields for the masked case.
@@ -366,7 +366,7 @@ class SimulationStacker(object):
 
         Args:
             pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma']. Defaults to 'cumulative'.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring']. Defaults to 'cumulative'.
             minRadius (float, optional): Minimum radius in kpc/h for the stacking. Defaults to 0.1.
             maxRadius (float, optional): Maximum radius in kpc/h for the stacking. Defaults to 4.5.
             numRadii (int, optional): Number of radial bins for the stacking. Defaults to 25.
@@ -445,7 +445,7 @@ class SimulationStacker(object):
 
         Args:
             array (np.ndarray): 2D array to stack on. Requires shape (nPixels, nPixels) such that the array is square.
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma']. Defaults to 'cumulative'.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring']. Defaults to 'cumulative'.
             minRadius (float, optional): Minimum radius for stacking. Defaults to 0.1.
             maxRadius (float, optional): Maximum radius for stacking. Defaults to 4.5.
             numRadii (int, optional): Number of radial bins for stacking. Defaults to 25.
@@ -513,6 +513,8 @@ class SimulationStacker(object):
             filterFunc = total_mass
         elif filterType == 'CAP':
             filterFunc = CAP
+        elif filterType == 'ringring':
+            filterFunc = CAP_ringring
         elif filterType == 'DSigma':
             filterFunc = delta_sigma_kernel
             # filterFunc = delta_sigma_ring

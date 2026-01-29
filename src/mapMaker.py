@@ -280,7 +280,7 @@ import time
 #     else:
 #         raise ValueError('Particle type not recognized: ' + pType)
 
-def create_field(stacker, pType, nPixels, projection, dim='2D'):
+def create_field(stacker, pType, nPixels, projection, dim='2D', load=True):
     """Wrapper function to create the appropriate field type.
 
     Args:
@@ -301,7 +301,7 @@ def create_field(stacker, pType, nPixels, projection, dim='2D'):
     if pType in sz_types:
         return make_sz_field(stacker, pType, nPixels, projection, dim=dim)
     elif pType in combined_types:
-        return make_combined_field(stacker, pType, nPixels, projection, dim=dim)
+        return make_combined_field(stacker, pType, nPixels, projection, dim=dim, load=load)
     else:
         return make_mass_field(stacker, pType, nPixels, projection, dim=dim)
 
@@ -472,7 +472,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
 
     Args:
         stacker (SimulationStacker): The stacker instance.
-        pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH'
+        pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH', or 'ionized_gas'
         nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to stacker.nPixels.
         projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
         dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
@@ -488,6 +488,13 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """
     if nPixels is None:
         nPixels = stacker.nPixels
+        
+    if pType == 'ionized_gas':
+        print("Warning: 'ionized_gas' is experimental.")
+        use_ionized_gas = True
+        pType = 'gas'
+    else:
+        use_ionized_gas = False
             
     Lbox = stacker.header['BoxSize'] # kpc/h
     
@@ -516,11 +523,35 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     t0 = time.time()
     for i, snap in enumerate(snaps):
         # particles = stacker.loadSubset(pType, snapPath=snap)
-        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
-                                snap_path=snap, header=stacker.header, sim_name=stacker.sim)
-        coordinates = particles['Coordinates'] # kpc/h
-        masses = particles['Masses']  * 1e10 / stacker.header['HubbleParam'] # Msun/h
+        if use_ionized_gas:
+            keys = ['Coordinates', 'Masses', 'ElectronAbundance']
+        else:
+            keys = ['Coordinates', 'Masses']
         
+        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
+                                snap_path=snap, header=stacker.header, sim_name=stacker.sim,
+                                keys=keys)
+        coordinates = particles['Coordinates'] # kpc/h
+        # masses = particles['Masses'].astype(np.float64)  * 1e10 #/ stacker.header['HubbleParam'] # Msun/h
+        masses = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h # this is better than doing msun/h
+        
+        if use_ionized_gas:
+            solar_mass = 1.989e33 # g
+            m_p = 1.6726e-24 # g, mass of proton
+            X_H = 0.76 # unitless, primordial hydrogen fraction
+            h = stacker.header['HubbleParam'] # Hubble Parameter
+            
+            Mgas_g = particles['Masses'].astype(np.float64)  * 1e10 * (solar_mass / h) # convert to grams
+            xe = particles['ElectronAbundance']
+            Ne = xe * X_H * Mgas_g / m_p # dimensionless count of electrons
+            mu_e = 2.0 / (1.0 + X_H)
+
+            Mion_e_g = Ne * m_p * mu_e # grams of ionized gas
+            masses = Mion_e_g * (h / solar_mass) # convert back to Msun/h
+            
+            # ionized_fractions = xe * X_H / (1 + X_H + xe * 2) # number of electrons per baryon
+            # ionized_fractions = particles['IonizedFractions']
+            # masses *= ionized_fractions
         
         if dim == '2D':
             
@@ -596,6 +627,8 @@ def make_combined_field(stacker, pType, nPixels=None, projection='xy', dim='2D',
                 print(e)
                 print("Computing the field instead...")
                 field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)
+        else:
+            field = make_mass_field(stacker, pt, nPixels, projection, dim=dim)
         total_field += field
 
     return total_field

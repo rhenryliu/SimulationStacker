@@ -532,8 +532,8 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
                                 snap_path=snap, header=stacker.header, sim_name=stacker.sim,
                                 keys=keys)
         coordinates = particles['Coordinates'] # kpc/h
-        # masses = particles['Masses'].astype(np.float64)  * 1e10 #/ stacker.header['HubbleParam'] # Msun/h
-        masses = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h # this is better than doing msun/h
+        # masses = particles['Masses'].astype(np.float64)  * 1e10 #/ stacker.header['HubbleParam'] # Msun
+        masses = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h # this is better than doing just Msun
         
         if use_ionized_gas:
             solar_mass = 1.989e33 # g

@@ -92,10 +92,11 @@ def main(path2config, verbose=True):
     # Plotting parameters
     # get the datetime for file naming
     now = datetime.now()
+    yr_string = now.strftime("%Y-%m")
     dt_string = now.strftime("%m-%d")
 
-    figPath = Path(plot_config.get('fig_path')) / dt_string
-    figPath.mkdir(parents=False, exist_ok=True)
+    figPath = Path(plot_config.get('fig_path')) / yr_string / dt_string
+    figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
@@ -108,8 +109,8 @@ def main(path2config, verbose=True):
     
     # Define particle type configurations for each row
     ptype_configs = [
-        {'pType': 'gas', 'pType2': 'total'},
-        {'pType': 'baryon', 'pType2': 'total'}
+        {'pType': 'ionized_gas', 'pType2': 'total'},
+        {'pType': 'gas', 'pType2': 'total'}
     ]
     
     t0 = time.time()
@@ -345,6 +346,7 @@ def main(path2config, verbose=True):
     else:
         figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}'
     
+    fig.suptitle(f'{filterType} / {filterType2} Profile Ratios at $z={redshift}$', fontsize=22) # TEST; REMOVE LATER
     fig.tight_layout()
     fig.savefig(figName_all, dpi=300) # type: ignore
     plt.close(fig)

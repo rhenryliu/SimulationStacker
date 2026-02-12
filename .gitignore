@@ -14,3 +14,4 @@ data/
 old/
 scripts/clean_mass_bin_stack.py
 scripts/get_AP_sz_marvin.py
+.ipynb_checkpoints/

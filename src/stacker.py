@@ -143,7 +143,7 @@ class SimulationStacker(object):
 
         return field
 
-    def makeMap(self, pType, z=None, projection='xy', beamsize=1.6, save=False, load=True, 
+    def makeMap(self, pType, z=None, projection='xy', beamSize=1.6, save=False, load=True, 
                 pixelSize=0.5, mask=False, maskRad=3.0, base_path=None):
         """Make a 2D map convolved with a beam for a given particle type.
         This is more realistic than makeField
@@ -154,7 +154,7 @@ class SimulationStacker(object):
             z (float, optional): Redshift of the snapshot. Defaults to None, in which case self.z is used.
             # nPixels (int, optional): Number of pixels in each direction of the 2D map. Defaults to self.nPixels.
             projection (str, optional): Direction of the map projection. Currently only 'xy' is implemented. Defaults to 'xy'.
-            beamsize (float, optional): Size of the beam in arcminutes. Defaults to 1.6.
+            beamSize (float, optional): Size of the beam in arcminutes. Defaults to 1.6.
             save (bool, optional): If True, saves the map to a file. Defaults to False.
             load (bool, optional): If True, loads the map from a file if it exists and returns the map. Defaults to True.
             pixelSize (float, optional): The theoretical expected size of each pixel in arcminutes. Defaults to 0.5. arcminPerPixel overrides this to the exact size.
@@ -184,7 +184,7 @@ class SimulationStacker(object):
         # Round up to the nearest integer, pixel size is 0.5 arcmin as in ACT
         nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
         arcminPerPixel = theta_arcmin / nPixels  # Arcminutes per pixel, this is the true pixelSize after rounding.
-        # beamsize_pixel = beamsize / arcminPerPixel  # Convert arcminutes to pixels
+        # beamSize_pixel = beamSize / arcminPerPixel  # Convert arcminutes to pixels
 
         
         # Now that we know the expected pixel size, we try to load the map first before computing it:
@@ -201,9 +201,9 @@ class SimulationStacker(object):
         map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load, 
                               mask=mask, maskRad=maskRad, base_path=base_path)
 
-        # Convolve the map with a Gaussian beam (only if beamsize is not None)
-        if beamsize is not None:
-            map_ = fft_smoothed_map(map_, beamsize, pixel_size_arcmin=arcminPerPixel)
+        # Convolve the map with a Gaussian beam (only if beamSize is not None)
+        if beamSize is not None:
+            map_ = fft_smoothed_map(map_, beamSize, pixel_size_arcmin=arcminPerPixel)
 
         if save:
             save_data(map_, self.simType, self.sim, self.snapshot, 
@@ -267,8 +267,8 @@ class SimulationStacker(object):
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
                  z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
-                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, maskRad=3.0,
-                 subtract_mean=False):
+                 beamSize=1.6, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, 
+                 maskRad=3.0, subtract_mean=False):
         """Stack the map of a given particle type.
 
         Args:
@@ -284,6 +284,7 @@ class SimulationStacker(object):
             radDistance (float, optional): Radial distance units for stacking. Defaults to 1 arcmin.
                 Note there is no None option here as in stackField.
             pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
+            beamSize (float, optional): Size of the Gaussian beam in arcminutes, defaults to 1.6. If None, no beam convolution is applied.
             halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
             mask (bool, optional): If True, masks out areas outside of haloes in the map. Defaults to False.
@@ -303,10 +304,10 @@ class SimulationStacker(object):
             z = self.z
         
         # Load or create the map
-        fieldKey = (pType, z, projection, pixelSize)
+        fieldKey = (pType, z, projection, pixelSize, beamSize)
         if not (fieldKey in self.maps and self.maps[fieldKey] is not None):
-            self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection,
-                                               save=save, load=load, pixelSize=pixelSize, mask=mask, maskRad=maskRad)
+            self.maps[fieldKey] = self.makeMap(pType, z=z, projection=projection, save=save, load=load,
+                                               pixelSize=pixelSize, beamSize=beamSize, mask=mask, maskRad=maskRad)
 
         # If subtract_mean is True, subtract the mean of the map before stacking.
         if subtract_mean:
@@ -360,7 +361,7 @@ class SimulationStacker(object):
         return radii, profiles 
 
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000, 
+                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000.0, 
                    mask=False, maskRad=3.0, subtract_mean=False):
         """Do stacking on the computed field.
 

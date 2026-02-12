@@ -72,7 +72,6 @@ def main(path2config, verbose=True):
     loadField = stack_config.get('load_field', True)
     saveField = stack_config.get('save_field', True)
 
-    stackField = stack_config.get('stack_field', False)
     radDistance = stack_config.get('rad_distance', 1.0)
     minRadius = stack_config.get('min_radius', 1.0)
     maxRadius = stack_config.get('max_radius', 10.0)
@@ -84,8 +83,13 @@ def main(path2config, verbose=True):
     
     filterType = stack_config.get('filter_type', 'CAP')
     pType = stack_config.get('particle_type', 'tau')
+    stackField = stack_config.get('stack_field', False)
+    convert_particle_type = stack_config.get('convert_particle_type', False)
+
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
+    stackField2 = stack_config.get('stack_field_2', False)
+    convert_particle_type2 = stack_config.get('convert_particle_type_2', False)
 
     subtract_mean = stack_config.get('subtract_mean', False)
 
@@ -109,8 +113,8 @@ def main(path2config, verbose=True):
     
     # Define particle type configurations for each row
     ptype_configs = [
-        {'pType': pType, 'pType2': 'total'},
-        {'pType': pType2, 'pType2': 'total'}
+        {'pType': pType, 'convert': convert_particle_type, 'stackField': stackField},
+        {'pType': pType2, 'convert': convert_particle_type2, 'stackField': stackField2}
     ]
     
     t0 = time.time()
@@ -118,8 +122,8 @@ def main(path2config, verbose=True):
     # Loop over rows (particle type configurations)
     for row_idx, ptype_config in enumerate(ptype_configs):
         pType_current = ptype_config['pType']
-        # pType2_current = ptype_config['pType2']
-        
+        convert_current = ptype_config['convert']
+        stackField_current = ptype_config['stackField']
         print(f"\nProcessing configuration: {pType_current}")
         
         for i, sim_type in enumerate(config['simulations']):
@@ -178,7 +182,7 @@ def main(path2config, verbose=True):
                 
                 # Now we do the stacking for both simulation types
             
-                if stackField:
+                if stackField_current:
                     radii0, profiles0 = stacker.stackField(pType_current, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
                                                            save=saveField, load=loadField, radDistance=radDistance, nPixels=nPixels,
                                                            projection=projection) 
@@ -193,8 +197,15 @@ def main(path2config, verbose=True):
                     # radii1, profiles1 = stacker.stackMap(pType2_current, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, numRadii=numRadii, # type: ignore
                     #                                      save=saveField, load=loadField, radDistance=radDistance, pixelSize=pixelSize,
                     #                                      projection=projection, subtract_mean=subtract_mean)
+                
+                
                 # Convert delta Sigma profiles to kSZ profiles if needed
-                                                                
+                if convert_current:
+                    print(f"Converting {pType_current} profiles to kSZ units...")
+                    cosmo = cosmo_tng if sim_type_name == 'IllustrisTNG' else cosmo_simba
+                    
+                    profiles0 = ksz_from_delta_sigma(profiles0 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) * -1.0 # convert to kSZ # type: ignore
+                    # profiles0 = np.abs(profiles0) # take absolute value, since some profiles are negative.                                                
                 # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
                 # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
@@ -227,9 +238,9 @@ def main(path2config, verbose=True):
                 # profiles_plot = np.median(plot_term, axis=1)
                 ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
-                    err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                    err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1]) # type: ignore
                     # err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
-                    profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
+                    profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1]) # type: ignore
                     # profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
 
 

@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import h5py
 
 # from scipy.stats import binned_statistic_2d
@@ -49,6 +50,66 @@ matplotlib.rcParams.update({
     "legend.fontsize": 20,
 })
 # --- END NEW ---
+
+def save_measurements_npz(path, data):
+    """
+    Save a nested dict-of-dicts to an NPZ file without pickling.
+
+    The input must have the structure:
+        {
+            outer_key: {
+                inner_key: array_like,
+                ...
+            },
+            ...
+        }
+
+    All inner values are converted to NumPy arrays and stored under
+    keys of the form "outer_key/inner_key".
+
+    Args:
+        path (str): Output .npz file path.
+        data (dict): Nested dict of array-like values.
+
+    Raises:
+        TypeError: If data is not a dict-of-dicts.
+        ValueError: If an inner value cannot be converted to a NumPy array.
+    """
+    if not isinstance(data, dict):
+        raise TypeError("data must be a dict")
+
+    flat = {}
+
+    for outer_key, inner in data.items():
+        if not isinstance(inner, dict):
+            raise TypeError(
+                f"Value for {outer_key!r} must be a dict, got {type(inner)}"
+            )
+
+        for inner_key, value in inner.items():
+            try:
+                arr = np.asarray(value)
+            except Exception as e:
+                raise ValueError(
+                    f"Could not convert {outer_key}/{inner_key} to array"
+                ) from e
+
+            flat[f"{outer_key}/{inner_key}"] = arr
+
+    np.savez_compressed(path, **flat)
+
+def load_measurements_npz(path):
+    """
+    Load a nested dict-of-dicts saved by save_measurements_npz.
+    """
+    z = np.load(path)
+    out = {}
+
+    for k in z.files:
+        outer_key, inner_key = k.split("/", 1)
+        out.setdefault(outer_key, {})[inner_key] = z[k]
+
+    return out
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -99,10 +160,10 @@ def main(path2config, verbose=True):
     figType = plot_config.get('fig_type', 'pdf')
 
     colourmaps = ['hot', 'cool']
-    colourmaps = ['hsv', 'twilight']
+    colourmaps = ['plasma', 'twilight']
 
     # fig, ax = plt.subplots(figsize=(10,8))
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=False)
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -140,12 +201,12 @@ def main(path2config, verbose=True):
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
                 cosmo_tng = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=radDistance,
-                                                        projection=projection)
+                # radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                #                                      save=saveField, load=loadField, radDistance=radDistance,
+                #                                      projection=projection)
+                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=radDistance,
+                #                                         projection=projection)
                 # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
                 # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
                 # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
@@ -176,12 +237,12 @@ def main(path2config, verbose=True):
                 OmegaBaryon = 0.048  # Default value for SIMBA
                 cosmo_simba = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
 
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius,  # type: ignore
-                                                     save=saveField, load=loadField, radDistance=radDistance,
-                                                     projection=projection)
-                radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                        save=saveField, load=loadField, radDistance=radDistance,
-                                                        projection=projection)
+                # radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius,  # type: ignore
+                #                                      save=saveField, load=loadField, radDistance=radDistance,
+                #                                      projection=projection)
+                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                #                                         save=saveField, load=loadField, radDistance=radDistance,
+                #                                         projection=projection)
                 # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
                 # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
                 # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
@@ -212,6 +273,12 @@ def main(path2config, verbose=True):
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
+            radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                    save=saveField, load=loadField, radDistance=radDistance,
+                                                    projection=projection)
+            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                    save=saveField, load=loadField, radDistance=radDistance,
+                                                    projection=projection)
             
             # Now for Plotting
             
@@ -257,6 +324,21 @@ def main(path2config, verbose=True):
                                 lower, 
                                 upper, 
                                 color=colours[j], alpha=0.2)
+                
+                
+        # We plot the data on seach subplot.
+        if plot_config['plot_data']:
+            # This is the changed code, which plots the measurement ratios for dsigma/dsigma measurements alongside the simulation results.
+            cmap = mpl.colormaps['gist_rainbow'] # type: ignore
+            colours = cmap(np.linspace(0, 1.0, 4))
+            data_path = plot_config['data_path']
+            data = load_measurements_npz(data_path)
+            
+            for k, key in enumerate(data.keys()):
+                r_data = data[key]['ksz_theta_arcmin']
+                plot_data = data[key]['ratio']
+                plot_err = data[key]['ratio_err']
+                ax.errorbar(r_data + (k-1) * 0.05, plot_data, yerr=plot_err, fmt='s', color=colours[k+1], label=key, markersize=6, capsize=2)
 
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
@@ -266,13 +348,14 @@ def main(path2config, verbose=True):
     def inverse_arcmin(comoving):
         return comoving_to_arcmin(comoving, redshift, cosmo_tng)
 
-    if plot_config['plot_data']:
-        data_path = plot_config['data_path']
-        data = np.load(data_path)
-        r_data = data['theta_arcmins']
-        profile_data = data['prof']
-        profile_err = np.sqrt(np.diag(data['cov']))
-        plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
+
+        
+        # data_path = plot_config['data_path']
+        # data = np.load(data_path)
+        # r_data = data['theta_arcmins']
+        # profile_data = data['prof']
+        # profile_err = np.sqrt(np.diag(data['cov']))
+        # plt.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=8)
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
@@ -322,15 +405,15 @@ def main(path2config, verbose=True):
         if title == 'IllustrisTNG':
             # ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
             ax.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
-        elif title == 'SIMBA':
-            # Secondary Y axis
-            k = 1 / (T_CMB * v_c * 1e6)
+        # elif title == 'SIMBA':
+        #     # Secondary Y axis
+        #     k = 1 / (T_CMB * v_c * 1e6)
             
-            secax = ax.secondary_yaxis('right',
-                                   functions=(lambda y: y * k,
-                                             lambda y: y / k))
-            secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
-            # secax.tick_params(axis='y', which='major', labelsize=14)
+        #     secax = ax.secondary_yaxis('right',
+        #                            functions=(lambda y: y * k,
+        #                                      lambda y: y / k))
+        #     secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
+        #     # secax.tick_params(axis='y', which='major', labelsize=14)
         
         secax_x = ax.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
         secax_x.set_xlabel('R [comoving kpc/h]', fontsize=18)
@@ -338,14 +421,15 @@ def main(path2config, verbose=True):
 
         ax.axhline(1.0, color='k', ls='--', lw=2)
         ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
-        ax.legend(loc='lower right', fontsize=12)
+        ax.legend(loc='upper left', fontsize=12)
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
     
-    fig.suptitle(f'Ratio at z={redshift}', fontsize=20)
+    fig.suptitle(f'Ratio at z={redshift}, with DESI LRG zbin 1 x HSC measurements', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
+    print(f'Saving figure to {figPath / f"{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}"}')
     fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     

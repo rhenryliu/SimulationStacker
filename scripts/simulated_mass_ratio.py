@@ -136,6 +136,8 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
+    pixelSize = stack_config.get('pixel_size', 0.5)
+    beamSize = stack_config.get('beam_size', None)
     
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
@@ -273,12 +275,16 @@ def main(path2config, verbose=True):
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
-            radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                    save=saveField, load=loadField, radDistance=radDistance,
-                                                    projection=projection)
-            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                    save=saveField, load=loadField, radDistance=radDistance,
-                                                    projection=projection)
+            radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius,
+                                                 maxRadius=maxRadius, numRadii=nRadii,
+                                                #  pixelSize=pixelSize, beamSize=beamSize,
+                                                 save=saveField, load=loadField, radDistance=radDistance,
+                                                 projection=projection)
+            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius,
+                                                 maxRadius=maxRadius, numRadii=nRadii,
+                                                 pixelSize=pixelSize, beamSize=beamSize,
+                                                 save=saveField, load=loadField, radDistance=radDistance,
+                                                 projection=projection)
             
             # Now for Plotting
             
@@ -425,7 +431,7 @@ def main(path2config, verbose=True):
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
     
-    fig.suptitle(f'Ratio at z={redshift}, with DESI LRG zbin 1 x HSC measurements', fontsize=20)
+    fig.suptitle(f'Ratio at z={redshift}, with DESI BGS x HSC measurements', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore

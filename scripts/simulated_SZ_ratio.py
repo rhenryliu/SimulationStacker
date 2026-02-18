@@ -104,6 +104,8 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
+    pixelSize = stack_config.get('pixel_size', 0.5)
+    beamSize = stack_config.get('beam_size', None)
 
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
@@ -129,12 +131,13 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    star_fraction_dict_path = '../figures/2025-10/star_fraction_z0.5_star_fraction.yaml'
+    star_fraction_dict_path = '../figures/2026-01/01-26/star_fraction_z0.5_star_fraction.yaml'
     load_path_obj = Path(star_fraction_dict_path)
     with open(load_path_obj, 'r') as f:
         star_fraction_dict = yaml.safe_load(f)
 
-    fig, ax = plt.subplots(figsize=(10,8))
+    # fig, ax = plt.subplots(figsize=(10,8))
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -144,9 +147,11 @@ def main(path2config, verbose=True):
         if sim_type_name == 'IllustrisTNG':
             TNG_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
+            ax = ax_tng
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
             colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            ax = ax_simba
 
         if verbose:
             print(f"Processing simulations of type: {sim_type_name}")
@@ -159,13 +164,15 @@ def main(path2config, verbose=True):
                 print(f"Processing simulation: {sim_name}")
             
             if sim_type_name == 'IllustrisTNG':
+                sim_name_show = sim_name
+                
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
+                                            simType=sim_type_name)
+                
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
-                
-                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
-                                       simType=sim_type_name)
                 
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
                 
@@ -180,8 +187,8 @@ def main(path2config, verbose=True):
                     print(f"Processing feedback model: {feedback}")
                 
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift,
-                                       simType=sim_type_name, 
-                                       feedback=feedback)
+                                            simType=sim_type_name, 
+                                            feedback=feedback)
                 cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
                 
                 
@@ -207,38 +214,42 @@ def main(path2config, verbose=True):
 
             # Now we do the stacking after configuring the stacker
             # TEST!!! making a map without beam smoothing.
-            map_ = stacker.makeMap(pType, projection=projection, save=False, load=False,
-                                   beamsize=None) # type: ignore
-            map_ = map_ / (1 - star_fraction_dict[sim_name])
-            stacker.setMap(pType, map_, z=redshift)
+            # map_ = stacker.makeMap(pType, projection=projection, save=False, load=False, beamsize=None) # type: ignore
+            # map_ = stacker.makeMap(pType, projection=projection, save=saveField, load=loadField) # type: ignore
+            # map_ = map_ / (1 - star_fraction_dict[sim_name_show])
+            # stacker.setMap(pType, map_, z=redshift)
             
             radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, 
                                                  maxRadius=maxRadius, numRadii=nRadii, # type: ignore
                                                  save=saveField, load=loadField, radDistance=radDistance,
                                                  projection=projection)
 
-            # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, 
-            #                                      maxRadius=maxRadius, numRadii=nRadii, # type: ignore
-            #                                      save=saveField, load=loadField, radDistance=radDistance,
-            #                                      projection=projection)
+            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, 
+                                                 maxRadius=maxRadius, numRadii=nRadii, # type: ignore
+                                                 pixelSize=pixelSize, beamSize=beamSize,
+                                                 save=saveField, load=loadField, radDistance=radDistance,
+                                                 projection=projection)
             # profiles1 = mass_to_temp(profiles1 * u.Msun, z=redshift, cosmology=cosmo) # convert to kSZ
                                                     
-            minRad_mpch = arcmin_to_comoving(minRadius, redshift, cosmo) / 1000.0
-            maxRad_mpch = arcmin_to_comoving(maxRadius, redshift, cosmo) / 1000.0
+            # minRad_mpch = arcmin_to_comoving(minRadius, redshift, cosmo) / 1000.0
+            # maxRad_mpch = arcmin_to_comoving(maxRadius, redshift, cosmo) / 1000.0
             
-            theta_arcmin = comoving_to_arcmin(stacker.header['BoxSize'], redshift, cosmo=cosmo)
-            pixelSize = 0.5
-            nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
+            # theta_arcmin = comoving_to_arcmin(stacker.header['BoxSize'], redshift, cosmo=cosmo)
+            # pixelSize = 0.5
+            # nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
 
-            # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-            radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, 
-                                                   maxRadius=maxRad_mpch, numRadii=nRadii, # type: ignore
-                                                   save=saveField, load=loadField, radDistance=1000, nPixels=nPixels,
-                                                   projection=projection)
+            # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
+            # radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, 
+            #                                        maxRadius=maxRad_mpch, numRadii=nRadii, # type: ignore
+            #                                        save=saveField, load=loadField, radDistance=1000, nPixels=nPixels,
+            #                                        projection=projection)
 
             h = stacker.header['HubbleParam']
-            profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-            profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
+            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h, redshift, delta_sigma_is_comoving=False, cosmology=cosmo) # convert to kSZ
+            # profiles1 = -1.0 * profiles1 # negative sign since kSZ from delta_sigma has a negative sign. # type: ignore
+            # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
 
             
             # Now for Plotting
@@ -265,8 +276,8 @@ def main(path2config, verbose=True):
             # plot_term = profiles1
 
             # profiles_plot = np.mean(plot_term, axis=1)
-            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
-            profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1)
+            profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
+            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1)
             # profiles_plot = np.median(plot_term, axis=1)
             ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
             if plotErrorBars:
@@ -299,8 +310,9 @@ def main(path2config, verbose=True):
 
     # ax.set_xlabel('Radius (arcmin)')
     # ax.set_ylabel('f')
-    ax.set_xlabel('R [arcmin]', fontsize=18)
-    ax.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
+    ax_tng.set_xlabel('R [arcmin]', fontsize=18)
+    ax_simba.set_xlabel('R [arcmin]', fontsize=18)
+    ax_tng.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
     # ax.set_xscale('log')
     # ax.set_yscale('log')
     # --- Secondary Y axis examples ---
@@ -319,16 +331,19 @@ def main(path2config, verbose=True):
     #                                     lambda y: y - C))     # inverse
     # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
 
-    ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
+    ax_tng.set_xlim(0.0, maxRadius * radDistance + 0.5)
+    ax_simba.set_xlim(0.0, maxRadius * radDistance + 0.5)
     # ax.set_ylim(0, 1.2)
     # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax.legend(loc='lower right', fontsize=12)
-    ax.grid(True)
-    ax.set_title(f'Ratio at z={redshift}', fontsize=18)
+    ax_tng.legend(loc='lower right', fontsize=12)
+    ax_simba.legend(loc='lower right', fontsize=12)
+    ax_tng.grid(True)
+    ax_simba.grid(True)
+    fig.suptitle(f'Ratio at z={redshift}', fontsize=18)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
-    fig.savefig(figPath / f'nosmoothing_scaled_{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')

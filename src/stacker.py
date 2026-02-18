@@ -168,6 +168,13 @@ class SimulationStacker(object):
         """        
         if z is None:
             z = self.z
+
+        if (beamSize is None) and save:
+            print('Saving field instead of map, since beamSize is None.')
+            saveField = True
+            save = False # Don't save the map if we aren't convolving it, since it's just the same as the field.
+        else:
+            saveField = False
             
         # First define cosmology
         cosmo = FlatLambdaCDM(H0=100 * self.header['HubbleParam'], Om0=self.header['Omega0'], Tcmb0=2.7255 * u.K)
@@ -198,7 +205,7 @@ class SimulationStacker(object):
         
         # If we don't have the map pre-saved, we then make the map. 
         # Since this is before doing beam convolution, this step is fine to do using makeField.
-        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=False, load=load, 
+        map_ = self.makeField(pType, nPixels=nPixels, projection=projection, save=saveField, load=load, 
                               mask=mask, maskRad=maskRad, base_path=base_path)
 
         # Convolve the map with a Gaussian beam (only if beamSize is not None)

@@ -16,9 +16,9 @@ stack:
   n_pixels: 1000 # Number of pixels on a side if stack_field is true
   projection: 'yz' # 'xy', 'xz', 'yz'
 
-  filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  filter_type: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type: 'ionized_gas'
-  filter_type_2: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  filter_type_2: 'cumulative' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type_2: 'total'
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking

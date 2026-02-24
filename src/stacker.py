@@ -168,6 +168,10 @@ class SimulationStacker(object):
         """        
         if z is None:
             z = self.z
+        
+        if beamSize == 0.0:
+            # Zero beamsize is same as None, so we just change it to None here.
+            beamSize = None
 
         if (beamSize is None) and save:
             print('Saving field instead of map, since beamSize is None.')

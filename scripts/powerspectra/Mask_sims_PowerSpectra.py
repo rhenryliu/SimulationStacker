@@ -45,7 +45,7 @@ import illustris_python as il
 
 
 parser = argparse.ArgumentParser(description='Process config.')
-parser.add_argument('-p', '--path2config', type=str, default='./configs/diskring_NGC.yaml', help='Path to the configuration file.')
+parser.add_argument('-p', '--path2config', type=str, default='./configs/test_pk.yaml', help='Path to the configuration file.')
 args = vars(parser.parse_args())
 print(f"Arguments: {args}")
 path2config = args['path2config']
@@ -111,17 +111,17 @@ kpcPerPixel = Lbox / nPixels # technically kpc/h per pixel
 kNyquist = 1 / (kpcPerPixel*2) * 1000 # h/Mpc units
 
 # Load product grids
-gridPath = '/pscratch/sd/r/rhliu/projects/IllustrisTNG/products/3D/'
+gridPath = '/pscratch/sd/r/rhliu/simulations/IllustrisTNG/products/3D/'
 
 # field_gas = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
 # field_DM = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
 
 if pType == 'gas':
     # field = field_gas.copy()
-    field = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
+    field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
 elif pType == 'DM':
     # field = field_DM.copy()
-    field = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
+    field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
 else:
     raise NotImplementedError('Particle Type not Implemented')
 
@@ -229,6 +229,7 @@ for i in range(len(cutout_masks)+1):
 #         k2, power2 = calc_power2(field_copy, k_bin_edges, Lbox=Lbox/1000)
 #         power = power + power2
         
+print(k, power2)
 plt.loglog(k, (4*np.pi*k**3) * power2, label='Sum', c=colours[-1])
 
 plt.axvline(kNyquist, c='k', alpha=0.5, linestyle='-.')

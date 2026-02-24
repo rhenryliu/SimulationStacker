@@ -110,7 +110,7 @@ def main(path2config, verbose=True):
     # Define particle type configurations for each row
     ptype_configs = [
         {'pType': 'ionized_gas', 'pType2': 'total'},
-        {'pType': 'gas', 'pType2': 'total'}
+        {'pType': 'baryon', 'pType2': 'total'}
     ]
     
     t0 = time.time()

@@ -1,7 +1,7 @@
 stack:
   redshift: 0.5
   load_field: true
-  save_field: false
+  save_field: true
 
   stack_field: false # If false, stacks maps instead of fields
   rad_distance: 1.0 # in arcmin, or comoving kpc/h if stack_field is true
@@ -17,7 +17,7 @@ stack:
   projection: 'yz' # 'xy', 'xz', 'yz'
 
   filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
-  particle_type: 'ionized_gas'
+  particle_type: 'DM' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
   filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type_2: 'total'
 
@@ -39,21 +39,21 @@ plot:
 simulations:
   - sim_type: 'SIMBA'
     sims:
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50'
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50noagn'
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50nox'
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50nojet'
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50nofb'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50noagn'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nox'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nojet'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nofb'
       - name: 'm100n1024'
         snapshot: 125
         feedback: 's50'

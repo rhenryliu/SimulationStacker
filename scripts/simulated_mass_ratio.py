@@ -308,6 +308,9 @@ def main(path2config, verbose=True):
             # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
             plot_term = profiles0 / profiles1 # TODO
             # plot_term = profiles1
+            # TODO: Remove next line after script!!!
+            if pType == 'DM' and pType2 == 'total':
+                profiles0 = profiles0 / ((stacker.header['Omega0'] - OmegaBaryon)/ OmegaBaryon)
 
             # profiles_plot = np.mean(plot_term, axis=1)
             profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
@@ -431,7 +434,7 @@ def main(path2config, verbose=True):
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
     
-    fig.suptitle(f'Ratio at z={redshift}, with DESI BGS x HSC measurements', fontsize=20)
+    fig.suptitle(f'Ratio at z={redshift}, with DESI LRG x HSC measurements', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore

@@ -472,7 +472,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
 
     Args:
         stacker (SimulationStacker): The stacker instance.
-        pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH', or 'ionized_gas'
+        pType (str): Particle Type. One of 'gas', 'DM', 'Stars', or 'BH', or 'ionized_gas' and 'neutral_gas'.
         nPixels (int, optional): Number of pixels in each direction of the 2D Field. Defaults to stacker.nPixels.
         projection (str, optional): Direction of the field projection. Currently only 'xy' is implemented. Defaults to 'xy'.
         dim (str, optional): Dimension of the map ('2D' or '3D'). Defaults to '2D'.
@@ -493,8 +493,15 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         print("Warning: 'ionized_gas' is experimental.")
         use_ionized_gas = True
         pType = 'gas'
+        get_neutral_gas = False
+    elif pType == 'neutral_gas':
+        print("Warning: 'neutral_gas' is experimental.")
+        use_ionized_gas = True
+        pType = 'gas'
+        get_neutral_gas = True
     else:
         use_ionized_gas = False
+        get_neutral_gas = False
             
     Lbox = stacker.header['BoxSize'] # kpc/h
     
@@ -552,6 +559,9 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
             # ionized_fractions = xe * X_H / (1 + X_H + xe * 2) # number of electrons per baryon
             # ionized_fractions = particles['IonizedFractions']
             # masses *= ionized_fractions
+            if get_neutral_gas:
+                total_gas_mass = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h
+                masses = total_gas_mass - masses
         
         if dim == '2D':
             

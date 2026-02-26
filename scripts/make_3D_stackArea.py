@@ -118,6 +118,7 @@ def main(path2config, verbose=True):
             TNG_sims = sim_type['sims']
             # colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
             ax = ax_tng
+            tng_name = sim_type['sims'][0]['name']
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
             # colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
@@ -315,7 +316,7 @@ def main(path2config, verbose=True):
     # ax_simba.set_title('SIMBA', fontsize=16)
     
     # Configure both subplots
-    for ax, title in zip([ax_tng, ax_simba], ['TNG300-1', 'SIMBA m100_s50']):
+    for ax, title in zip([ax_tng, ax_simba], [tng_name, 'SIMBA m100_s50']):
     # for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
         ax.set_xlabel('R [comoving kpc/h]', fontsize=18)
         # ax.set_yscale('log')
@@ -337,7 +338,7 @@ def main(path2config, verbose=True):
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
     
-    fig.suptitle(f'Baryon stack area at z={redshift}', fontsize=20)
+    fig.suptitle(f'Baryon Fractions at z={redshift}', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore

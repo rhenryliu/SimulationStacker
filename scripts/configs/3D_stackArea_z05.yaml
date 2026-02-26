@@ -23,8 +23,8 @@ plot:
   data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
-  fig_name: 'stackArea_3D'
-  fig_type: 'png'
+  fig_name: 'TNG_3D'
+  fig_type: 'pdf'
   plot_error_bars: true
 
 

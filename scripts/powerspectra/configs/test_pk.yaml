@@ -11,7 +11,7 @@ simulation:
 plot:
   fig_path: '../../figures/'
   fig_name: 'TNG300_PowerSpectra'
-  fig_type: 'png'
+  fig_type: 'pdf'
 
 
 simulations:

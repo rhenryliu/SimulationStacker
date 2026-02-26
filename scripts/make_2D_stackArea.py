@@ -134,10 +134,11 @@ def main(path2config, verbose=True):
     loadField = stack_config.get('load_field', True)
     saveField = stack_config.get('save_field', True)
     radDistance = stack_config.get('rad_distance', 1.0)
-    pType = stack_config.get('particle_type', 'tau')
+    # baryon_types: list of particle types to show as stacked fractional contributions
+    baryon_types = stack_config.get('baryon_types', ['Stars', 'BH', 'ionized_gas', 'neutral_gas'])
     projection = stack_config.get('projection', 'xy')
     pixelSize = stack_config.get('pixel_size', 0.5)
-    beamSize = stack_config.get('beam_size', None)
+    beamSize = stack_config.get('beam_size', 1.6) # in arcmin, for Gaussian smoothing of the maps before stacking. Set to 0 for no smoothing.
     
     filterType2 = stack_config.get('filter_type_2', 'DSigma')
     pType2 = stack_config.get('particle_type_2', 'total')
@@ -163,9 +164,11 @@ def main(path2config, verbose=True):
 
     colourmaps = ['hot', 'cool']
     colourmaps = ['plasma', 'twilight']
+    colourmap = matplotlib.colormaps['plasma'] # type: ignore
+    colours = colourmap(np.linspace(0.0, 0.8, len(baryon_types)))
 
     # fig, ax = plt.subplots(figsize=(10,8))
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(14, 8), sharey=True)
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
@@ -174,11 +177,12 @@ def main(path2config, verbose=True):
         
         if sim_type_name == 'IllustrisTNG':
             TNG_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
+            # colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
             ax = ax_tng
+            tng_name = sim_type['sims'][0]['name']
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            # colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
             ax = ax_simba
 
         if verbose:
@@ -195,31 +199,15 @@ def main(path2config, verbose=True):
                 
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                        simType=sim_type_name)
-                # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
-                #                                simType=sim_type_name)
                 try:
                     OmegaBaryon = stacker.header['OmegaBaryon']
                 except KeyError:
                     OmegaBaryon = 0.0456  # Default value for Illustris-1
                 cosmo_tng = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-
-                # radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                #                                      save=saveField, load=loadField, radDistance=radDistance,
-                #                                      projection=projection)
-                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=radDistance,
-                #                                         projection=projection)
-                # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                # radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=1000, nPixels=1000,
-                #                                         projection=projection)
-                
-
-                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
-
+                def forward_arcmin(arcmin):
+                    return arcmin_to_comoving(arcmin, redshift, cosmo_tng)
+                def inverse_arcmin(comoving):
+                    return comoving_to_arcmin(comoving, redshift, cosmo_tng)
                 
 
             elif sim_type_name == 'SIMBA':
@@ -233,121 +221,56 @@ def main(path2config, verbose=True):
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                        simType=sim_type_name, 
                                        feedback=feedback)
-                # stacker_tot = SimulationStacker(sim_name, snapshot, z=redshift, 
-                #                                simType=sim_type_name, 
-                #                                feedback=feedback)
                 OmegaBaryon = 0.048  # Default value for SIMBA
                 cosmo_simba = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
+                def forward_arcmin(arcmin):
+                    return arcmin_to_comoving(arcmin, redshift, cosmo_simba)
+                def inverse_arcmin(comoving):
+                    return comoving_to_arcmin(comoving, redshift, cosmo_simba)
 
-                # radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius,  # type: ignore
-                #                                      save=saveField, load=loadField, radDistance=radDistance,
-                #                                      projection=projection)
-                # radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=radDistance,
-                #                                         projection=projection)
-                # minRad_mpch = arcmin_to_comoving(1.0, redshift, cosmo) / 1000.0
-                # maxRad_mpch = arcmin_to_comoving(6.0, redshift, cosmo) / 1000.0
-                # # print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-                # radii1, profiles1 = stacker.stackField(pType2, filterType=filterType2, minRadius=minRad_mpch, maxRadius=maxRad_mpch, numRadii=11, # type: ignore
-                #                                         save=saveField, load=loadField, radDistance=1000, nPixels=1000,
-                #                                         projection=projection)
-                                                                
-                # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.pc**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-                # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
-
-                # if fractionType == 'gas':
-                #     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-                # elif fractionType == 'baryon':
-                #     fraction = (profiles0 + profiles4 + profiles5) / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-
-                # fraction_plot = np.median(fraction, axis=1)
-                # ax.plot(radii0 * radDistance, fraction_plot, label=sim_name_show, color=colours[j], lw=2)
-                # # ax.plot(radii0 * radDistance, profiles0.mean(axis=1), label=sim_name_show, color=colours[j], lw=2)
-                # # ax.plot(radii0 * radDistance, profiles0, label=sim_name_show, color=colours[j], lw=2)
-                # if plotErrorBars:
-                #     fraction_err = np.std(fraction, axis=1) / np.sqrt(fraction.shape[1])
-                #     upper = np.percentile(fraction, 75, axis=1)
-                #     lower = np.percentile(fraction, 25, axis=1)
-                #     ax.fill_between(radii0 * radDistance, 
-                #                     lower, 
-                #                     upper, 
-                #                     color=colours[j], alpha=0.2)
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
+            minRadius_arcmin = inverse_arcmin(minRadius * radDistance)
+            maxRadius_arcmin = inverse_arcmin(maxRadius * radDistance)
 
-            radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius,
-                                                 maxRadius=maxRadius, numRadii=nRadii,
+            # Stack the total field (denominator) and each baryon type (numerators)
+            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius_arcmin,
+                                                 maxRadius=maxRadius_arcmin, numRadii=nRadii,
                                                 #  pixelSize=pixelSize, beamSize=beamSize,
                                                  save=saveField, load=loadField, radDistance=radDistance,
                                                  projection=projection)
-            radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius,
-                                                 maxRadius=maxRadius, numRadii=nRadii,
-                                                 pixelSize=pixelSize, beamSize=beamSize,
-                                                 save=saveField, load=loadField, radDistance=radDistance,
-                                                 projection=projection)
-            
-            # Now for Plotting
-            
-            
-            T_CMB = 2.7255
-            # speed of light:
-            # v_c = 0.0007
-            v_c = 300000 / 299792458 # velocity over speed of light.
-            # v_c = 1.06e-3
-            # The conversion from tau to micro-Kelvin for kSZ is T_CMB * (v/c) * 1e6
-            # This is already done in the SZstacker.py file when loading the tau field.
-            # So here we do not need to do it again.
-            # profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
-            
+            # radii1 = forward_arcmin(radii1) / radDistance # convert back to physical distance units for plotting on x-axis
+            # profiles_baryon[bt]: shape (nRadii, nHalos); CAP sum per halo per radius for each baryon type
+            profiles_baryon = {}
+            for bt in baryon_types:
+                t1 = time.time()
+                print(f"Stacking baryon type: {bt}")
+                radii0, profiles_baryon[bt] = stacker.stackMap(bt, filterType=filterType, minRadius=minRadius_arcmin,
+                                                               maxRadius=maxRadius_arcmin, numRadii=nRadii,
+                                                               save=saveField, load=loadField, radDistance=radDistance,
+                                                               projection=projection)
+                # radii0 = forward_arcmin(radii0) / radDistance # convert back to physical distance units for plotting on x-axis
+                print(f"Done stacking {bt} in {time.time() - t1:.1f} seconds")
+
             if sim_type_name == 'SIMBA':
                 # SIMBA simulations have different feedback models               
-                sim_name = sim_name + '_' + sim['feedback'] 
-            
-            # If we want area-averaged CAP profile:
-            # profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
-            # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
-            plot_term = profiles0 / profiles1 # TODO
-            # plot_term = profiles1
-            # TODO: Remove next line after script!!!
-            if pType == 'DM' and pType2 == 'total':
-                profiles0 = profiles0 / ((stacker.header['Omega0'] - OmegaBaryon)/ OmegaBaryon)
+                sim_name = sim_name + '_' + sim['feedback']
 
-            # profiles_plot = np.mean(plot_term, axis=1)
-            profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
-            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1)
-            # profiles_plot = np.median(plot_term, axis=1)
-            ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
-            if plotErrorBars:
-                err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1]) # type: ignore
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
+            # Mean total profile across haloes at each radius (denominator)
+            mean_total = np.mean(profiles1, axis=1)  # shape: (nRadii,)
 
+            # For each baryon type compute its fraction of the total field,
+            # normalised by the cosmic baryon fraction (Omega_b / Omega_m) so that
+            # a perfectly baryon-traced field would sum to 1.
+            fractions = []
+            bt_labels = []
+            for bt in baryon_types:
+                mean_bt = np.mean(profiles_baryon[bt], axis=1)  # shape: (nRadii,)
+                fractions.append(mean_bt / mean_total / (OmegaBaryon / stacker.header['Omega0']))
+                bt_labels.append(bt)
 
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                # upper = np.percentile(plot_term, 75, axis=1)
-                # lower = np.percentile(plot_term, 25, axis=1)
-                upper = profiles_plot + profiles_err
-                lower = profiles_plot - profiles_err
-                ax.fill_between(radii0 * radDistance, 
-                                lower, 
-                                upper, 
-                                color=colours[j], alpha=0.2)
-                
-                
-        # We plot the data on seach subplot.
-        if plot_config['plot_data']:
-            # This is the changed code, which plots the measurement ratios for dsigma/dsigma measurements alongside the simulation results.
-            cmap = mpl.colormaps['gist_rainbow'] # type: ignore
-            colours = cmap(np.linspace(0, 1.0, 4))
-            data_path = plot_config['data_path']
-            data = load_measurements_npz(data_path)
-            
-            for k, key in enumerate(data.keys()):
-                r_data = data[key]['ksz_theta_arcmin']
-                plot_data = data[key]['ratio']
-                plot_err = data[key]['ratio_err']
-                ax.errorbar(r_data + (k-1) * 0.05, plot_data, yerr=plot_err, fmt='s', color=colours[k+1], label=key, markersize=6, capsize=2)
+            # Stacked-area plot: each band is one baryon type's normalised contribution
+            ax.stackplot(radii0 * radDistance, fractions, labels=bt_labels, alpha=0.8, colors=colours)
 
     T_CMB = 2.7255
     v_c = 300000 / 299792458 # velocity over speed of light.
@@ -403,7 +326,7 @@ def main(path2config, verbose=True):
     # ax_simba.set_title('SIMBA', fontsize=16)
     
     # Configure both subplots
-    for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
+    for ax, title in zip([ax_tng, ax_simba], [tng_name, 'SIMBA']):
         ax.set_xlabel('R [arcmin]', fontsize=18)
         # ax.set_yscale('log')
         
@@ -411,36 +334,26 @@ def main(path2config, verbose=True):
         # ax.tick_params(axis='both', which='major', labelsize=14)
         # ax.tick_params(axis='both', which='minor', labelsize=12)
 
-        if title == 'IllustrisTNG':
-            # ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')#, fontsize=18)
-            ax.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
-        # elif title == 'SIMBA':
-        #     # Secondary Y axis
-        #     k = 1 / (T_CMB * v_c * 1e6)
-            
-        #     secax = ax.secondary_yaxis('right',
-        #                            functions=(lambda y: y * k,
-        #                                      lambda y: y / k))
-        #     secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')#, fontsize=18)
-        #     # secax.tick_params(axis='y', which='major', labelsize=14)
+        # Y-axis: sum of baryon-type fractions, each normalised by (Omega_b / Omega_m)
+        ax.set_ylabel(r'Baryon fraction $/ \, (\Omega_b / \Omega_m)$', fontsize=18)
         
         secax_x = ax.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
         secax_x.set_xlabel('R [comoving kpc/h]', fontsize=18)
         # secax_x.tick_params(axis='x', which='major', labelsize=14)
 
         ax.axhline(1.0, color='k', ls='--', lw=2)
-        ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
-        # ax.set_ylim(0.0, 1.05)
-        ax.legend(loc='upper left', fontsize=12)
+        # ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
+        ax.set_xlim(0.0, maxRadius_arcmin * radDistance + 0.5) # type: ignore
+        ax.legend(loc='lower right', fontsize=12)
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
     
-    fig.suptitle(f'Ratio at z={redshift}, with DESI LRG x HSC measurements', fontsize=20)
+    fig.suptitle(f'Baryon Fractions at z={redshift}', fontsize=20)
     
     fig.tight_layout()
     # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
-    print(f'Saving figure to {figPath / f"{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}"}')
-    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}.{figType}', dpi=300) # type: ignore
+    print(f'Saving figure to {figPath / f"stackArea_2D_{pType2}_{figName}_z{redshift}_{filterType}_2D_stackArea.{figType}"}')
+    fig.savefig(figPath / f'stackArea_2D_{pType2}_{figName}_z{redshift}_{filterType}_2D_stackArea.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!!')
@@ -448,7 +361,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/mass_ratio_z05.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/2D_stackArea_z05.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

@@ -23,8 +23,8 @@ import astropy.units as u
 sys.path.append('../src/')
 # from filter_utils import *
 from utils import ksz_from_delta_sigma, arcmin_to_comoving, comoving_to_arcmin
-from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
+from halos import select_massive_halos
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il # type: ignore
@@ -156,6 +156,20 @@ def main(path2config, verbose=True):
                         OmegaBaryon = 0.0456  # Default value for Illustris-1
                     cosmo_tng = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
 
+                    if sim_name == 'TNG300-1':
+                        # We get a mean kpc/h value for R200c, so we need to convert it to arcmin for the stacking. We define the forward and inverse functions here:
+                        def forward_arcmin(arcmin):
+                            return arcmin_to_comoving(arcmin, redshift, cosmo_tng)
+                        def inverse_arcmin(comoving):
+                            return comoving_to_arcmin(comoving, redshift, cosmo_tng)
+                        # Halo selection:
+                        haloes = stacker.loadHalos()
+                        haloMass = haloes['GroupMass']
+                        halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input
+                        R200C_tng = np.mean(haloes['GroupRad'][halo_mask]) # in comoving kpc/h
+                        tng_R200C_arcmin = inverse_arcmin(R200C_tng) # convert to arcmin
+                        print(f"R200c for {sim_name} at z={redshift} is approximately {R200C_tng:.2f} comoving kpc/h, which corresponds to {tng_R200C_arcmin:.2f} arcmin.")
+
 
                 elif sim_type_name == 'SIMBA':
                     # SIMBA simulations have different feedback models               
@@ -170,6 +184,20 @@ def main(path2config, verbose=True):
                                                 feedback=feedback)
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     cosmo_simba = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
+                                        
+                    if sim_name == 'm100n1024':
+                        # We get a mean kpc/h value for R200c, so we need to convert it to arcmin for the stacking. We define the forward and inverse functions here:
+                        def forward_arcmin(arcmin):
+                            return arcmin_to_comoving(arcmin, redshift, cosmo_simba)
+                        def inverse_arcmin(comoving):
+                            return comoving_to_arcmin(comoving, redshift, cosmo_simba)
+                        # Halo selection:
+                        haloes = stacker.loadHalos()
+                        haloMass = haloes['GroupMass']
+                        halo_mask = select_massive_halos(haloMass, 10**(13.22), 5e14) # TODO: make this configurable from user input
+                        R200C_simba = np.mean(haloes['GroupRad'][halo_mask]) # in comoving kpc/h
+                        simba_R200C_arcmin = inverse_arcmin(R200C_simba) # convert to arcmin
+                        print(f"R200c for {sim_name} at z={redshift} is approximately {R200C_simba:.2f} comoving kpc/h, which corresponds to {simba_R200C_arcmin:.2f} arcmin.")
 
                     
                 else:
@@ -306,6 +334,9 @@ def main(path2config, verbose=True):
             # Only set y-label on left column
             if col_idx == 0:
                 ax.set_ylabel(rf'$\frac{{{pType_current}}}{{{pType2_current}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
+                ax.axvline(tng_R200C_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200c}$') # type: ignore
+            elif col_idx == 1:
+                ax.axvline(simba_R200C_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200c}$') # type: ignore
             
             # Add secondary y-axis only for right column (SIMBA)
             # if col_idx == 1:
@@ -322,9 +353,10 @@ def main(path2config, verbose=True):
             if stackField:
                 ax.set_xlabel('R [comoving kpc/h]', fontsize=18)
             else:
-            # Only set x-label on bottom row
+                # Only set x-label on bottom row
                 if row_idx == 1:
                     ax.set_xlabel('R [arcmin]', fontsize=18)
+                    ax.legend(loc='lower right', fontsize=17)
 
                 # Add secondary x-axis only for top row
                 if row_idx == 0:
@@ -333,7 +365,6 @@ def main(path2config, verbose=True):
 
             ax.axhline(1.0, color='k', ls='--', lw=2)
             ax.set_xlim(0.0, maxRadius * radDistance + 0.5)
-            ax.legend(loc='lower right', fontsize=20)
             ax.grid(True)
             
             # Add title only to top row

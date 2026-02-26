@@ -202,14 +202,16 @@ for i in range(len(cutout_masks)+1):
     if i==0:
         field_copy = field_copy / np.mean(field_copy) - 1
         k, power = calc_power2(field_copy, k_bin_edges, Lbox=Lbox/1000) # type: ignore
-        plt.loglog(k, (4*np.pi*k**3) * power, label='Original', c='k')
+        k_mask = k > 0
+        plt.loglog(k[k_mask], (4*np.pi*k[k_mask]**3) * power[k_mask], label='Original', c='k')
     else:
         field_copy[cutout_masks[i-1]] = 0.
         # field_copy[cutout_masks[i-1]] = field_copy.mean()
         field_copy = field_copy / np.mean(field_copy) - 1
         
         k, power = calc_power2(field_copy, k_bin_edges, Lbox=Lbox/1000) # type: ignore
-        plt.loglog(k, (4*np.pi*k**3) * power, label=title_strs[i-1], c=colours[i])
+        k_mask = k > 0
+        plt.loglog(k[k_mask], (4*np.pi*k[k_mask]**3) * power[k_mask], label=title_strs[i-1], c=colours[i])
         if i==1:
             power2 = power.copy()
         else:
@@ -230,7 +232,8 @@ for i in range(len(cutout_masks)+1):
 #         power = power + power2
         
 print(k, power2)
-plt.loglog(k, (4*np.pi*k**3) * power2, label='Sum', c=colours[-1])
+k_mask = k > 0
+plt.loglog(k[k_mask], (4*np.pi*k[k_mask]**3) * power2[k_mask], label='Sum', c=colours[-1])
 
 plt.axvline(kNyquist, c='k', alpha=0.5, linestyle='-.')
 plt.xlabel(r'$k$')

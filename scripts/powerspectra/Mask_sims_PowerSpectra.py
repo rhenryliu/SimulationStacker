@@ -116,14 +116,19 @@ gridPath = '/pscratch/sd/r/rhliu/simulations/IllustrisTNG/products/3D/'
 # field_gas = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
 # field_DM = np.load(gridPath + sim + '_0'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
 
-if pType == 'gas':
-    # field = field_gas.copy()
-    field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
-elif pType == 'DM':
-    # field = field_DM.copy()
-    field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
-else:
-    raise NotImplementedError('Particle Type not Implemented')
+try:
+    field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + pType +'_' + str(nPixels) + '.npy')
+except FileNotFoundError:
+     raise FileNotFoundError(f"Field grid not found at {gridPath + sim + '_'+ str(snapshot) +'_' + pType +'_' + str(nPixels) + '.npy'}")
+
+# if pType == 'gas':
+#     # field = field_gas.copy()
+#     field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'gas' +'_' + str(nPixels) + '.npy')
+# elif pType == 'DM':
+#     # field = field_DM.copy()
+#     field = np.load(gridPath + sim + '_'+ str(snapshot) +'_' + 'DM' +'_' + str(nPixels) + '.npy')
+# else:
+#     raise NotImplementedError('Particle Type not Implemented')
 
 
 # Load haloes

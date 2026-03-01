@@ -4,7 +4,7 @@ simulation:
   sim_type: 'IllustrisTNG'
   sim_name: 'TNG300-1'
   snapshot: 67
-  particle_type: 'gas'
+  particle_type: 'total'
   nPixels: 1000
   n_vir: 1.0
 

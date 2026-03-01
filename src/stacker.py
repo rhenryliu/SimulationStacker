@@ -277,9 +277,10 @@ class SimulationStacker(object):
     
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
-                 z=None, projection='xy', save=False, load=True, radDistance=1.0, pixelSize=0.5, 
-                 beamSize=1.6, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), mask=False, 
-                 maskRad=3.0, subtract_mean=False):
+                 z=None, projection='xy', save=False, load=True, radDistance=1.0, 
+                 pixelSize=0.5, beamSize=1.6, 
+                 mask=False, maskRad=3.0, subtract_mean=False, 
+                 use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
         """Stack the map of a given particle type.
 
         Args:
@@ -296,12 +297,13 @@ class SimulationStacker(object):
                 Note there is no None option here as in stackField.
             pixelSize (float, optional): Size of each pixel in arcminutes. Defaults to 0.5.
             beamSize (float, optional): Size of the Gaussian beam in arcminutes, defaults to 1.6. If None, no beam convolution is applied.
-            halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
-            halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
             mask (bool, optional): If True, masks out areas outside of haloes in the map. Defaults to False.
             maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True.
                 Defaults to 3x virial radii.
             subtract_mean (bool, optional): If True, subtracts the mean of the map before stacking. Defaults to False.
+            use_subhalos (bool, optional): If True, uses subhalos in the stacking process. Defaults to False.
+            halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
+            halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
 
         Returns:
             radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
@@ -335,10 +337,11 @@ class SimulationStacker(object):
             projection=projection,
             radDistance=radDistance,
             radDistanceUnits='arcmin',
+            z=z,
+            pixelSize=pixelSize,
+            use_subhalos=use_subhalos,
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
-            z=z,
-            pixelSize=pixelSize
         )
         
         # restore the mean if subtracted
@@ -373,7 +376,8 @@ class SimulationStacker(object):
 
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                    projection='xy', nPixels=None, save=False, load=True, radDistance=1000.0, 
-                   mask=False, maskRad=3.0, subtract_mean=False):
+                   mask=False, maskRad=3.0, subtract_mean=False, 
+                   use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
         """Do stacking on the computed field.
 
         Args:
@@ -392,7 +396,9 @@ class SimulationStacker(object):
             maskRad (float, optional): Number of virial radii around each halo to keep unmasked. Only used if mask=True. 
                 Defaults to 3x virial radii.
             subtract_mean (bool, optional): If True, subtracts the mean of the field before stacking. Defaults to False.
-
+            use_subhalos (bool, optional): If True, uses subhalos in the stacking. Defaults to False.
+            halo_mass_avg (float, optional): Average halo mass for subhalo selection. Defaults to 10^(13.22).
+            halo_mass_upper (float, optional): Upper halo mass limit for subhalo selection. Defaults to 5*10^(14).
         Raises:
             NotImplementedError: If pType is not one of the ones listed above.
 
@@ -433,7 +439,10 @@ class SimulationStacker(object):
             numRadii=numRadii,
             projection=projection,
             radDistance=radDistance,
-            radDistanceUnits='kpc/h'
+            radDistanceUnits='kpc/h',
+            use_subhalos=use_subhalos,
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
         )
         
         # restore the mean if subtracted
@@ -494,7 +503,9 @@ class SimulationStacker(object):
             halo_mask = np.where(np.logical_and((haloMass > mass_min), (haloMass < mass_max)))[0]
         elif use_subhalos:
             #TODO: Not done!!!!
-            halo_mask = select_abundance_subhalos(haloMass, halo_mass_avg, halo_mass_upper)
+            target_num = 5e-4 # TODO: make configurable from user input
+            halo_mask = select_abundance_subhalos(haloMass, target_num, self.header['BoxSize'])
+            # halo_mask = select_abundance_subhalos(haloMass, halo_mass_avg, halo_mass_upper)
         else:
             halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
         

@@ -22,6 +22,7 @@ stack:
   particle_type_2: 'total'
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
+  use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
 
 
 plot:

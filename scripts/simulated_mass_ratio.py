@@ -145,6 +145,7 @@ def main(path2config, verbose=True):
     minRadius = stack_config.get('min_radius', 1.0)
     maxRadius = stack_config.get('max_radius', 10.0)
     nRadii = stack_config.get('num_radii', 11)
+    use_subhalos = stack_config.get('use_subhalos', False)
 
 
     # fractionType = config['fraction_type']
@@ -279,11 +280,13 @@ def main(path2config, verbose=True):
                                                  maxRadius=maxRadius, numRadii=nRadii,
                                                 #  pixelSize=pixelSize, beamSize=beamSize,
                                                  save=saveField, load=loadField, radDistance=radDistance,
+                                                 use_subhalos=use_subhalos,
                                                  projection=projection)
             radii1, profiles1 = stacker.stackMap(pType2, filterType=filterType2, minRadius=minRadius,
                                                  maxRadius=maxRadius, numRadii=nRadii,
                                                  pixelSize=pixelSize, beamSize=beamSize,
                                                  save=saveField, load=loadField, radDistance=radDistance,
+                                                 use_subhalos=use_subhalos,
                                                  projection=projection)
             
             # Now for Plotting

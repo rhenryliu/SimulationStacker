@@ -17,11 +17,12 @@ stack:
   projection: 'yz' # 'xy', 'xz', 'yz'
 
   filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
-  particle_type: 'DM' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
+  particle_type: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
   filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type_2: 'total'
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
+  use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
 
 
 plot:
@@ -31,7 +32,7 @@ plot:
   # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   # data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
-  fig_name: 'ratios_yz_data'
+  fig_name: 'halos_yz_data'
   fig_type: 'png'
   plot_error_bars: true
 

@@ -46,7 +46,7 @@ matplotlib.rcParams.update({
     "axes.labelsize": 20,
     "xtick.labelsize": 20,
     "ytick.labelsize": 20,
-    "legend.fontsize": 20,
+    "legend.fontsize": 14,
 })
 # --- END NEW ---
 
@@ -105,7 +105,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # Create 2x2 subplot grid with shared axes
-    fig, axes = plt.subplots(2, 2, figsize=(18, 12), sharex='col', sharey='row')
+    fig, axes = plt.subplots(2, 2, figsize=(18, 10), sharex='col', sharey='row')
     
     # Define particle type configurations for each row
     ptype_configs = [
@@ -356,7 +356,7 @@ def main(path2config, verbose=True):
                 # Only set x-label on bottom row
                 if row_idx == 1:
                     ax.set_xlabel('R [arcmin]', fontsize=18)
-                    ax.legend(loc='lower right', fontsize=17)
+                    ax.legend(loc='lower right')
 
                 # Add secondary x-axis only for top row
                 if row_idx == 0:
@@ -377,12 +377,12 @@ def main(path2config, verbose=True):
     else:
         figName_all = figPath / f'2x2_{figName}_z{redshift}_{filterType}_{filterType2}_ratio.{figType}'
     
-    fig.suptitle(f'{filterType} / {filterType2} Profile Ratios at $z={redshift}$', fontsize=22) # TEST; REMOVE LATER
+    # fig.suptitle(f'{filterType} / {filterType2} Profile Ratios at $z={redshift}$', fontsize=22) # TEST; REMOVE LATER
     fig.tight_layout()
     fig.savefig(figName_all, dpi=300) # type: ignore
     plt.close(fig)
     
-    print('Done!!!')
+    print('Done!!!, time taken: {:.2f} minutes'.format((time.time() - t0) / 60))
 
 if __name__ == "__main__":
     

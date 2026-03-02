@@ -209,6 +209,8 @@ def main(path2config, verbose=True):
             haloes['GroupRad'] = haloes['GroupRad'][halo_mask] # in comoving kpc/h
             GroupPos_masked = np.round(haloes['GroupPos'][halo_mask] / kpcPerPixel).astype(int) % nPixels
             R200C = np.mean(haloes['GroupRad']) # in comoving kpc/h
+            print(f"  Number of selected haloes: {halo_mask.sum()}")
+            print(haloes['GroupMass'].shape)
             
             # GroupPos_masked = np.random.randint(0, nPixels, size=GroupPos_masked.shape) # For testing purposes only
             # Now stack the 3D fields:

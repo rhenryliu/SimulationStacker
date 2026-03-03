@@ -36,9 +36,9 @@ stack:
   projection: 'yz'  # options: 'xy', 'xz', 'yz'
 
   # Filter type for the baryon-component maps (numerators).
-  filter_type: 'cumulative'   # options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  filter_type: 'CAP'   # options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   # Filter type for the total-mass map (denominator).
-  filter_type_2: 'cumulative'
+  filter_type_2: 'CAP'
   # Particle type used as the common total-mass denominator.
   particle_type_2: 'total'
 

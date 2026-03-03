@@ -369,7 +369,7 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
         )
 
     # --- X axis labels and secondary axis ---
-    col_titles = ['3D profiles', '2D cumulative', '2D CAP']
+    col_titles = ['3D cumulative', '2D cumulative', '2D CAP']
     if col_idx == 0:
         # 3D column: x in comoving kpc/h
         if row_idx == 1:
@@ -379,7 +379,8 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
             # Secondary x-axis on top row (also in comoving kpc/h, no conversion needed)
             secax = ax.secondary_xaxis('top')
             secax.set_xlabel('R [comoving kpc/h]', fontsize=18)
-            ax.set_title(f'{suite_name} — {col_titles[col_idx]}', fontsize=18)
+            # ax.set_title(f'{suite_name} — {col_titles[col_idx]}', fontsize=18)
+            ax.set_title(col_titles[col_idx], fontsize=18)
     else:
         # 2D columns: x in arcmin
         if row_idx == 1:
@@ -406,13 +407,15 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
 # Main
 # ===========================================================================
 
-def main(path2config: str, verbose: bool = True):
+def main(path2config: str, ptype: str, verbose: bool = True):
     """Generate the 3×2 particle-fraction ratio figure.
 
     Parameters
     ----------
     path2config : str
         Path to the YAML configuration file.
+    ptype : str
+        Particle type to plot (overrides config).
     verbose : bool
         If True, print progress messages to stdout.
     """
@@ -431,7 +434,8 @@ def main(path2config: str, verbose: bool = True):
     save_field  = stack_cfg.get('save_field', True)
     load_field  = stack_cfg.get('load_field', True)
     subtract_mn = stack_cfg.get('subtract_mean', False)
-    pType       = stack_cfg.get('particle_type', 'ionized_gas')
+    pType       = args['ptype'] if args['ptype'] is not None else stack_cfg.get('particle_type', 'ionized_gas')
+    # pType       = stack_cfg.get('particle_type', 'ionized_gas')
     pType2      = stack_cfg.get('particle_type_2', 'total')
 
     # --- 3D column parameters ---
@@ -674,6 +678,12 @@ if __name__ == "__main__":
         type=str,
         default='./configs/ratios_3x2_z05.yaml',
         help='Path to the YAML configuration file.',
+    )
+    parser.add_argument(
+        '--ptype',
+        type=str,
+        default=None,
+        help='Override particle type from config (e.g. "ionized_gas").',
     )
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")

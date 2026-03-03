@@ -388,7 +388,7 @@ def main(path2config: str, verbose: bool = True):
     #   Row 1 — 2-D map stacking profiles (x: arcmin)
     # sharey='row' keeps the y-scale the same within each row for easy comparison
     # -----------------------------------------------------------------------
-    fig, axes = plt.subplots(2, n_sims, figsize=(18, 10), sharey='row')
+    fig, axes = plt.subplots(2, n_sims, figsize=(18, 9), sharey='row')
 
     t_total = time.time()
 

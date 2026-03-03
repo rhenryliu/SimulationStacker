@@ -16,9 +16,9 @@ plot:
   # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   data_path: '../data/fig4.csv'
   data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
-  fig_path: '../figures/2025-10/10-29/'
+  fig_path: '../figures/'
   fig_name: 'profiles_xz_masked'
-  fig_type: 'png'
+  fig_type: 'pdf'
   plot_error_bars: true
   yscale: 'linear'
 

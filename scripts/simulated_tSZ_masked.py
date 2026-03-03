@@ -33,6 +33,7 @@ import illustris_python as il # type: ignore
 import yaml
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 
 # --- NEW: set default font to Computer Modern (with fallbacks) and increase tick fontsize ---
@@ -87,8 +88,13 @@ def main(path2config, verbose=True):
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
 
     # Plotting parameters
-    figPath = Path(plot_config.get('fig_path'))
-    figPath.mkdir(parents=False, exist_ok=True)
+    # get the datetime for file naming
+    now = datetime.now()
+    yr_string = now.strftime("%Y-%m")
+    dt_string = now.strftime("%m-%d")
+
+    figPath = Path(plot_config.get('fig_path')) / yr_string / dt_string
+    figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
@@ -283,7 +289,7 @@ def main(path2config, verbose=True):
     fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
-    print('Done!!!')
+    print('Done!!! time taken = ', time.time() - t0, ' seconds')
 
 if __name__ == "__main__":
     

@@ -36,6 +36,23 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
+# ---------------------------------------------------------------------------
+# Global matplotlib style
+# ---------------------------------------------------------------------------
+matplotlib.rcParams.update({
+    "font.family":      "serif",
+    "font.serif":       ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    "text.usetex":      True,
+    "mathtext.fontset": "cm",
+    "font.size":        20,
+    "axes.titlesize":   20,
+    "axes.labelsize":   20,
+    "xtick.labelsize":  20,
+    "ytick.labelsize":  20,
+    "legend.fontsize":  13,
+})
+
+
 
 # def get_remaining_fraction_wrapper(field, Pos_array, Rad_array):
 #     """
@@ -135,7 +152,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(20, 8), sharey=True)
+    fig, (ax_tng, ax_simba) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
     
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
@@ -288,7 +305,8 @@ def main(path2config, verbose=True):
     # ax_tng.set_title(f'{pType} {filterType} profiles at z={redshift}', fontsize=18)
     
     # Configure right subplot (profiles1)
-    ax_simba.set_xlabel('R [kpc/h]', fontsize=18)
+    # ax_simba.set_xlabel('R [kpc/h]', fontsize=18)
+    ax_simba.set_ylabel(rf'$\frac{{\mathrm{{{pType}}}}}{{\mathrm{{{pType2}}}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
     # ax_simba.set_xlim(0.0, maxRadius * radDistance + 0.5)
     ax_simba.legend(loc='best', fontsize=12)
     ax_simba.grid(True)
@@ -298,7 +316,7 @@ def main(path2config, verbose=True):
     fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_3Dremainder.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
-    print('Done!!!')
+    print(f'Done!!!, time taken: {time.time() - t0} seconds')
 
 if __name__ == "__main__":
     

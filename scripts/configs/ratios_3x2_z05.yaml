@@ -29,8 +29,8 @@ stack:
   # Particle types: fraction plotted is particle_type / particle_type_2
   # Change these to produce different fraction figures, e.g. 'tau' / 'total',
   # 'star' / 'total', 'baryon' / 'total', etc.
-  # particle_type:   'ionized_gas'
-  particle_type:   'baryon'
+  particle_type:   'ionized_gas'
+  # particle_type:   'baryon'
   particle_type_2: 'total'
 
   # ------------------------------------------------------------------

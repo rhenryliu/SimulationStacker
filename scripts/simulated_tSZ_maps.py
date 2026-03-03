@@ -123,7 +123,10 @@ def main(path2config, verbose=True):
             ax = ax_tng  # Plot TNG on left subplot
         if sim_type_name == 'SIMBA':
             SIMBA_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            if len(SIMBA_sims) > 1:
+                colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            else:
+                colours = colourmap(np.linspace(0.2, 0.85, 6))[-1:] # Use the last color if only one SIMBA sim, otherwise generate a range of colors
             ax = ax_simba  # Plot SIMBA on right subplot
 
         if verbose:

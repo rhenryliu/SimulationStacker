@@ -103,7 +103,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # Create (2, 4) subplots: top row for TNG, bottom row for SIMBA
-    fig, axes = plt.subplots(2, 4, figsize=(20, 10), sharex=True, sharey=True)
+    fig, axes = plt.subplots(2, 4, figsize=(18, 9), sharex=True, sharey=True)
     
     # Define mask configurations: [maskRadii=1, 2, 3, False]
     mask_configs = [
@@ -138,7 +138,10 @@ def main(path2config, verbose=True):
                 colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
             elif sim_type_name == 'SIMBA':
                 SIMBA_sims = sim_type['sims']
-                colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+                if len(SIMBA_sims) > 1:
+                    colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+                else:
+                    colours = colourmap(np.linspace(0.2, 0.85, 6))[-1:] # Use the last color if only one SIMBA sim, otherwise generate a range of colors
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 

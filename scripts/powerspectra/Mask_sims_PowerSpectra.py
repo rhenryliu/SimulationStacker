@@ -43,6 +43,23 @@ import sys
 # sys.path.append('../../illustrisPython/')
 import illustris_python as il
 
+# ---------------------------------------------------------------------------
+# Global matplotlib style — Computer Modern / LaTeX-compatible fonts
+# ---------------------------------------------------------------------------
+matplotlib.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    "text.usetex": True,
+    "mathtext.fontset": "cm",
+    "font.size": 18,
+    "axes.titlesize": 18,
+    "axes.labelsize": 18,
+    "xtick.labelsize": 15,
+    "ytick.labelsize": 15,
+    "legend.fontsize": 14,
+})
+
+
 
 parser = argparse.ArgumentParser(description='Process config.')
 parser.add_argument('-p', '--path2config', type=str, default='./configs/test_pk.yaml', help='Path to the configuration file.')
@@ -200,7 +217,7 @@ k_bin_edges = np.logspace(np.log10(kmin), np.log10(kmax), kbins)
 colourmap = matplotlib.colormaps['plasma'] # type: ignore
 colours = colourmap(np.linspace(0, 0.85, len(cutout_masks)+2))
 
-fig = plt.figure(figsize=(8,8))
+fig = plt.figure(figsize=(9, 7))
 
 for i in range(len(cutout_masks)+1):
     field_copy = field.copy()
@@ -245,11 +262,11 @@ plt.xlabel(r'$k$')
 plt.ylabel(r'$4\pi k^3 P(k)$')
 
 # fig.suptitle('{} Simulation Box, pType {}, snapshot {} \n (replace masked regions with field mean)'.format(sim, pType, snapshot), fontsize=15)
-fig.suptitle('{} Simulation Box, pType {}, snapshot {}'.format(sim, pType, snapshot), fontsize=15)
+# fig.suptitle('{} Simulation Box, pType {}, snapshot {}'.format(sim, pType, snapshot),)
 plt.grid()
 plt.legend()
 plt.tight_layout()
 # plt.savefig(figPath + 'PowerSpectra_mean_' + sim + '_' + pType + '_' + str(nPixels) +'.png', dpi=100)
-plt.savefig(figPath / ('PowerSpectra_' + sim + '_' + pType + '_' + str(nPixels) +'.png'), dpi=100)
+plt.savefig(figPath / ('PowerSpectra_' + sim + '_' + pType + '_' + str(nPixels) +'.pdf'), dpi=100)
 
 print('Done!!', time.time() - t0)

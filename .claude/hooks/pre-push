@@ -1,19 +1,36 @@
 #!/bin/bash
 
+# Run review with: REVIEW=1 git push
+if [ "${REVIEW}" != "1" ]; then
+    echo "Skipping Claude code review. Use REVIEW=1 git push to enable."
+    exit 0
+fi
+
 echo "================================================"
 echo "Claude Code Review"
 echo "================================================"
 
-# Git passes push info to the hook via stdin in the format:
-# <local ref> <local sha> <remote ref> <remote sha>
 while read local_ref local_sha remote_ref remote_sha; do
-    # If remote sha is all zeros, this is a new branch
+    # Determine the diff range
     if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-        DIFF=$(git diff HEAD~1 HEAD)
+        # New branch — check if HEAD~1 exists
+        if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            DIFF=$(git diff HEAD~1 HEAD)
+        else
+            # First commit — diff against empty tree
+            DIFF=$(git diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD)
+        fi
     else
-        DIFF=$(git diff $remote_sha $local_sha)
+        DIFF=$(git diff "$remote_sha" "$local_sha")
     fi
 
+    # Skip if diff is empty
+    if [ -z "$DIFF" ]; then
+        echo "No changes detected, skipping review."
+        exit 0
+    fi
+
+    # Run review, but don't block push if claude fails
     echo "$DIFF" | claude -p "Review these git changes passed via stdin.
 Check for:
 - Bugs or logic errors
@@ -23,7 +40,8 @@ Check for:
 - Unit inconsistencies (radians vs degrees etc.)
 Be concise. Organise feedback as Critical, Warnings, Suggestions." \
     --allowedTools Read,Bash \
-    --model haiku
+    --model haiku || echo "Claude review failed (network issue?), proceeding anyway."
+
 done
 
 echo "================================================"

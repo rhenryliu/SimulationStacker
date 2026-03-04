@@ -52,7 +52,8 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         haloes_cat = il.groupcat.loadHalos(sim_path, snapshot)
         haloes['GroupPos'] = haloes_cat['GroupPos']
         haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
-        haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
+        # haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
+        haloes['GroupRad'] = haloes_cat['Group_R_Mean200']
         
     elif sim_type == 'SIMBA':
         if header is None:
@@ -64,7 +65,7 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         haloes_cat = load_as_dict(halo_path, 'halo_data')
         haloes['GroupPos'] = haloes_cat['pos'] * header['HubbleParam']  # kpc/h
         haloes['GroupMass'] = haloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
-        haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200c'] * header['HubbleParam']  # kpc/h
+        haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200'] * header['HubbleParam']  # kpc/h
 
     del haloes_cat  # free memory
     return haloes

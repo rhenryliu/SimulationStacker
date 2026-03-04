@@ -41,12 +41,12 @@ matplotlib.rcParams.update({
     "text.usetex": True,
     "mathtext.fontset": "cm",
     # Base font sizes (adjust as desired)
-    "font.size": 20,
-    "axes.titlesize": 20,
-    "axes.labelsize": 20,
-    "xtick.labelsize": 20,
-    "ytick.labelsize": 20,
-    "legend.fontsize": 20,
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 18,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 14,
 })
 # --- END NEW ---
 
@@ -109,7 +109,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight']
 
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    fig, (ax_tng, ax_simba) = plt.subplots(2, 1, figsize=(9, 9), sharex=True)
     
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
@@ -256,15 +256,19 @@ def main(path2config, verbose=True):
 
     # Configure both subplots
     for ax, title in zip([ax_tng, ax_simba], ['IllustrisTNG', 'SIMBA']):
-        ax.set_xlabel('R [arcmin]', fontsize=18)
+        # ax.set_xlabel('R [arcmin]', fontsize=18)
         ax.set_yscale(plot_config.get('yscale', 'log'))
         
         # Set tick label font size
         # ax.tick_params(axis='both', which='major', labelsize=14)
         # ax.tick_params(axis='both', which='minor', labelsize=12)
 
-        if title == 'IllustrisTNG':
-            ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')#, fontsize=18)
+        ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')#, fontsize=18)
+        if title == 'SIMBA':
+            ax.set_xlabel('R [arcmin]', fontsize=18)
+
+        # if title == 'IllustrisTNG':
+            # ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')#, fontsize=18)
         # elif title == 'SIMBA':
         #     secax = ax.secondary_yaxis('right',
         #                            functions=(lambda y: y * k,
@@ -281,7 +285,7 @@ def main(path2config, verbose=True):
         ax.grid(True)
         ax.set_title(f'{title}')#, fontsize=20)
 
-    fig.suptitle(f'Stacked {pType} profiles, {filterType} filter, z={redshift}', fontsize=20)
+    # fig.suptitle(f'Stacked {pType} profiles, {filterType} filter, z={redshift}', fontsize=20)
     fig.tight_layout()
     if maskHaloes:
         fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masked_{maskRadii:.1f}.{figType}', dpi=300) # type: ignore

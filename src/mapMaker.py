@@ -414,9 +414,9 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         # compute the contribution to the y and b signals of each cell
         # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
         # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-        dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Compton Y parameter
+        dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Compton Y parameter
         b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
-        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # Optical depth. This is what we use for tau
+        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Optical depth. This is what we use for tau
 
         # Now we make the fields:
         

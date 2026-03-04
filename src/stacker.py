@@ -348,7 +348,7 @@ class SimulationStacker(object):
         if subtract_mean:
             self.maps[fieldKey] += map_mean
 
-       # Unit Conversion specific to SZ maps:
+        # Unit Conversion specific to SZ maps:
         T_CMB = 2.7255
         if pType == 'tau':
             # In the case of the tau field, we want to do unit conversion from optical depth units to micro-Kelvin.

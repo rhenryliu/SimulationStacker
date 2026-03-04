@@ -1,52 +1,37 @@
 #!/bin/bash
-
 # Run review with: REVIEW=1 git push
 if [ "${REVIEW}" != "1" ]; then
     echo "Skipping Claude code review. Use REVIEW=1 git push to enable."
     exit 0
 fi
-
 echo "================================================"
 echo "Claude Code Review"
 echo "================================================"
-
 while read local_ref local_sha remote_ref remote_sha; do
     # Determine the diff range
     if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-        # New branch — check if HEAD~1 exists
         if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            DIFF=$(git diff HEAD~1 HEAD)
+            RANGE="HEAD~1..HEAD"
         else
-            # First commit — diff against empty tree, log fallback
-            echo "First commit detected, diffing against empty tree." >&2
-            DIFF=$(git diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD)
+            # First commit — diff against empty tree
+            echo "First commit detected." >&2
+            RANGE="4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD"
         fi
     else
-        DIFF=$(git diff "$remote_sha" "$local_sha")
+        RANGE="${remote_sha}..${local_sha}"
     fi
 
     # Skip this ref if diff is empty
-    if [ -z "$DIFF" ]; then
+    if [ -z "$(git diff "$RANGE")" ]; then
         echo "No changes detected for $local_ref, skipping."
         continue
     fi
 
-    # Run review, but don't block push if claude fails
-    echo "$DIFF" | claude -p "Review these git changes passed via stdin.
-Check for:
-- Bugs or logic errors
-- Numpy array shape mismatches
-- Missing error handling
-- Any obvious performance issues
-- Unit inconsistencies (radians vs degrees etc.)
-Be concise. Organise feedback as Critical, Warnings, Suggestions." \
-    --allowedTools Read,Bash \
-    --model haiku || echo "Claude review failed, proceeding anyway."
-
+    # Run review via subagent, but don't block push if claude fails
+    claude -p "Use the pre-push-reviewer subagent to review the changes in the range ${RANGE}." \
+        || echo "Claude review failed, proceeding anyway."
 done
-
 echo "================================================"
 echo "Review complete. Proceeding with push."
 echo "================================================"
-
 exit 0

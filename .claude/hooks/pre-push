@@ -17,17 +17,18 @@ while read local_ref local_sha remote_ref remote_sha; do
         if git rev-parse HEAD~1 >/dev/null 2>&1; then
             DIFF=$(git diff HEAD~1 HEAD)
         else
-            # First commit — diff against empty tree
+            # First commit — diff against empty tree, log fallback
+            echo "First commit detected, diffing against empty tree." >&2
             DIFF=$(git diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD)
         fi
     else
         DIFF=$(git diff "$remote_sha" "$local_sha")
     fi
 
-    # Skip if diff is empty
+    # Skip this ref if diff is empty
     if [ -z "$DIFF" ]; then
-        echo "No changes detected, skipping review."
-        exit 0
+        echo "No changes detected for $local_ref, skipping."
+        continue
     fi
 
     # Run review, but don't block push if claude fails
@@ -40,7 +41,7 @@ Check for:
 - Unit inconsistencies (radians vs degrees etc.)
 Be concise. Organise feedback as Critical, Warnings, Suggestions." \
     --allowedTools Read,Bash \
-    --model haiku || echo "Claude review failed (network issue?), proceeding anyway."
+    --model haiku || echo "Claude review failed, proceeding anyway."
 
 done
 

@@ -4,7 +4,17 @@ echo "================================================"
 echo "Claude Code Review"
 echo "================================================"
 
-claude -p "Review the changes in git diff HEAD~1. 
+# Git passes push info to the hook via stdin in the format:
+# <local ref> <local sha> <remote ref> <remote sha>
+while read local_ref local_sha remote_ref remote_sha; do
+    # If remote sha is all zeros, this is a new branch
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        DIFF=$(git diff HEAD~1 HEAD)
+    else
+        DIFF=$(git diff $remote_sha $local_sha)
+    fi
+
+    echo "$DIFF" | claude -p "Review these git changes passed via stdin.
 Check for:
 - Bugs or logic errors
 - Numpy array shape mismatches
@@ -12,7 +22,9 @@ Check for:
 - Any obvious performance issues
 - Unit inconsistencies (radians vs degrees etc.)
 Be concise. Organise feedback as Critical, Warnings, Suggestions." \
---allowedTools Read,Bash
+    --allowedTools Read,Bash \
+    --model haiku
+done
 
 echo "================================================"
 echo "Review complete. Proceeding with push."

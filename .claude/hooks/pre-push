@@ -1,0 +1,21 @@
+#!/bin/bash
+
+echo "================================================"
+echo "Claude Code Review"
+echo "================================================"
+
+claude -p "Review the changes in git diff HEAD~1. 
+Check for:
+- Bugs or logic errors
+- Numpy array shape mismatches
+- Missing error handling
+- Any obvious performance issues
+- Unit inconsistencies (radians vs degrees etc.)
+Be concise. Organise feedback as Critical, Warnings, Suggestions." \
+--allowedTools Read,Bash
+
+echo "================================================"
+echo "Review complete. Proceeding with push."
+echo "================================================"
+
+exit 0

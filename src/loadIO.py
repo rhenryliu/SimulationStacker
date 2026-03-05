@@ -296,14 +296,13 @@ def _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     return dir_path / filename
 
 
-def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels, 
-              projection='xy', data_type='field', dim='2D', 
+def load_data(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
+              projection='xy', data_type='field', dim='2D',
               mask=False, maskRad=2.0,
               base_path=None):
     """Load a precomputed field or map from file.
 
     Args:
-        sim_path (str): Base path to the simulation.
         sim_type (str): The type of simulation.
         sim_name (str): Name of the simulation.
         snapshot (int): Snapshot number.

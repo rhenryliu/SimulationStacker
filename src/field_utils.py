@@ -20,8 +20,12 @@ from nbodykit.lab import *
 # DEFAULTS = {'path2config': 'config/abacus_heft.yaml'}
 
 def compress_asdf(asdf_fn, table, header):
-    r"""
-    Compress the dictionaries `table` and `header` using blsc into an ASDF file, `asdf_fn`.
+    r"""Compress data dictionaries into an ASDF file using BLOSC compression.
+
+    Args:
+        asdf_fn (str): Output filename for the ASDF file.
+        table (dict): Dictionary of field data arrays to compress.
+        header (dict): Metadata header dictionary.
     """
     # cram into a dictionary
     data_dict = {}
@@ -40,8 +44,15 @@ def compress_asdf(asdf_fn, table, header):
         af.write_to(fp)#, all_array_compression='blsc', compression_kwargs=compression_kwargs)
 
 def load_lagrangians(path):
-    """
-    Load initial (Lagrangian) positions for the MillenniumTNG Simulation
+    """Load initial (Lagrangian) positions for the MillenniumTNG simulation.
+
+    Reads and concatenates 10 serialized NumPy position files from snapshot 000.
+
+    Args:
+        path (str): Directory path containing the Lagrangian position files.
+
+    Returns:
+        np.ndarray: Concatenated initial positions, shape (N,).
     """
     lagrangians = []
     for i in range(10):
@@ -51,8 +62,19 @@ def load_lagrangians(path):
     return np.concatenate(lagrangians)
 
 def load_positions(z, path):
-    """
-    Load positions for the MillenniumTNG Simulation
+    """Load comoving positions for the MillenniumTNG simulation at redshift z.
+
+    Reads and concatenates 10 serialized NumPy position files.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the position files.
+
+    Returns:
+        np.ndarray: Concatenated comoving positions, shape (N,).
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -70,8 +92,19 @@ def load_positions(z, path):
     return np.concatenate(pos)
 
 def load_velocities(z, path):
-    """
-    Load velocities for the MillenniumTNG Simulation
+    """Load velocities for the MillenniumTNG simulation at redshift z.
+
+    Reads and concatenates 10 serialized NumPy velocity files.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the velocity files.
+
+    Returns:
+        np.ndarray: Concatenated velocities, shape (N,).
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -89,8 +122,17 @@ def load_velocities(z, path):
     return np.concatenate(vel)
 
 def load_tau(z, path):
-    """
-    Load gas field for the MillenniumTNG Simulation
+    """Load the optical depth (tau) 3D field for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the tau field file.
+
+    Returns:
+        np.ndarray: 3D optical depth field.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -105,8 +147,17 @@ def load_tau(z, path):
     return result
 
 def load_Y_compton(z, path):
-    """
-    Load gas field for the MillenniumTNG Simulation
+    """Load the Compton-Y 3D field for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the Compton-Y field file.
+
+    Returns:
+        np.ndarray: 3D Compton-Y (tSZ) field.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -121,8 +172,17 @@ def load_Y_compton(z, path):
     return result
 
 def load_GroupPos(z, path):
-    """
-    Load Halo Group Positions for the MillenniumTNG Simulation
+    """Load halo group center-of-mass positions for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the group position file.
+
+    Returns:
+        np.ndarray: Halo positions array.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -138,8 +198,17 @@ def load_GroupPos(z, path):
 
 
 def load_GroupMass(z, path):
-    """
-    Load Halo Group Masses for the MillenniumTNG Simulation
+    """Load halo group masses (M_TopHat200) for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the group mass file.
+
+    Returns:
+        np.ndarray: Halo masses array.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -154,8 +223,17 @@ def load_GroupMass(z, path):
     return result
 
 def load_GroupRad(z, path):
-    """
-    Load Halo Group Masses for the MillenniumTNG Simulation
+    """Load halo group radii (R_TopHat200) for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the group radius file.
+
+    Returns:
+        np.ndarray: Halo radii array.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -170,8 +248,17 @@ def load_GroupRad(z, path):
     return result
 
 def load_SubhaloPos(z, path):
-    """
-    Load SubHalo Group Positions for the MillenniumTNG Simulation
+    """Load subhalo positions for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the subhalo position file.
+
+    Returns:
+        np.ndarray: Subhalo positions array.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -186,8 +273,17 @@ def load_SubhaloPos(z, path):
     return result
 
 def load_SubhaloMassType(z, path):
-    """
-    Load SubHalo Group Mass Type for the MillenniumTNG Simulation
+    """Load subhalo masses by particle type for the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the subhalo mass-type file.
+
+    Returns:
+        np.ndarray: Subhalo mass-by-type array, shape (N_subhalos, N_types).
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -202,8 +298,17 @@ def load_SubhaloMassType(z, path):
     return result
 
 def load_SubhaloGroupNr(z, path):
-    """
-    Load SubHalo Group Number for the MillenniumTNG Simulation
+    """Load parent group index for each subhalo in the MillenniumTNG simulation.
+
+    Args:
+        z (float): Redshift; must be one of {0.0, 0.5, 1.0}.
+        path (str): Directory path containing the subhalo group number file.
+
+    Returns:
+        np.ndarray: Parent group indices, shape (N_subhalos,), dtype int.
+
+    Raises:
+        Exception: If z is not one of the supported redshifts.
     """
     if z==0.:
         string = '264'
@@ -219,6 +324,19 @@ def load_SubhaloGroupNr(z, path):
 
 
 def make_cross_corr(field1, field2, Lbox=500, kmax=10):
+    """Compute the cross-correlation coefficient r_cc(k) using nbodykit.
+
+    Args:
+        field1 (np.ndarray): First 3D density field, shape (N, N, N).
+        field2 (np.ndarray): Second 3D density field, shape (N, N, N).
+        Lbox (float, optional): Simulation box size in Mpc. Defaults to 500.
+        kmax (float, optional): Maximum wavenumber in h/Mpc. Defaults to 10.
+
+    Returns:
+        tuple: (kk, r_cc) where kk is wavenumber bin centres, shape (K,),
+            and r_cc = P_cross / sqrt(P1 * P2) is the cross-correlation
+            coefficient, shape (K,).
+    """
     mesh1 = ArrayMesh(field1, BoxSize=[Lbox]*3)
     mesh2 = ArrayMesh(field2, BoxSize=[Lbox]*3)
 
@@ -236,9 +354,19 @@ def make_cross_corr(field1, field2, Lbox=500, kmax=10):
     return kk, r_cc
 
 def make_cross_corr2(field1, field2, Lbox=500, kmax=10, kbins=101):
-    '''
-    This one uses abacus instead of nbodykit
-    '''
+    """Compute the cross-correlation coefficient r_cc(k) using the Abacus toolkit.
+
+    Args:
+        field1 (np.ndarray): First 3D density field, shape (N, N, N).
+        field2 (np.ndarray): Second 3D density field, shape (N, N, N).
+        Lbox (float, optional): Simulation box size in Mpc. Defaults to 500.
+        kmax (float, optional): Maximum wavenumber in h/Mpc. Defaults to 10.
+        kbins (int, optional): Number of wavenumber bins. Defaults to 101.
+
+    Returns:
+        tuple: (k_avg, r_cc) where k_avg is wavenumber bin centres, shape (K,),
+            and r_cc = P_cross / sqrt(P1 * P2), shape (K,).
+    """
     k_bin_edges = np.linspace(1e-2, kmax, kbins)
     mu_bin_edges = np.array([0., 1.])
     field1_fft = (rfftn(field1, workers=-1)/ np.complex64(field1.size))
@@ -259,9 +387,20 @@ def make_cross_corr2(field1, field2, Lbox=500, kmax=10, kbins=101):
     return k_avg1, r_cc
 
 def make_cross_corr3(field1, field2, k_bin_edges, Lbox=500):
-    '''
-    This one uses abacus instead of nbodykit
-    '''
+    """Compute the cross-correlation coefficient r_cc(k) with custom bin edges.
+
+    Uses the Abacus toolkit.
+
+    Args:
+        field1 (np.ndarray): First 3D density field, shape (N, N, N).
+        field2 (np.ndarray): Second 3D density field, shape (N, N, N).
+        k_bin_edges (np.ndarray): Wavenumber bin edges in h/Mpc, shape (K+1,).
+        Lbox (float, optional): Simulation box size in Mpc. Defaults to 500.
+
+    Returns:
+        tuple: (k_avg, r_cc) where k_avg is wavenumber bin centres, shape (K,),
+            and r_cc = P_cross / sqrt(P1 * P2), shape (K,).
+    """
     mu_bin_edges = np.array([0., 1.])
     field1_fft = (rfftn(field1, workers=-1)/ np.complex64(field1.size))
     field2_fft = (rfftn(field2, workers=-1)/ np.complex64(field2.size))
@@ -282,9 +421,25 @@ def make_cross_corr3(field1, field2, k_bin_edges, Lbox=500):
 
 
 def calc_power(field1, Lbox=500, kmax=10, kmin=1e-2, kbins=101, field2=None, Nmodes=False):
-    '''
-    Calculates power of a field given kmin, kmax and kbins using abacus toolkit
-    '''
+    """Calculate the power spectrum (or cross-power) using the Abacus toolkit.
+
+    Args:
+        field1 (np.ndarray): 3D density field, shape (N, N, N).
+        Lbox (float, optional): Simulation box size in Mpc. Defaults to 500.
+        kmax (float, optional): Maximum wavenumber in h/Mpc. Defaults to 10.
+        kmin (float, optional): Minimum wavenumber in h/Mpc. Defaults to 1e-2.
+        kbins (int, optional): Number of wavenumber bins. Defaults to 101.
+        field2 (np.ndarray, optional): Second field for cross-power. If None,
+            computes auto-power of field1. Defaults to None.
+        Nmodes (bool, optional): If True, also return the number of modes per
+            bin. Defaults to False.
+
+    Returns:
+        tuple: (k_avg, pk) or (k_avg, pk, nmodes) if Nmodes=True.
+            k_avg is wavenumber bin centres in h/Mpc, shape (K,).
+            pk is power spectrum in (Mpc/h)^3, shape (K,).
+            nmodes is number of modes per bin, shape (K,).
+    """
     k_bin_edges = np.linspace(kmin, kmax, kbins)
     mu_bin_edges = np.array([0., 1.])
     
@@ -306,9 +461,23 @@ def calc_power(field1, Lbox=500, kmax=10, kmin=1e-2, kbins=101, field2=None, Nmo
 
 
 def calc_power2(field1, k_bin_edges, Lbox=500, field2=None, Nmodes=False):
-    '''
-    Calculates power of a field given the k bin edges using abacus
-    '''
+    """Calculate the power spectrum with custom bin edges using the Abacus toolkit.
+
+    Args:
+        field1 (np.ndarray): 3D density field, shape (N, N, N).
+        k_bin_edges (np.ndarray): Wavenumber bin edges in h/Mpc, shape (K+1,).
+        Lbox (float, optional): Simulation box size in Mpc. Defaults to 500.
+        field2 (np.ndarray, optional): Second field for cross-power. If None,
+            computes auto-power of field1. Defaults to None.
+        Nmodes (bool, optional): If True, also return the number of modes per
+            bin. Defaults to False.
+
+    Returns:
+        tuple: (k_avg, pk) or (k_avg, pk, nmodes) if Nmodes=True.
+            k_avg is wavenumber bin centres in h/Mpc, shape (K,).
+            pk is power spectrum in (Mpc/h)^3, shape (K,).
+            nmodes is number of modes per bin, shape (K,).
+    """
     mu_bin_edges = np.array([0., 1.])
     
     field1_fft = (rfftn(field1, workers=-1)/ np.complex64(field1.size))
@@ -328,24 +497,20 @@ def calc_power2(field1, k_bin_edges, Lbox=500, field2=None, Nmodes=False):
         return k_avg1, pk1, Nmodes
 
 def gaussian_filter(field, nmesh, lbox, kcut):
-    """
-    Apply a fourier space gaussian filter to a field.
+    """Apply a Gaussian smoothing filter to a 3D field in Fourier space.
 
-    Parameters
-    ---------
-    field : array_like
-        the field to filter.
-    nmesh : int
-        size of the mesh.
-    lbox : float
-        size of the box.
-    kcut : float
-        the exponential cutoff to use in the gaussian filter
+    Multiplies the FFT of the field by exp(-k^2 / (2 * kcut^2)) and
+    returns the inverse FFT as a smoothed real-space field.
 
-    Returns
-    -------
-    f_filt : array_like
-        Gaussian filtered version of field
+    Args:
+        field (np.ndarray): 3D field to filter, shape (nmesh, nmesh, nmesh).
+        nmesh (int): Size of the mesh along each dimension.
+        lbox (float): Simulation box size in Mpc/h.
+        kcut (float): Gaussian cutoff wavenumber in h/Mpc.
+
+    Returns:
+        np.ndarray: Gaussian-filtered field, shape (nmesh, nmesh, nmesh),
+            dtype float32.
     """
 
     # fourier transform field
@@ -357,27 +522,22 @@ def gaussian_filter(field, nmesh, lbox, kcut):
 
 @numba.njit(parallel=True, fastmath=True)
 def filter_field(delta_k, n1d, L, kcut, dtype=np.float32):
+    r"""Apply a Gaussian smoothing filter to a Fourier-space field in-place.
 
-    r"""
-    Compute nabla^2 delta in Fourier space.
+    Multiplies each mode by exp(-k^2 / (2 * kcut^2)). JIT-compiled with
+    Numba for performance.
 
-    Parameters
-    ----------
-    delta_k : array_like
-        Fourier 3D field.
-    n1d : int
-        size of the 3d array along x and y dimension.
-    L : float
-        box size of the simulation.
-    kcut : float
-        smoothing scale in Fourier space.
-    dtype : np.dtype
-        float type (32 or 64) to use in calculations.
+    Args:
+        delta_k (np.ndarray): Fourier-space field, shape (n1d, n1d, n1d//2+1).
+            Modified in place.
+        n1d (int): Size of the mesh along the first two dimensions.
+        L (float): Simulation box size in Mpc/h.
+        kcut (float): Gaussian cutoff wavenumber in h/Mpc.
+        dtype (np.dtype, optional): Float type for intermediate calculations.
+            Defaults to np.float32.
 
-    Returns
-    -------
-    n2_fft : array_like
-        Fourier 3D field.
+    Returns:
+        np.ndarray: Filtered Fourier-space field (same object as delta_k).
     """
     # define number of modes along last dimension
     kzlen = n1d//2 + 1
@@ -399,24 +559,20 @@ def filter_field(delta_k, n1d, L, kcut, dtype=np.float32):
 
 @numba.njit(parallel=True, fastmath=True)
 def get_n2_fft(delta_k, n1d, L, dtype=np.float32):
-    r"""
-    Compute nabla^2 delta in Fourier space.
+    r"""Compute nabla^2 delta in Fourier space as -k^2 * delta_k.
 
-    Parameters
-    ----------
-    delta_k : array_like
-        Fourier 3D field.
-    n1d : int
-        size of the 3d array along x and y dimension.
-    L : float
-        box size of the simulation.
-    dtype : np.dtype
-        float type (32 or 64) to use in calculations.
+    JIT-compiled with Numba for performance.
 
-    Returns
-    -------
-    n2_fft : array_like
-        Fourier 3D field.
+    Args:
+        delta_k (np.ndarray): Fourier-space field, shape (n1d, n1d, n1d//2+1).
+        n1d (int): Size of the mesh along the first two dimensions.
+        L (float): Simulation box size in Mpc/h.
+        dtype (np.dtype, optional): Float type for intermediate calculations.
+            Defaults to np.float32.
+
+    Returns:
+        np.ndarray: Fourier-space Laplacian field -k^2 * delta_k,
+            shape (n1d, n1d, n1d//2+1), same dtype as delta_k.
     """
     # define number of modes along last dimension
     kzlen = n1d//2 + 1
@@ -439,28 +595,23 @@ def get_n2_fft(delta_k, n1d, L, dtype=np.float32):
 
 @numba.njit(parallel=True, fastmath=True)
 def get_sij_fft(i_comp, j_comp, delta_k, n1d, L, dtype=np.float32):
-    r"""
-    Compute ijth component of the tidal tensor in Fourier space.
+    r"""Compute the (i, j) component of the tidal tensor in Fourier space.
 
-    Parameters
-    ----------
-    i_comp : int
-        ith component of the tensor.
-    j_comp : int
-        jth component of the tensor.
-    delta_k : array_like
-        Fourier 3D field.
-    n1d : int
-        size of the 3d array along x and y dimension.
-    L : float
-        box size of the simulation.
-    dtype : np.dtype
-        float type (32 or 64) to use in calculations.
+    Computes s_ij = (k_i k_j / k^2 - delta_ij / 3) * delta_k.
+    JIT-compiled with Numba for performance.
 
-    Returns
-    -------
-    s_ij_fft : array_like
-        Fourier 3D field.
+    Args:
+        i_comp (int): First tensor index (0=x, 1=y, 2=z).
+        j_comp (int): Second tensor index (0=x, 1=y, 2=z).
+        delta_k (np.ndarray): Fourier-space field, shape (n1d, n1d, n1d//2+1).
+        n1d (int): Size of the mesh along the first two dimensions.
+        L (float): Simulation box size in Mpc/h.
+        dtype (np.dtype, optional): Float type for intermediate calculations.
+            Defaults to np.float32.
+
+    Returns:
+        np.ndarray: Fourier-space tidal tensor component s_ij,
+            shape (n1d, n1d, n1d//2+1), same dtype as delta_k.
     """
     # define number of modes along last dimension
     kzlen = n1d//2 + 1
@@ -502,8 +653,18 @@ def get_sij_fft(i_comp, j_comp, delta_k, n1d, L, dtype=np.float32):
 
 @numba.njit(parallel=True, fastmath=True)
 def add_ij(final_field, field_to_add, n1d, factor=1., dtype=np.float32):
-    r"""
-    Add field `field_to_add` to `final_field` with a constant factor.
+    r"""Accumulate factor * field_to_add^2 into final_field in-place.
+
+    JIT-compiled with Numba for performance.
+
+    Args:
+        final_field (np.ndarray): Accumulator field, shape (n1d, n1d, n1d).
+            Modified in place.
+        field_to_add (np.ndarray): Field to square and accumulate,
+            shape (n1d, n1d, n1d).
+        n1d (int): Size of the mesh along each dimension.
+        factor (float, optional): Multiplicative scale factor. Defaults to 1.
+        dtype (np.dtype, optional): Float type. Defaults to np.float32.
     """
     factor = dtype(factor)
     for i in numba.prange(n1d):
@@ -513,23 +674,21 @@ def add_ij(final_field, field_to_add, n1d, factor=1., dtype=np.float32):
     return
 
 def get_dk_to_s2(delta_k, nmesh, lbox):
-    r"""
-    Computes the square tidal field from the density FFT `s^2 = s_ij s_ij`,
-    where `s_ij = (k_i k_j / k^2 - delta_ij / 3 ) * delta_k`.
+    r"""Compute the squared tidal field s^2 = s_ij s_ij from the density FFT.
 
-    Parameters
-    ----------
-    delta_k : array_like
-        Fourier transformed density field.
-    nmesh : int
-        size of the mesh.
-    lbox : float
-        size of the box.
+    Computes all 6 independent components of the symmetric tidal tensor
+    s_ij = (k_i k_j / k^2 - delta_ij / 3) * delta_k, inverse-transforms
+    each, and sums their squares (with factor 2 for off-diagonal terms).
 
-    Returns
-    -------
-    tidesq :
-        the tidal field (s^2).
+    Args:
+        delta_k (np.ndarray): Fourier-transformed density field,
+            shape (nmesh, nmesh, nmesh//2+1).
+        nmesh (int): Size of the mesh along each dimension.
+        lbox (float): Simulation box size in Mpc/h.
+
+    Returns:
+        np.ndarray: Real-space squared tidal field s^2,
+            shape (nmesh, nmesh, nmesh), dtype float32.
     """
     # Compute the symmetric tide at every Fourier mode which we'll reshape later
     # Order is xx, xy, xz, yy, yz, zz
@@ -546,29 +705,40 @@ def get_dk_to_s2(delta_k, nmesh, lbox):
     return tidesq
 
 def get_dk_to_n2(delta_k, nmesh, lbox):
-    """
-    Computes the density curvature from the density field: nabla^2 delta = IFFT(-k^2 delta_k)
-    Parameters
-    ----------
-    delta_k : array_like
-        Fourier transformed density field.
-    nmesh : int
-        size of the mesh.
-    lbox : float
-        size of the box.
+    """Compute the Laplacian of the density field: nabla^2 delta = IFFT(-k^2 delta_k).
 
-    Returns
-    -------
-    real_gradsqdelta : array_like
-        the nabla^2 delta field
+    Args:
+        delta_k (np.ndarray): Fourier-transformed density field,
+            shape (nmesh, nmesh, nmesh//2+1).
+        nmesh (int): Size of the mesh along each dimension.
+        lbox (float): Simulation box size in Mpc/h.
+
+    Returns:
+        np.ndarray: Real-space Laplacian field nabla^2 delta,
+            shape (nmesh, nmesh, nmesh), dtype float32.
     """
     # Compute -k^2 delta which is the gradient
     nabla2delta = irfftn(get_n2_fft(delta_k, nmesh, lbox), workers=-1).astype(np.float32)
     return nabla2delta
 
 def get_fields(delta_lin, Lbox, nmesh):
-    """
-    Return the fields delta, delta^2, s^2, nabla^2 given the linear density field.
+    """Compute delta, delta^2, s^2, and nabla^2 delta from the linear density field.
+
+    All output fields are mean-subtracted. Memory is freed aggressively
+    during computation to minimize peak usage.
+
+    Args:
+        delta_lin (np.ndarray): Linear density field, shape (nmesh, nmesh, nmesh).
+        Lbox (float): Simulation box size in Mpc/h.
+        nmesh (int): Size of the mesh along each dimension.
+
+    Returns:
+        tuple: (d, d2, s2, n2) where each is an np.ndarray of shape
+            (nmesh, nmesh, nmesh), dtype float32:
+            - d: Mean-subtracted density contrast delta.
+            - d2: Mean-subtracted delta^2.
+            - s2: Mean-subtracted squared tidal field s_ij s^ij.
+            - n2: Laplacian nabla^2 delta (not mean-subtracted).
     """
 
     # get delta

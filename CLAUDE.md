@@ -116,7 +116,7 @@ simulations:
 
 ## Supported Simulations
 
-- **IllustrisTNG**: `TNG300-1`, `TNG300-2`, `TNG100-1`, `TNG100-2`, `TNG50-1`, `Illustris-1`
+- **IllustrisTNG**: `TNG300-1`, `TNG300-2`, `TNG100-1`, `TNG100-2`, `TNG50-1`, `Illustris-1`, `Illustris-2`
 - **SIMBA**: `m50n512`, `m100n1024` with feedback variants `s50`, `s50nox`, `s50noagn`, `s50nofb`, `s50nojet`
 
 Simulation data lives at hardcoded paths in `stacker.py` under `/pscratch/sd/r/rhliu/simulations/` — this is known technical debt, do not refactor without being asked.

@@ -1,6 +1,19 @@
 import numpy as np
 
 def halo_ind(ind):
+    """Return mass bin boundaries and label string for a given bin index.
+
+    Args:
+        ind (int): Mass bin index. Must be 0, 1, or 2.
+
+    Returns:
+        tuple: A 3-tuple (mass_min, mass_max, label) where mass_min and
+            mass_max are the lower and upper halo mass bounds in M☉, and
+            label is a LaTeX-formatted string describing the bin.
+
+    Raises:
+        ValueError: If ind is not 0, 1, or 2.
+    """
     if ind == 0:
         return 5e11, 1e12, r'$5\times 10^{11} M_\odot < M_{\rm halo} < 10^{12} M_\odot$, '
     elif ind == 1:
@@ -19,12 +32,14 @@ def select_massive_halos(halo_masses, target_average_mass, upper_mass_bound=None
         upper_mass_bound (float, optional): Upper bound on halo mass. Defaults to None.
 
     Raises:
-        ValueError: _description_
+        ValueError: If no subset of halos satisfies the target average mass
+            (e.g. if target_average_mass exceeds the highest individual mass).
 
     Returns:
-        _type_: _description_
+        np.ndarray: Integer indices into the original halo_masses array
+            identifying the selected halos, shape (N_selected,).
     """
-    
+
     halo_masses = np.asarray(halo_masses)
     if upper_mass_bound is not None:
         valid_mask = halo_masses <= upper_mass_bound
@@ -47,18 +62,20 @@ def select_massive_halos(halo_masses, target_average_mass, upper_mass_bound=None
     return np.where(valid_mask)[0][selected]
 
 def select_abundance_subhalos(halo_masses, target_number, Lbox):
-    """Select haloes such that the average mass of the selected halos meets the target average mass.
+    """Select the most massive halos to match a target number density.
+
+    Sorts halos by mass in descending order and selects the top N halos
+    such that N / box_volume matches the target number density.
 
     Args:
         halo_masses (array-like): Array of halo masses.
-        target_number (float): Target number density for the selected halos. Units: (cMpc/h)^-3
-        Lbox (float): Length of the simulation box in ckpc/h
-
-    Raises:
-        ValueError: _description_
+        target_number (float): Target number density for the selected halos.
+            Units: (cMpc/h)^-3.
+        Lbox (float): Length of the simulation box in ckpc/h.
 
     Returns:
-        _type_: _description_
+        np.ndarray: Integer indices into halo_masses for the selected halos,
+            sorted by decreasing mass, shape (N_selected,).
     """
     box_volume = (Lbox / 1e3) ** 3  # Convert ckpc/h to cMpc/h
     Ngal = int(target_number * box_volume) # Total number of galaxies desired

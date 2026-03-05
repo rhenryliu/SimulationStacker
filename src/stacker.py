@@ -39,19 +39,28 @@ class SimulationStacker(object):
                  simType='IllustrisTNG', 
                  feedback=None, # Only for SIMBA
                  z=0.0):
-        """_summary_
+        """Initialize a SimulationStacker for field creation and halo stacking.
+
+        Sets up simulation paths, loads the snapshot header, and initializes
+        in-memory caches for fields and maps.
 
         Args:
-            sim (str): Simulation Instance, One of ['TNG300-1', 'TNG300-2', 'TNG100-1', 'TNG100-2', 'm50n512', 'm100n1024']
-            snapshot (int): _description_
-            nPixels (int, optional): Pixel size of the output 2D field, i.e. the number of pixels in each direction.
-            simType (str, optional): Simulation type, one of ['IllustrisTNG', 'SIMBA']. Defaults to 'IllustrisTNG'.
-            feedback (str, optional): feedback types for SIMBA. Defaults to None. One of 
-                ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet'].
-            z (float, optional): Redshift of the snapshot. Defaults to 0.0.
-            
-        TODO:
-            Automatic selection of closest snapshot from redshift specification!
+            sim (str): Simulation name. IllustrisTNG options: 'TNG300-1',
+                'TNG300-2', 'TNG100-1', 'TNG100-2', 'TNG50-1', 'Illustris-1'.
+                SIMBA options: 'm50n512', 'm100n1024'.
+            snapshot (int): Snapshot number in the simulation.
+            nPixels (int, optional): Number of pixels per side of 2D fields,
+                i.e. field shape will be (nPixels, nPixels). Defaults to 2000.
+            simType (str, optional): Simulation code, one of
+                ['IllustrisTNG', 'SIMBA']. Defaults to 'IllustrisTNG'.
+            feedback (str, optional): Feedback model variant for SIMBA only.
+                One of ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet'].
+                Required if simType='SIMBA'. Defaults to None.
+            z (float, optional): Redshift of the snapshot. Used for
+                cosmological distance calculations in maps. Defaults to 0.0.
+
+        Note:
+            TODO: Implement automatic snapshot selection from redshift.
         """
         
         self.simType = simType
@@ -638,16 +647,16 @@ class SimulationStacker(object):
     
     @staticmethod
     def cutout_2d_periodic(array, center, length):
-        """
-        Returns a square cutout from a 2D array with periodic boundary conditions.
-    
-        Parameters:
-        - array: 2D numpy array
-        - center: tuple (x, y) center index
-        - length: float or int, half-width of the cutout (will be rounded)
-    
+        """Extract a square cutout from a 2D array with periodic boundary conditions.
+
+        Args:
+            array (np.ndarray): 2D input array.
+            center (tuple): (x, y) center pixel coordinates for the cutout.
+            length (float or int): Half-width of the cutout in pixels.
+                Rounded to the nearest integer.
+
         Returns:
-        - 2D numpy array cutout of shape (2*length+1, 2*length+1)
+            np.ndarray: Square cutout, shape (2*length+1, 2*length+1).
         """
         length = int(round(length))
         x, y = center
@@ -664,9 +673,17 @@ class SimulationStacker(object):
     
     @staticmethod
     def radial_distance_grid(array, bounds):
-        """
-        array: 2D numpy array (only shape is used)
-        bounds: tuple ((x_min, x_max), (y_min, y_max)) representing physical bounds
+        """Create a 2D radial distance grid centred at (0, 0) in physical coordinates.
+
+        Args:
+            array (np.ndarray): 2D array whose shape (rows, cols) defines the
+                grid resolution (only shape is used).
+            bounds (tuple): (xy_min, xy_max) physical coordinate range applied
+                equally to both axes (e.g. in kpc/h or virial radii).
+
+        Returns:
+            np.ndarray: 2D array of radial distances from (0, 0), same shape
+                as array.
         """
         rows, cols = array.shape
         xy_min, xy_max = bounds
@@ -688,34 +705,99 @@ class SimulationStacker(object):
     # Some tools for file handling and loading:
 
     def snapPath(self, chunkNum=0, pathOnly=False):
-        """Get the snapshot path for the given simulation type."""
+        """Get the snapshot file path for the current simulation.
+
+        Args:
+            chunkNum (int, optional): Chunk number for multi-file snapshots
+                (IllustrisTNG only). Defaults to 0.
+            pathOnly (bool, optional): If True, return only the directory path.
+                Defaults to False.
+
+        Returns:
+            str: Full path to the snapshot HDF5 file, or directory if pathOnly.
+        """
         return snap_path(self.simPath, self.snapshot, self.simType, 
                         sim_name=self.sim, feedback=self.feedback, 
                         chunk_num=chunkNum, path_only=pathOnly)
 
     def loadHalos(self):
-        """Load halo data for the specified simulation type."""
+        """Load the FoF halo catalogue for the current simulation and snapshot.
+
+        Returns:
+            dict: Halo catalogue with keys 'GroupMass' (M_sun/h), 'GroupPos'
+                (kpc/h, shape (nHalos, 3)), and 'GroupRad' (kpc/h).
+        """
         return load_halos(self.simPath, self.snapshot, self.simType, 
                          sim_name=self.sim, header=self.header)
     
     def loadSubHalos(self):
-        """Load subhalo data for the specified simulation type."""
+        """Load the subhalo catalogue for the current simulation and snapshot.
+
+        Returns:
+            dict: Subhalo catalogue with keys 'SubhaloMass' (M_sun/h),
+                'SubhaloPos' (kpc/h, shape (nSubhalos, 3)), 'SubhaloGrNr',
+                and 'SubhaloMStar' (M_sun/h).
+        """
         return load_subhalos(self.simPath, self.snapshot, self.simType, 
                             sim_name=self.sim, header=self.header)
 
     def loadSubsets(self, pType, keys=None):
-        """Load particle subsets for the specified particle type."""
+        """Load particle data for the specified type from the full snapshot.
+
+        Args:
+            pType (str): Particle type, e.g. 'gas', 'DM', 'Stars', 'BH'.
+            keys (list, optional): Specific fields to load, e.g.
+                ['Coordinates', 'Masses']. Defaults to None (uses defaults
+                from loadIO based on pType).
+
+        Returns:
+            dict: Particle data arrays keyed by field name.
+        """
         return load_subsets(self.simPath, self.snapshot, self.simType, pType,
                            sim_name=self.sim, feedback=self.feedback, header=self.header, keys=keys)
 
     def loadSubset(self, pType, snapPath, keys=None):
-        """Load a subset of particles from the snapshot."""
+        """Load particle data for the specified type from a specific snapshot file.
+
+        Args:
+            pType (str): Particle type, e.g. 'gas', 'DM', 'Stars', 'BH'.
+            snapPath (str): Full path to the snapshot HDF5 file.
+            keys (list, optional): Specific fields to load. Defaults to None
+                (uses ['Coordinates', 'Masses']).
+
+        Returns:
+            dict: Particle data arrays keyed by field name.
+        """
         return load_subset(self.simPath, self.snapshot, self.simType, pType, snapPath,
                           header=self.header, keys=keys, sim_name=self.sim)
 
-    def loadData(self, pType, nPixels=None, projection='xy', type='field', 
+    def loadData(self, pType, nPixels=None, projection='xy', type='field',
                  mask=False, maskRad=3.0, base_path=None, dim='2D'):
-        """Load a precomputed field or map from file."""
+        """Load a cached field or map from file.
+
+        Args:
+            pType (str): Particle type identifier.
+            nPixels (int, optional): Number of pixels per side. Defaults to
+                self.nPixels.
+            projection (str, optional): Projection direction, one of
+                ['xy', 'xz', 'yz']. Defaults to 'xy'.
+            type (str, optional): Data type, one of ['field', 'map'].
+                Defaults to 'field'.
+            mask (bool, optional): If True, load the masked version.
+                Defaults to False.
+            maskRad (float, optional): Mask radius scale used in filename.
+                Defaults to 3.0.
+            base_path (str, optional): Base directory for cached files.
+                Defaults to None (uses /pscratch/ default).
+            dim (str, optional): Dimensionality, one of ['2D', '3D'].
+                Defaults to '2D'.
+
+        Returns:
+            np.ndarray: Cached field or map.
+
+        Raises:
+            ValueError: If the file does not exist.
+        """
         if nPixels is None:
             nPixels = self.nPixels
         return load_data(self.simType, self.sim, self.snapshot, 

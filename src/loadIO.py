@@ -65,6 +65,7 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         haloes_cat = load_as_dict(halo_path, 'halo_data')
         haloes['GroupPos'] = haloes_cat['pos'] * header['HubbleParam']  # kpc/h
         haloes['GroupMass'] = haloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
+        # GroupRad here intentionally uses r200 (mean-overdensity radius) rather than r200c (critical-overdensity radius)
         haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200'] * header['HubbleParam']  # kpc/h
 
     del haloes_cat  # free memory

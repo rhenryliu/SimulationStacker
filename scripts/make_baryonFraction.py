@@ -36,10 +36,12 @@ import time
 import argparse
 from pathlib import Path
 from datetime import datetime
+from typing import cast
 
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 import yaml
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
@@ -352,13 +354,10 @@ def main(path2config: str, verbose: bool = True):
     # Create two figures: 3D (n_sims rows × 1 col) and 2D (n_sims rows × 1 col)
     # sharex=True on the 3D figure so a single x-axis at the top suffices
     # -----------------------------------------------------------------------
-    fig_3d, axes_3d = plt.subplots(n_sims, 1, figsize=(9, 9), sharey=True, sharex=True)
-    fig_2d, axes_2d = plt.subplots(n_sims, 1, figsize=(9, 9), sharey=True)
-
-    # Ensure axes are always iterable even for n_sims == 1
-    if n_sims == 1:
-        axes_3d = [axes_3d]
-        axes_2d = [axes_2d]
+    fig_3d, _axes_3d = plt.subplots(n_sims, 1, figsize=(9, 9), sharey=True, sharex=True)
+    fig_2d, _axes_2d = plt.subplots(n_sims, 1, figsize=(9, 9), sharey=True)
+    axes_3d = cast(list[Axes], [_axes_3d] if n_sims == 1 else list(_axes_3d))
+    axes_2d = cast(list[Axes], [_axes_2d] if n_sims == 1 else list(_axes_2d))
 
     t_total = time.time()
 
@@ -401,9 +400,9 @@ def main(path2config: str, verbose: bool = True):
         ax_3d.set_xlim(0.0, maxRadius * radDistance)
         ax_3d.set_ylim(0.0, 1.0)
         ax_3d.grid(True)
-        # Suppress bottom x-axis ticks and labels on all panels; the label and
-        # ticks live on the top of the top panel (set after the loop).
-        ax_3d.tick_params(axis='x', bottom=False, labelbottom=False)
+        # Show bottom ticks on all panels but suppress labels; labels live on
+        # the top of the top panel and bottom of the bottom panel (set after the loop).
+        ax_3d.tick_params(axis='x', bottom=True, labelbottom=False, top=True, labeltop=False)
         # Sim label in a tight box at the lower-left corner
         ax_3d.text(0.03, 0.05, sim_label, transform=ax_3d.transAxes, fontsize=18,
                    va='bottom', ha='left',
@@ -443,16 +442,18 @@ def main(path2config: str, verbose: bool = True):
         if row == n_sims - 1:
             ax_2d.set_xlabel('R [arcmin]')
             ax_2d.legend(loc='lower right')
+            ax_2d.tick_params(axis='x', bottom=True, labelbottom=True, top=True, labeltop=False)
         else:
-            ax_2d.tick_params(axis='x', bottom=False, labelbottom=False)
+            ax_2d.tick_params(axis='x', bottom=True, labelbottom=False, top=True, labeltop=False)
         # Sim label in a tight box at the lower-left corner
         ax_2d.text(0.03, 0.05, sim_label, transform=ax_2d.transAxes, fontsize=18,
                    va='bottom', ha='left',
                    bbox=dict(boxstyle='square,pad=0.1', facecolor='white',
                              edgecolor='gray', alpha=0.85))
-        # Secondary x-axis (comoving kpc/h) on every panel; label only on top
-        secax = ax_2d.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
+        
+        # Secondary x-axis (comoving kpc/h) on top panel
         if row == 0:
+            secax = ax_2d.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
             secax.set_xlabel('R [comoving kpc/h]')
 
     # -----------------------------------------------------------------------
@@ -462,9 +463,9 @@ def main(path2config: str, verbose: bool = True):
     axes_3d[0].xaxis.tick_top()
     axes_3d[0].xaxis.set_label_position('top')
     axes_3d[0].set_xlabel('R [comoving kpc/h]')
-    axes_3d[0].tick_params(axis='x', top=True, labeltop=True)
-    axes_3d[2].tick_params(axis='x', bottom=True, labelbottom=True)
-    axes_3d[2].set_xlabel('R [comoving kpc/h]')
+    axes_3d[0].tick_params(axis='x',  bottom=True, labelbottom=False, top=True, labeltop=True)
+    axes_3d[-1].tick_params(axis='x', bottom=True, labelbottom=True, top=True, labeltop=False)
+    axes_3d[-1].set_xlabel('R [comoving kpc/h]')
 
     fig_3d.suptitle(f'Baryon Fractions (3D) at $z={redshift}$', fontsize=18)
     fig_3d.tight_layout()

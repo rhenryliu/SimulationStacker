@@ -434,7 +434,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     save_field  = stack_cfg.get('save_field', True)
     load_field  = stack_cfg.get('load_field', True)
     subtract_mn = stack_cfg.get('subtract_mean', False)
-    pType       = args['ptype'] if args['ptype'] is not None else stack_cfg.get('particle_type', 'ionized_gas')
+    pType       = ptype if ptype is not None else stack_cfg.get('particle_type', 'ionized_gas')
     # pType       = stack_cfg.get('particle_type', 'ionized_gas')
     pType2      = stack_cfg.get('particle_type_2', 'total')
 

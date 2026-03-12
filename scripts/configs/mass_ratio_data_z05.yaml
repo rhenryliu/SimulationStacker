@@ -33,7 +33,7 @@ plot:
   # data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
   fig_name: 'halos_yz_data'
-  fig_type: 'png'
+  fig_type: 'pdf'
   plot_error_bars: true
 
 

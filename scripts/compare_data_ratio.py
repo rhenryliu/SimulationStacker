@@ -322,7 +322,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
     ax.set_xlabel('R [arcmin]')
     ax.set_ylabel(
-        rf'$\frac{{\langle \Delta \Sigma_{{\rm {pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {pType2}}} \rangle}} \;/\; (\Omega_b / \Omega_m)$'
+        rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \;/\; (\Omega_b / \Omega_m)$'
     )
     ax.set_xlim(0.0, max_radius * rad_distance + 0.5)
     ax.legend(loc='upper left')

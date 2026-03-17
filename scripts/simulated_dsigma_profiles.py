@@ -317,8 +317,8 @@ def main(path2config, verbose=True):
         # profile_data = data['prof']
         # profile_err = data['prof_err']
         r_data = data['rp'] * radDistance * h_tng # / 0.6774 # in kpc
-        profile_data = deepcopy(data['ds']) * u.Msun / u.pc**2 * (radDistance)**2 / h_tng # in Msun/arcmin^2
-        ds_measurement_cov = data['cov'] * (u.Msun / u.pc**2 * (radDistance)**2 / h_tng)**2 # in uK
+        profile_data = deepcopy(data['ds']) * u.Msun / u.pc**2 * (radDistance)**2 / h_tng # in Msun / pc^2
+        ds_measurement_cov = data['cov'] * (u.Msun / u.pc**2 * (radDistance)**2 / h_tng)**2 # in Msun^2 / pc^4
         profile_err = np.sqrt(np.diag(ds_measurement_cov))# * (radDistance)**2
         print(r_data)
         print(profile_data)

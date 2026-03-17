@@ -134,7 +134,7 @@ def make_stacker(sim: dict, redshift: float):
 
 def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii,
                     projection, saveField, loadField, ax, colours,
-                    radDistance, verbose=True):
+                    radDistance, sphere=True, dr=0.0, verbose=True):
     """Build 3-D density fields and plot the baryon-fraction stacked-area profile.
 
     The denominator is the sum of all baryon fields so that the stacked areas
@@ -164,6 +164,14 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
         One colour per baryon type.
     radDistance : float
         Multiplicative scaling applied to radii for the x-axis.
+    sphere : bool
+        If True (default), each bin accumulates all mass within a sphere of
+        radius R (cumulative aperture).  If False, each bin considers only the
+        shell between R and R+dr, computed as sphere(R+dr) − sphere(R).
+    dr : float
+        Shell width [comoving kpc/h].  Used only when ``sphere=False``.  Should
+        be set by the caller (``main`` computes a sensible default from the
+        radii spacing).
     verbose : bool
     """
     baryon_fields = {}
@@ -197,12 +205,26 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
 
     t0 = time.time()
     for r in radii:
-        rr = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
-        mask_indices = get_cutout_indices_3d(first_field, GroupPos_px, rr)
-        for bt in baryon_types:
-            profiles_baryon[bt].append(
-                sum_over_cutouts(baryon_fields[bt], mask_indices.copy())
-            )
+        if sphere:
+            # Cumulative sphere of radius R
+            rr = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
+            mask_indices = get_cutout_indices_3d(first_field, GroupPos_px, rr)
+            for bt in baryon_types:
+                profiles_baryon[bt].append(
+                    sum_over_cutouts(baryon_fields[bt], mask_indices.copy())
+                )
+        else:
+            # Shell from R to R+dr: sphere(R+dr) - sphere(R)
+            rr_inner = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
+            rr_outer = np.ones(len(haloes['GroupMass'])) * (r + dr) / kpcPerPixel
+            mask_inner = get_cutout_indices_3d(first_field, GroupPos_px, rr_inner)
+            mask_outer = get_cutout_indices_3d(first_field, GroupPos_px, rr_outer)
+            for bt in baryon_types:
+                shell_sum = (
+                    sum_over_cutouts(baryon_fields[bt], mask_outer.copy())
+                    - sum_over_cutouts(baryon_fields[bt], mask_inner.copy())
+                )
+                profiles_baryon[bt].append(shell_sum)
         if verbose:
             print(f"    r={r:.0f} kpc/h  elapsed={time.time()-t0:.1f}s")
 
@@ -310,6 +332,17 @@ def main(path2config: str, verbose: bool = True):
         Path to the YAML configuration file.
     verbose : bool
         If True, print progress messages during stacking.
+
+    Config keys added under ``stack:``
+    -----------------------------------
+    sphere : bool, default True
+        If True, each 3D radial bin accumulates all mass within a sphere of
+        radius R.  If False, each bin considers only the shell from R to R+dr
+        (computed as sphere(R+dr) − sphere(R)).
+    dr : float, optional
+        Shell width in comoving kpc/h.  Only used when ``sphere: false``.
+        Defaults to the spacing of the ``np.linspace`` radii grid,
+        i.e. ``(max_radius - min_radius) / (num_radii - 1)``.
     """
     with open(path2config) as f:
         config = yaml.safe_load(f)
@@ -331,6 +364,17 @@ def main(path2config: str, verbose: bool = True):
     maxRadius    = stack_config.get('max_radius', 6000.0)
     nRadii       = stack_config.get('num_radii', 15)
     nPixels      = stack_config.get('n_pixels', 1000)
+    sphere       = stack_config.get('sphere', True)
+    dr           = stack_config.get('dr', None)            # comoving kpc/h; shell width
+
+    # Resolve default shell width: spacing of the np.linspace radii grid
+    if not sphere and dr is None:
+        if nRadii > 1:
+            dr = (maxRadius - minRadius) / (nRadii - 1)
+        else:
+            dr = maxRadius * 0.1
+        if verbose:
+            print(f"Shell mode: dr not specified, using radii spacing dr={dr:.1f} kpc/h")
 
     # -----------------------------------------------------------------------
     # Read plotting parameters
@@ -394,6 +438,8 @@ def main(path2config: str, verbose: bool = True):
             ax=ax_3d,
             colours=colours,
             radDistance=radDistance,
+            sphere=sphere,
+            dr=dr if dr is not None else 0.0,
             verbose=verbose,
         )
         ax_3d.set_ylabel('Baryon fraction')

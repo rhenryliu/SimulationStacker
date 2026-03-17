@@ -19,9 +19,26 @@ def halo_ind(ind):
     elif ind == 1:
         return 1e12, 1e13, r'$1\times 10^{12} M_\odot < M_{\rm halo} < 10^{13} M_\odot$, '
     elif ind == 2:
-        return 1e13, 1e19, r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
+        return 1e13, 1e14, r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{14} M_\odot$, '
+    elif ind == 3:
+        return 1e14, 1e19, r'$1\times 10^{14} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
     else:
         raise ValueError("Wrong ind")
+
+def select_binned_halos(halo_masses, ind):
+    """Select halos within a specified mass bin.
+
+    Args:
+        halo_masses (array-like): Array of halo masses.
+        ind (int): Mass bin index. Must be 0, 1, 2, or 3.
+
+    Returns:
+        np.ndarray: Integer indices into the original halo_masses array
+            identifying the selected halos, shape (N_selected,).
+    """
+    mass_min, mass_max, _ = halo_ind(ind)
+    mask = (halo_masses > mass_min) & (halo_masses < mass_max)
+    return np.where(mask)[0]
 
 def select_massive_halos(halo_masses, target_average_mass, upper_mass_bound=None):
     """Select haloes such that the average mass of the selected halos meets the target average mass.
@@ -68,7 +85,7 @@ def select_abundance_subhalos(halo_masses, target_number, Lbox):
     such that N / box_volume matches the target number density.
 
     Args:
-        halo_masses (array-like): Array of halo masses.
+        halo_masses (array-like): Array of subhalo masses.
         target_number (float): Target number density for the selected halos.
             Units: (cMpc/h)^-3.
         Lbox (float): Length of the simulation box in ckpc/h.

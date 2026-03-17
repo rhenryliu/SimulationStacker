@@ -26,18 +26,18 @@ plot:
 simulations:
   - sim_type: 'SIMBA'
     sims:
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50'
       - name: 'm50n512'
         snapshot: 125
         feedback: 's50noagn'
       - name: 'm50n512'
         snapshot: 125
         feedback: 's50nox'
-      - name: 'm50n512'
-        snapshot: 125
-        feedback: 's50nojet'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nojet'
       - name: 'm50n512'
         snapshot: 125
         feedback: 's50nofb'
@@ -54,5 +54,5 @@ simulations:
       #   snapshot: 67
       - name: 'Illustris-1'
         snapshot: 103
-      - name: 'Illustris-2'
-        snapshot: 103
+      # - name: 'Illustris-2'
+      #   snapshot: 103

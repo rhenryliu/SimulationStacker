@@ -19,7 +19,7 @@ def halo_ind(ind):
     elif ind == 1:
         return 1e12, 1e13, r'$1\times 10^{12} M_\odot < M_{\rm halo} < 10^{13} M_\odot$, '
     elif ind == 2:
-        return 1e13, 1e14, r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{14} M_\odot$, '
+        return 1e13, 1e19, r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
     elif ind == 3:
         return 1e14, 1e19, r'$1\times 10^{14} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
     else:
@@ -110,3 +110,50 @@ def select_abundance_subhalos(halo_masses, target_number, Lbox):
     # cutoff = idx
     # selected = order[:cutoff]
     return idx_selected
+
+def select_halos(halo_masses, method, **kwargs):
+    """Unified halo selection dispatcher.
+
+    Routes to one of three selection strategies based on the method argument.
+
+    Args:
+        halo_masses (array-like): Array of halo masses.
+        method (str): Selection method. One of:
+            - ``'binned'``: Select halos within a fixed mass bin via
+              :func:`select_binned_halos`. Required kwarg: ``ind`` (int).
+            - ``'massive'``: Select the most massive halos whose cumulative
+              average meets a target mass via :func:`select_massive_halos`.
+              Required kwarg: ``target_average_mass`` (float).
+              Optional kwarg: ``upper_mass_bound`` (float).
+            - ``'abundance'``: Select halos by number density matching via
+              :func:`select_abundance_subhalos`. Required kwargs:
+              ``target_number`` (float, in (cMpc/h)^-3) and ``Lbox`` (float,
+              in ckpc/h).
+        **kwargs: Method-specific parameters as described above.
+
+    Returns:
+        np.ndarray: Integer indices into ``halo_masses`` for the selected
+            halos, shape (N_selected,).
+
+    Raises:
+        ValueError: If ``method`` is not one of the recognised options.
+    """
+    if method == 'binned':
+        return select_binned_halos(halo_masses, kwargs['ind'])
+    elif method == 'massive':
+        return select_massive_halos(
+            halo_masses,
+            kwargs['target_average_mass'],
+            kwargs.get('upper_mass_bound'),
+        )
+    elif method == 'abundance':
+        return select_abundance_subhalos(
+            halo_masses,
+            kwargs['target_number'],
+            kwargs['Lbox'],
+        )
+    else:
+        raise ValueError(
+            f"Unknown halo selection method: '{method}'. "
+            "Must be one of 'binned', 'massive', 'abundance'."
+        )

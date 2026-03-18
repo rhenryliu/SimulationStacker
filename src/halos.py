@@ -17,11 +17,11 @@ def halo_ind(ind):
     if ind == 0:
         return 5e11, 1e12, r'$5\times 10^{11} M_\odot < M_{\rm halo} < 10^{12} M_\odot$, '
     elif ind == 1:
-        return 1e12, 1e13, r'$1\times 10^{12} M_\odot < M_{\rm halo} < 10^{13} M_\odot$, '
+        return 1e12, 1e13, r'$10^{12} M_\odot < M_{\rm halo} < 10^{13} M_\odot$, '
     elif ind == 2:
-        return 1e13, 1e19, r'$1\times 10^{13} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
+        return 1e13, 1e19, r'$10^{13} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
     elif ind == 3:
-        return 1e14, 1e19, r'$1\times 10^{14} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
+        return 1e14, 1e19, r'$10^{14} M_\odot < M_{\rm halo} < 10^{19} M_\odot$, '
     else:
         raise ValueError("Wrong ind")
 

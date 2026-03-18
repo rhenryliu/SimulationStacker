@@ -288,10 +288,11 @@ class SimulationStacker(object):
     
 
     def stackMap(self, pType, filterType='cumulative', minRadius=0.5, maxRadius=6.0, numRadii=11,
-                 z=None, projection='xy', save=False, load=True, radDistance=1.0, 
-                 pixelSize=0.5, beamSize=1.6, 
-                 mask=False, maskRad=3.0, subtract_mean=False, 
-                 use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
+                 z=None, projection='xy', save=False, load=True, radDistance=1.0,
+                 pixelSize=0.5, beamSize=1.6,
+                 mask=False, maskRad=3.0, subtract_mean=False,
+                 use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
+                 halo_mask=None):
         """Stack the map of a given particle type.
 
         Args:
@@ -315,10 +316,13 @@ class SimulationStacker(object):
             use_subhalos (bool, optional): If True, uses subhalos in the stacking process. Defaults to False.
             halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
+            halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
+                catalogue. When provided, internal halo selection is skipped entirely.
+                Defaults to None.
 
         Returns:
             radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
-            
+
         TODO:
             Add a wrapper for automatic stacking along all 3 projections.
             Implement the DSigma filter for stacking.
@@ -353,6 +357,7 @@ class SimulationStacker(object):
             use_subhalos=use_subhalos,
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
+            halo_mask=halo_mask,
         )
         
         # restore the mean if subtracted
@@ -386,9 +391,10 @@ class SimulationStacker(object):
         return radii, profiles 
 
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
-                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000.0, 
-                   mask=False, maskRad=3.0, subtract_mean=False, 
-                   use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14)):
+                   projection='xy', nPixels=None, save=False, load=True, radDistance=1000.0,
+                   mask=False, maskRad=3.0, subtract_mean=False,
+                   use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
+                   halo_mask=None):
         """Do stacking on the computed field.
 
         Args:
@@ -410,6 +416,9 @@ class SimulationStacker(object):
             use_subhalos (bool, optional): If True, uses subhalos in the stacking. Defaults to False.
             halo_mass_avg (float, optional): Average halo mass for subhalo selection. Defaults to 10^(13.22).
             halo_mass_upper (float, optional): Upper halo mass limit for subhalo selection. Defaults to 5*10^(14).
+            halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
+                catalogue. When provided, internal halo selection is skipped entirely.
+                Defaults to None.
         Raises:
             NotImplementedError: If pType is not one of the ones listed above.
 
@@ -454,6 +463,7 @@ class SimulationStacker(object):
             use_subhalos=use_subhalos,
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
+            halo_mask=halo_mask,
         )
         
         # restore the mean if subtracted
@@ -473,7 +483,7 @@ class SimulationStacker(object):
     def stack_on_array(self, array, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                        projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', use_subhalos=False,
                        halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), halo_abundance_target=5e-4,
-                       z=None, pixelSize=0.5):
+                       z=None, pixelSize=0.5, halo_mask=None):
         """Abstract stacking function that works on any 2D array.
 
         Args:
@@ -490,15 +500,18 @@ class SimulationStacker(object):
             halo_abundance_target (float, optional): Target number density in (cMpc/h)^-3 for subhalo abundance matching ('abundance' method). Defaults to 5e-4.
             z (float, optional): Redshift for angular distance calculation (required if radDistanceUnits='arcmin'). Defaults to None.
             pixelSize (float, optional): Pixel size in arcminutes (required if radDistanceUnits='arcmin'). Defaults to 0.5.
+            halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
+                catalogue. When provided, internal halo selection is skipped entirely.
+                Defaults to None.
 
         Returns:
             tuple: (radii, profiles) - 1D radii array and 2D profiles array.
         """
-        
+
         nPixels = array.shape[0]
         assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
 
-        # Load the halo catalog and select halos
+        # Load the halo catalog (always needed for haloPos in the stacking loop below).
         if use_subhalos:
             subhalos = self.loadSubHalos()
             haloMass = subhalos['SubhaloMass']
@@ -508,19 +521,21 @@ class SimulationStacker(object):
             haloMass = haloes['GroupMass']
             haloPos = haloes['GroupPos']
 
-        if halo_mass_avg is None:
-            # Use legacy selection method for backward compatibility
-            warnings.warn("halo_mass_avg is None, using legacy halo selection method. This may lead to unexpected results. Please specify halo_mass_avg explicitly for consistent behavior.",
-                          DeprecationWarning, stacklevel=2)
-            halo_mask = select_halos(haloMass, 'binned', ind=2)
-        elif use_subhalos:
-            halo_mask = select_halos(haloMass, 'abundance',
-                                     target_number=halo_abundance_target,
-                                     Lbox=self.header['BoxSize'])
-        else:
-            halo_mask = select_halos(haloMass, 'massive',
-                                     target_average_mass=halo_mass_avg,
-                                     upper_mass_bound=halo_mass_upper)
+        if halo_mask is None:
+            # If halo_mask is not supplied, perform internal halo selection.
+            if use_subhalos:
+                halo_mask = select_halos(haloMass, 'abundance',
+                                        target_number=halo_abundance_target,
+                                        Lbox=self.header['BoxSize'])
+            elif halo_mass_avg is None:
+                # Use legacy selection method for backward compatibility
+                warnings.warn("halo_mass_avg is None, using legacy halo selection method. This may lead to unexpected results. Please specify halo_mass_avg explicitly for consistent behavior.",
+                            DeprecationWarning, stacklevel=2)
+                halo_mask = select_halos(haloMass, 'binned', ind=2)
+            else:
+                halo_mask = select_halos(haloMass, 'massive',
+                                        target_average_mass=halo_mass_avg,
+                                        upper_mass_bound=halo_mass_upper)
         
         print(f'Number of halos selected: {halo_mask.shape[0]}')
         

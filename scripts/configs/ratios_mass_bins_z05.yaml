@@ -1,0 +1,97 @@
+# ratios_mass_bins_z05.yaml
+# =========================
+# Configuration for make_ratios_mass_bins.py
+#
+# Produces a 4×3 figure of particle-type fraction profiles normalised by the
+# cosmic baryon fraction (OmegaBaryon / OmegaMatter), broken down by halo mass
+# bin.
+#
+#   Rows 0–3 : mass bins defined by halo_ind() in halos.py
+#              bin 0: 5e11–1e12 Msun
+#              bin 1: 1e12–1e13 Msun
+#              bin 2: 1e13–1e14 Msun
+#              bin 3: 1e14–1e19 Msun
+#
+#   Col 0  : 3D spherical profiles        (radius in comoving kpc/h)
+#   Col 1  : 2D projected, cumulative     (radius in arcmin)
+#   Col 2  : 2D projected, CAP filter     (radius in arcmin)
+
+stack:
+  # Redshift of the simulation snapshot targeted
+  redshift: 0.5
+
+  # Projection axis for the 2D maps and 3D field construction
+  projection: 'yz'         # options: 'xy', 'xz', 'yz'
+
+  # I/O caching: load pre-computed fields/stacks when available
+  load_field: true
+  save_field: true
+
+  # Whether to subtract the field mean before stacking
+  subtract_mean: false
+
+  # Particle types: fraction plotted is particle_type / particle_type_2
+  particle_type:   'baryon'
+  particle_type_2: 'total'
+
+  # ------------------------------------------------------------------
+  # Column 0 — 3D spherical profile parameters
+  # ------------------------------------------------------------------
+  n_pixels:      1000     # pixels per side for the 3D density field
+  min_radius_3d: 200.0    # innermost radial bin (comoving kpc/h)
+  max_radius_3d: 4000.0   # outermost radial bin (comoving kpc/h)
+  num_radii_3d:  11       # number of radial bins
+
+  # Halo mass selection is now determined by mass_bin_indices below;
+  # halo_mass_min / halo_mass_max are intentionally absent here.
+
+  # ------------------------------------------------------------------
+  # Columns 1 & 2 — 2D projected profile parameters
+  # ------------------------------------------------------------------
+  pixel_size:    0.5      # map pixel size (arcmin)
+  min_radius_2d: 1.0      # innermost radial bin (arcmin, before rad_distance scaling)
+  max_radius_2d: 10.0     # outermost radial bin (arcmin, before rad_distance scaling)
+  num_radii_2d:  11       # number of radial bins
+  rad_distance:  1.0      # multiplicative scaling applied to arcmin radii in plots
+
+  # Column 1: filter applied to numerator and denominator when stacking in 2D
+  filter_type_col1:   'cumulative'
+  filter_type_2_col1: 'cumulative'
+
+  # Column 2: CAP aperture filter
+  filter_type_col2:   'CAP'
+  filter_type_2_col2: 'CAP'
+
+  # ------------------------------------------------------------------
+  # Mass bins to loop over (indices into halo_ind() in halos.py).
+  # Remove entries here to drop bins from the figure without code changes.
+  # ------------------------------------------------------------------
+  mass_bin_indices: [0, 1, 2]
+
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'ratios_mass_bins_yz'   # output: <fig_name>_<particle_type>.pdf
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+
+simulations:
+  # ----------------------------------------------------------------
+  # IllustrisTNG simulations
+  # ----------------------------------------------------------------
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+
+  # ----------------------------------------------------------------
+  # SIMBA simulation — fiducial 100 Mpc/h box
+  # ----------------------------------------------------------------
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'

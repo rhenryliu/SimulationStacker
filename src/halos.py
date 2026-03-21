@@ -95,21 +95,8 @@ def select_abundance_subhalos(halo_masses, target_number, Lbox):
             sorted by decreasing mass, shape (N_selected,).
     """
     box_volume = (Lbox / 1e3) ** 3  # Convert ckpc/h to cMpc/h
-    Ngal = int(target_number * box_volume) # Total number of galaxies desired
-    
-    
-    idx_selected = np.argsort(halo_masses)[::-1][:Ngal]
-    
-    # sorted_m = halo_masses[order]
-    # cum_counts = np.arange(1, len(sorted_m) + 1)
-    # cum_number_density = cum_counts / box_volume
-
-    # idx = np.searchsorted(cum_number_density, target_number, side='right')
-    # if idx == 0:
-    #     raise ValueError("No subset of halos meets the target number density.")
-    # cutoff = idx
-    # selected = order[:cutoff]
-    return idx_selected
+    Ngal = int(target_number * box_volume)  # Total number of galaxies desired
+    return np.argsort(halo_masses)[::-1][:Ngal]
 
 def select_halos(halo_masses, method, **kwargs):
     """Unified halo selection dispatcher.

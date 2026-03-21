@@ -524,9 +524,20 @@ class SimulationStacker(object):
         if halo_mask is None:
             # If halo_mask is not supplied, perform internal halo selection.
             if use_subhalos:
-                halo_mask = select_halos(haloMass, 'abundance',
-                                        target_number=halo_abundance_target,
-                                        Lbox=self.header['BoxSize'])
+                if halo_mass_upper is not None:
+                    # Pre-filter subhalos by their parent FoF group mass, then
+                    # abundance-match within that restricted sample.
+                    parent_haloes = self.loadHalos()
+                    parent_mass = parent_haloes['GroupMass'][subhalos['SubhaloGrNr']]
+                    valid = np.where(parent_mass <= halo_mass_upper)[0]
+                    local_mask = select_halos(haloMass[valid], 'abundance',
+                                             target_number=halo_abundance_target,
+                                             Lbox=self.header['BoxSize'])
+                    halo_mask = valid[local_mask]
+                else:
+                    halo_mask = select_halos(haloMass, 'abundance',
+                                            target_number=halo_abundance_target,
+                                            Lbox=self.header['BoxSize'])
             elif halo_mass_avg is None:
                 # Use legacy selection method for backward compatibility
                 warnings.warn("halo_mass_avg is None, using legacy halo selection method. This may lead to unexpected results. Please specify halo_mass_avg explicitly for consistent behavior.",

@@ -156,9 +156,6 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                 simType=sim_type_name)
 
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
-                                                         save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                     try:
                         OmegaBaryon = stacker.header['OmegaBaryon']
@@ -185,14 +182,16 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name, 
                                                 feedback=feedback)
                     
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
-                                                         save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
                     
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     sim_name = sim_name_show
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
+
+                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                                        save=saveField, load=loadField, radDistance=radDistance,
+                                        use_subhalos=False,
+                                        projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                 # Plotting
                 T_CMB = 2.7255

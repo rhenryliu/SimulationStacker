@@ -153,7 +153,7 @@ def main(path2config, verbose=True):
     colourmaps = ['hsv', 'twilight']
 
     # fig, (ax_tng, ax_simba) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
-    fig, ax = plt.subplots(1, 1, figsize=(9, 8), sharex=True)
+    fig, ax = plt.subplots(1, 1, figsize=(9, 7), sharex=True)
     
     t0 = time.time()
     for i, sim_type in enumerate(config['simulations']):
@@ -299,7 +299,8 @@ def main(path2config, verbose=True):
     #     # Optionally also plot on ax2 if relevant
 
     # Configure left subplot (profiles0)
-    ax.set_xlabel('R [kpc/h]', fontsize=18)
+    # ax.set_xlabel('R [kpc/h]', fontsize=18)
+    ax.set_xlabel('R [virial radii]', fontsize=18)
     # ax.set_ylabel(rf'$\frac{{{pType}}}{{{pType2}}} \; / \; (\Omega_b / \Omega_m)$', fontsize=18)
     # ax_tng.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]', fontsize=18)
     # ax_tng.set_xlim(0.0, maxRadius * radDistance + 0.5)

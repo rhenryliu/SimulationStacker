@@ -76,6 +76,11 @@ matplotlib.rcParams.update({
 # Per-suite colourmaps: IllustrisTNG sims → twilight, SIMBA sims → hsv.
 _COLOURMAPS = {'IllustrisTNG': 'twilight', 'SIMBA': 'hsv'}
 
+# Ordered reference TNG sim list used to fix colour positions so that omitting
+# TNG100-1 from the config does not shift the colours of TNG300-1/Illustris-1.
+# Extend this list here if new TNG sims are added.
+_TNG_REFERENCE_ORDER = ['TNG100-1', 'TNG300-1', 'Illustris-1']
+
 # Panel labels: (a) = left (mass-cut), (b) = right (SHAM).
 _PANEL_LABELS = ['(a)', '(b)']
 
@@ -203,15 +208,19 @@ def _print_selection_stats(stacker: SimulationStacker, params: dict) -> None:
     For the mass-cut selection: number of selected FoF groups and their
     mean GroupMass.
 
-    For the SHAM selection: number of selected subhalos, mean SubhaloMass,
+    For the SHAM selection: number of selected subhalos, mean host halo mass,
     number of unique parent FoF halos, and the satellite fraction.
 
-    The satellite fraction is computed by identifying the central subhalo
-    of each FoF group as the most massive subhalo in that group.  All other
-    selected subhalos in the same group are counted as satellites.
+    The SHAM selection mirrors the ``use_subhalos=True`` branch of
+    ``SimulationStacker.stack_on_array``: subhalos are ranked and selected
+    by stellar mass (``SubhaloMStar``), consistent with the observational
+    motivation for stellar-mass-based abundance matching.
 
-    The SHAM selection logic mirrors the ``use_subhalos=True`` branch of
-    ``SimulationStacker.stack_on_array``.
+    The satellite fraction is computed separately using total bound mass
+    (``SubhaloMass``) to identify the central of each FoF group — the
+    subhalo with the highest ``SubhaloMass`` — independent of the stellar
+    mass used for selection.  All other selected subhalos in the same group
+    are counted as satellites.
     """
     halo_mass_avg         = params['halo_mass_avg']
     halo_mass_upper       = params['halo_mass_upper']
@@ -234,18 +243,21 @@ def _print_selection_stats(stacker: SimulationStacker, params: dict) -> None:
 
     # ------------------------------------------------------------------
     # SHAM selection  (mirrors stack_on_array use_subhalos=True branch)
+    # Selection uses stellar mass (SubhaloMStar), matching stack_on_array.
+    # SubhaloMass (total bound mass) is kept separately for is_central below.
     # ------------------------------------------------------------------
-    haloMass_sub = subhalos['SubhaloMass']
+    haloMStar_sub = subhalos['SubhaloMStar']  # used for SHAM ranking
+    haloMass_sub  = subhalos['SubhaloMass']   # used for is_central detection
 
     if halo_mass_upper is not None:
         parent_mass = haloes['GroupMass'][subhalos['SubhaloGrNr']]
         valid       = np.where(parent_mass <= halo_mass_upper)[0]
-        local_mask  = select_halos(haloMass_sub[valid], 'abundance',
+        local_mask  = select_halos(haloMStar_sub[valid], 'abundance',
                                    target_number=halo_abundance_target,
                                    Lbox=stacker.header['BoxSize'])
         sham_mask = valid[local_mask]
     else:
-        sham_mask = select_halos(haloMass_sub, 'abundance',
+        sham_mask = select_halos(haloMStar_sub, 'abundance',
                                  target_number=halo_abundance_target,
                                  Lbox=stacker.header['BoxSize'])
 
@@ -267,13 +279,14 @@ def _print_selection_stats(stacker: SimulationStacker, params: dict) -> None:
 
     selected_masses = haloMass_sub[sham_mask]
     is_central      = np.isclose(selected_masses, max_sub_mass[selected_grps])
+    n_centrals      = int(np.sum(is_central))
     n_satellites    = int(np.sum(~is_central))
     sat_frac        = n_satellites / n_sham
 
     print(f"  [SHAM]      N_subhalos = {n_sham:d},  "
           f"<M_host> = {mean_host_mass:.3e}  (log10 = {np.log10(mean_host_mass):.2f})")
     print(f"              N_unique_halos = {n_unique_halos:d},  "
-          f"N_satellites = {n_satellites:d},  "
+          f"N_centrals = {n_centrals:d},  N_satellites = {n_satellites:d},  "
           f"satellite fraction = {sat_frac:.3f}")
 
 
@@ -500,20 +513,20 @@ def compute_fgas_3d(stacker: SimulationStacker, params: dict,
     # Mirrors the use_subhalos=True branch of stack_on_array, including
     # the optional pre-filter by parent FoF group mass.
     # ---------------------------------------------------------------
-    subhalos     = stacker.loadSubHalos()
-    haloMass_sub = subhalos['SubhaloMass']
-    haloPos_sub  = subhalos['SubhaloPos']
+    subhalos      = stacker.loadSubHalos()
+    haloMStar_sub = subhalos['SubhaloMStar']  # stellar mass used for SHAM ranking
+    haloPos_sub   = subhalos['SubhaloPos']
 
     if halo_mass_upper is not None:
         # Pre-filter subhalos by parent FoF group mass (reuse loaded haloes).
         parent_mass = haloes['GroupMass'][subhalos['SubhaloGrNr']]
         valid       = np.where(parent_mass <= halo_mass_upper)[0]
-        local_mask  = select_halos(haloMass_sub[valid], 'abundance',
+        local_mask  = select_halos(haloMStar_sub[valid], 'abundance',
                                    target_number=halo_abundance_target,
                                    Lbox=stacker.header['BoxSize'])
         sham_mask = valid[local_mask]
     else:
-        sham_mask = select_halos(haloMass_sub, 'abundance',
+        sham_mask = select_halos(haloMStar_sub, 'abundance',
                                  target_number=halo_abundance_target,
                                  Lbox=stacker.header['BoxSize'])
 
@@ -616,37 +629,51 @@ def main(path2config: str, verbose: bool = True):
     plot_error_bars = plot_cfg.get('plot_error_bars', True)
 
     # ------------------------------------------------------------------
-    # Pre-assign colours per simulation suite, matching make_ratios3x2.py:
-    #   IllustrisTNG sims → 'twilight' colormap
-    #   SIMBA sims        → 'hsv' colormap
-    # Multiple sims of the same type are spread evenly over [0.2, 0.85].
+    # Pre-assign colours per simulation suite:
+    #   IllustrisTNG → 'twilight', positions fixed by _TNG_REFERENCE_ORDER
+    #                  so omitting TNG100-1 does not shift other colours.
+    #   SIMBA (1 sim) → 'hsv' at position 0.85 (last of 6, matching the
+    #                   tSZ reference scripts); multiple sims spread over
+    #                   [0.2, 0.85] as usual.
     # ------------------------------------------------------------------
     all_sims_flat = []
     for suite in config['simulations']:
         for sim in suite['sims']:
             all_sims_flat.append((suite['sim_type'], sim))
 
-    sim_type_count = {}
-    for stype, _ in all_sims_flat:
-        sim_type_count[stype] = sim_type_count.get(stype, 0) + 1
+    # TNG: build a colour lookup keyed by sim name from the reference order.
+    _tng_cmap       = matplotlib.colormaps[_COLOURMAPS['IllustrisTNG']]  # type: ignore
+    _tng_ref_clrs   = _tng_cmap(np.linspace(0.2, 0.85, len(_TNG_REFERENCE_ORDER)))
+    _tng_colour_map = {name: _tng_ref_clrs[i]
+                       for i, name in enumerate(_TNG_REFERENCE_ORDER)}
 
-    sim_type_colours = {}
-    for stype, n in sim_type_count.items():
-        if stype not in _COLOURMAPS:
+    # SIMBA: single sim → position 0.85 (matches tSZ reference); else spread.
+    _n_simba    = sum(1 for stype, _ in all_sims_flat if stype == 'SIMBA')
+    _simba_cmap = matplotlib.colormaps[_COLOURMAPS['SIMBA']]  # type: ignore
+    _simba_clrs = (_simba_cmap(np.linspace(0.2, 0.85, 6))[-1:]
+                   if _n_simba == 1
+                   else _simba_cmap(np.linspace(0.2, 0.85, _n_simba)))
+
+    _simba_idx = 0
+    sim_colours = {}
+    for stype, sim in all_sims_flat:
+        if stype == 'IllustrisTNG':
+            name = sim['name']
+            if name not in _tng_colour_map:
+                raise ValueError(
+                    f"TNG sim {name!r} is not in _TNG_REFERENCE_ORDER. "
+                    f"Add it there to maintain consistent colours."
+                )
+            sim_colours[name] = _tng_colour_map[name]
+        elif stype == 'SIMBA':
+            label = f"{sim['name']}_{sim['feedback']}"
+            sim_colours[label] = _simba_clrs[_simba_idx]
+            _simba_idx += 1
+        else:
             raise ValueError(
                 f"No colormap defined for sim_type {stype!r}. "
                 f"Known types: {list(_COLOURMAPS)}"
             )
-        cmap = matplotlib.colormaps[_COLOURMAPS[stype]]  # type: ignore
-        sim_type_colours[stype] = cmap(np.linspace(0.2, 0.85, n))
-
-    sim_type_idx = {stype: 0 for stype in sim_type_count}
-    sim_colours  = {}
-    for stype, sim in all_sims_flat:
-        label = (f"{sim['name']}_{sim['feedback']}"
-                 if stype == 'SIMBA' else sim['name'])
-        sim_colours[label] = sim_type_colours[stype][sim_type_idx[stype]]
-        sim_type_idx[stype] += 1
 
     # ------------------------------------------------------------------
     # Create figure — 1×2 panels, 9 × 7 inches, shared y-axis
@@ -773,7 +800,7 @@ def main(path2config: str, verbose: bool = True):
     # Save figure
     # ------------------------------------------------------------------
     fig.tight_layout()
-    out_path = figPath / f'{figName}.{figType}'
+    out_path = figPath / f'{figName}_{dim}.{figType}'
     fig.savefig(out_path, dpi=300)  # type: ignore
     plt.close(fig)
 

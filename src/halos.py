@@ -79,20 +79,32 @@ def select_massive_halos(halo_masses, target_average_mass, upper_mass_bound=None
     return np.where(valid_mask)[0][selected]
 
 def select_abundance_subhalos(halo_masses, target_number, Lbox):
-    """Select the most massive halos to match a target number density.
+    """Select subhalos by abundance matching to a target number density.
 
-    Sorts halos by mass in descending order and selects the top N halos
-    such that N / box_volume matches the target number density.
+    Sorts subhalos by the provided mass proxy in descending order and
+    selects the top N such that N / box_volume matches the target number
+    density.  The function is agnostic to the choice of mass proxy: any
+    monotonic observable can be passed, e.g. total bound mass, stellar
+    mass, or a DM-inclusive aperture mass.
+
+    In practice, stellar mass (SubhaloMStar) is preferred because it is
+    directly observable and avoids the tidal-stripping bias that affects
+    current total subhalo masses for satellites (Reddick et al. 2013).
+    For SIMBA, where CAESAR does not compute a bound DM mass per galaxy,
+    stellar mass is also the most consistently defined quantity across
+    both central and satellite galaxies.
 
     Args:
-        halo_masses (array-like): Array of subhalo masses.
-        target_number (float): Target number density for the selected halos.
-            Units: (cMpc/h)^-3.
-        Lbox (float): Length of the simulation box in ckpc/h.
+        halo_masses (array-like): Mass proxy array for all subhalos.
+            Can be total bound mass, stellar mass, or any other monotonic
+            observable suitable for abundance matching.  Units must be
+            consistent within the array; the ranking is purely ordinal.
+        target_number (float): Target number density in (cMpc/h)^-3.
+        Lbox (float): Simulation box side length in ckpc/h.
 
     Returns:
-        np.ndarray: Integer indices into halo_masses for the selected halos,
-            sorted by decreasing mass, shape (N_selected,).
+        np.ndarray: Integer indices into halo_masses for the selected
+            subhalos, sorted by decreasing mass proxy, shape (N_selected,).
     """
     box_volume = (Lbox / 1e3) ** 3  # Convert ckpc/h to cMpc/h
     Ngal = int(target_number * box_volume)  # Total number of galaxies desired

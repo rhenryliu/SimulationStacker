@@ -64,8 +64,14 @@ matplotlib.rcParams.update({
     "legend.fontsize":  13,
 })
 
-# Single colourmap for all simulations; 3 evenly-spaced samples.
-_COLOURMAP = 'twilight'
+# Per-suite colourmaps: IllustrisTNG sims → twilight, SIMBA sims → hsv.
+# This matches the assignment in the tSZ reference scripts.
+_COLOURMAPS = {'IllustrisTNG': 'twilight', 'SIMBA': 'hsv'}
+
+# Ordered reference TNG sim list used to fix colour positions so that omitting
+# TNG100-1 from the config does not shift the colours of TNG300-1/Illustris-1.
+# Extend this list here if new TNG sims are added.
+_TNG_REFERENCE_ORDER = ['TNG100-1', 'TNG300-1', 'Illustris-1']
 
 # Subplot panel labels in reading order (4 rows × 3 cols = 12 panels).
 _PANEL_LABELS = [
@@ -525,11 +531,40 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         for sim in suite['sims']:
             all_sim_entries.append((sim, sim_type_name))
 
-    n_sims = len(all_sim_entries)
-
     # One colour per simulation, fixed across all rows.
-    cmap    = matplotlib.colormaps[_COLOURMAP]  # type: ignore
-    colours = cmap(np.linspace(0.2, 0.85, n_sims))
+    # TNG: positions fixed by _TNG_REFERENCE_ORDER so omitting TNG100-1 does
+    #      not shift the colours of TNG300-1/Illustris-1.
+    # SIMBA (1 sim): position 0.85 (last of 6, matching tSZ reference scripts).
+    _tng_cmap       = matplotlib.colormaps[_COLOURMAPS['IllustrisTNG']]  # type: ignore
+    _tng_ref_clrs   = _tng_cmap(np.linspace(0.2, 0.85, len(_TNG_REFERENCE_ORDER)))
+    _tng_colour_map = {name: _tng_ref_clrs[i]
+                       for i, name in enumerate(_TNG_REFERENCE_ORDER)}
+
+    _n_simba    = sum(1 for _, stype in all_sim_entries if stype == 'SIMBA')
+    _simba_cmap = matplotlib.colormaps[_COLOURMAPS['SIMBA']]  # type: ignore
+    _simba_clrs = (_simba_cmap(np.linspace(0.2, 0.85, 6))[-1:]
+                   if _n_simba == 1
+                   else _simba_cmap(np.linspace(0.2, 0.85, _n_simba)))
+
+    _simba_idx = 0
+    colours = []
+    for sim, sim_type_name in all_sim_entries:
+        if sim_type_name == 'IllustrisTNG':
+            name = sim['name']
+            if name not in _tng_colour_map:
+                raise ValueError(
+                    f"TNG sim {name!r} is not in _TNG_REFERENCE_ORDER. "
+                    f"Add it there to maintain consistent colours."
+                )
+            colours.append(_tng_colour_map[name])
+        elif sim_type_name == 'SIMBA':
+            colours.append(_simba_clrs[_simba_idx])
+            _simba_idx += 1
+        else:
+            raise ValueError(
+                f"No colormap defined for sim_type {sim_type_name!r}. "
+                f"Known types: {list(_COLOURMAPS)}"
+            )
 
     # ------------------------------------------------------------------
     # Instantiate all stackers once, outside the mass-bin loop.
@@ -563,7 +598,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # Create figure
     # ------------------------------------------------------------------
     fig, axes = plt.subplots(n_bins, 3, figsize=(18, 9),
-                             sharex='col', sharey='row')
+                             sharex='col', sharey=True)
 
     # ------------------------------------------------------------------
     # Outer loop: mass bins (rows)

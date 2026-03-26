@@ -17,6 +17,7 @@ stack:
   # '2D' : stackMap — beam-convolved projected field, x-axis in arcmin.
   # '3D' : direct 3D spherical stacking, x-axis in comoving kpc/h.
   dim: '2D'
+  # dim: '3D'
 
   # Redshift and projection
   redshift: 0.5

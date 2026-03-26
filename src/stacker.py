@@ -497,7 +497,7 @@ class SimulationStacker(object):
             radDistanceUnits (str, optional): Units for radDistance. Either 'kpc/h' or 'arcmin'. Defaults to 'kpc/h'.
             halo_mass_avg (float, optional): Average halo mass for selecting halos ('massive' method). Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos ('massive' method). Defaults to 5*10**(14).
-            halo_abundance_target (float, optional): Target number density in (cMpc/h)^-3 for subhalo abundance matching ('abundance' method). Defaults to 5e-4.
+            halo_abundance_target (float, optional): Target number density in (cMpc/h)^-3 for subhalo abundance matching ('abundance' method). Subhalos are ranked by stellar mass (SubhaloMStar) rather than total bound mass, following the observational motivation for stellar-mass-based SHAM (Reddick et al. 2013). Defaults to 5e-4.
             z (float, optional): Redshift for angular distance calculation (required if radDistanceUnits='arcmin'). Defaults to None.
             pixelSize (float, optional): Pixel size in arcminutes (required if radDistanceUnits='arcmin'). Defaults to 0.5.
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
@@ -514,7 +514,11 @@ class SimulationStacker(object):
         # Load the halo catalog (always needed for haloPos in the stacking loop below).
         if use_subhalos:
             subhalos = self.loadSubHalos()
-            haloMass = subhalos['SubhaloMass']
+            # haloMass = subhalos['SubhaloMass']
+            # Using stellar mass for subhalo selection and abundance matching, 
+            # since it's more observationally relevant. This is only used if 
+            # use_subhalos is True, otherwise we use the halo mass from the main halo catalog.
+            haloMass = subhalos['SubhaloMStar'] 
             haloPos = subhalos['SubhaloPos']
         else:
             haloes = self.loadHalos()

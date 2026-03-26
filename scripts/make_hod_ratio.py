@@ -74,8 +74,13 @@ matplotlib.rcParams.update({
 })
 
 # Per-suite colourmaps: IllustrisTNG sims → twilight, SIMBA sims → hsv.
-# This matches the assignment in make_ratios3x2.py.
+# This matches the assignment in the tSZ reference scripts.
 _COLOURMAPS = {'IllustrisTNG': 'twilight', 'SIMBA': 'hsv'}
+
+# Ordered reference TNG sim list used to fix colour positions so that omitting
+# TNG100-1 from the config does not shift the colours of TNG300-1/Illustris-1.
+# Extend this list here if new TNG sims are added.
+_TNG_REFERENCE_ORDER = ['TNG100-1', 'TNG300-1', 'Illustris-1']
 
 # Panel label (single panel; kept as list for easy extension).
 _PANEL_LABELS = ['(a)']
@@ -383,10 +388,12 @@ def main(path2config: str, verbose: bool = True):
     plot_error_bars = plot_cfg.get('plot_error_bars', True)
 
     # ------------------------------------------------------------------
-    # Pre-assign colours per simulation suite, matching make_ratios3x2.py:
-    #   IllustrisTNG sims → 'twilight' colormap
-    #   SIMBA sims        → 'hsv' colormap
-    # Multiple sims of the same type are spread evenly over [0.2, 0.85].
+    # Pre-assign colours per simulation suite:
+    #   IllustrisTNG → 'twilight', positions fixed by _TNG_REFERENCE_ORDER
+    #                  so omitting TNG100-1 does not shift other colours.
+    #   SIMBA (1 sim) → 'hsv' at position 0.85 (last of 6, matching the
+    #                   tSZ reference scripts); multiple sims spread over
+    #                   [0.2, 0.85] as usual.
     # ------------------------------------------------------------------
     # Build a flat list of (sim_type, sim_dict) preserving config order.
     all_sims_flat = []
@@ -394,30 +401,39 @@ def main(path2config: str, verbose: bool = True):
         for sim in suite['sims']:
             all_sims_flat.append((suite['sim_type'], sim))
 
-    # Count sims per type to size the colormap sampling.
-    sim_type_count = {}
-    for stype, _ in all_sims_flat:
-        sim_type_count[stype] = sim_type_count.get(stype, 0) + 1
+    # TNG: build a colour lookup keyed by sim name from the reference order.
+    _tng_cmap       = matplotlib.colormaps[_COLOURMAPS['IllustrisTNG']]  # type: ignore
+    _tng_ref_clrs   = _tng_cmap(np.linspace(0.2, 0.85, len(_TNG_REFERENCE_ORDER)))
+    _tng_colour_map = {name: _tng_ref_clrs[i]
+                       for i, name in enumerate(_TNG_REFERENCE_ORDER)}
 
-    # Sample the full colour array for each suite type.
-    sim_type_colours = {}
-    for stype, n in sim_type_count.items():
-        if stype not in _COLOURMAPS:
+    # SIMBA: single sim → position 0.85 (matches tSZ reference); else spread.
+    _n_simba    = sum(1 for stype, _ in all_sims_flat if stype == 'SIMBA')
+    _simba_cmap = matplotlib.colormaps[_COLOURMAPS['SIMBA']]  # type: ignore
+    _simba_clrs = (_simba_cmap(np.linspace(0.2, 0.85, 6))[-1:]
+                   if _n_simba == 1
+                   else _simba_cmap(np.linspace(0.2, 0.85, _n_simba)))
+
+    _simba_idx  = 0
+    sim_colours = {}   # key: sim_label → colour
+    for stype, sim in all_sims_flat:
+        if stype == 'IllustrisTNG':
+            name = sim['name']
+            if name not in _tng_colour_map:
+                raise ValueError(
+                    f"TNG sim {name!r} is not in _TNG_REFERENCE_ORDER. "
+                    f"Add it there to maintain consistent colours."
+                )
+            sim_colours[name] = _tng_colour_map[name]
+        elif stype == 'SIMBA':
+            label = f"{sim['name']}_{sim['feedback']}"
+            sim_colours[label] = _simba_clrs[_simba_idx]
+            _simba_idx += 1
+        else:
             raise ValueError(
                 f"No colormap defined for sim_type {stype!r}. "
                 f"Known types: {list(_COLOURMAPS)}"
             )
-        cmap = matplotlib.colormaps[_COLOURMAPS[stype]]  # type: ignore
-        sim_type_colours[stype] = cmap(np.linspace(0.2, 0.85, n))
-
-    # Map each sim_label to its colour.
-    sim_type_idx = {stype: 0 for stype in sim_type_count}
-    sim_colours  = {}   # key: sim_label → colour
-    for stype, sim in all_sims_flat:
-        label = (f"{sim['name']}_{sim['feedback']}"
-                 if stype == 'SIMBA' else sim['name'])
-        sim_colours[label] = sim_type_colours[stype][sim_type_idx[stype]]
-        sim_type_idx[stype] += 1
 
     # ------------------------------------------------------------------
     # Create figure — single panel, 9 × 7 inches

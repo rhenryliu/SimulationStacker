@@ -128,7 +128,8 @@ def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         #     Still unique per galaxy; includes a local DM contribution that
         #     partially captures the galaxy's DM environment; physically
         #     closer to SUBFIND's satellite-subhalo mass than baryons alone.
-        #     Currently in use (chosen as the best available approximation).
+        #     Currently in use (chosen as the best available approximation), while
+        #     SHAM selection in stack_on_array uses SubhaloMStar (stellar mass)
         #
         #   Option 3 — parent FoF halo mass:
         #     Right scale for centrals (~10^13 Msun) but degenerate — all
@@ -141,7 +142,7 @@ def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         # include DM belonging to the host rather than the satellite itself.
         # This is a known limitation with no better alternative in CAESAR.
         subhaloes['SubhaloMass']  = (
-            # subhaloes_cat['dicts']['masses.dm_30kpc'] +
+            subhaloes_cat['dicts']['masses.dm_30kpc'] +
             subhaloes_cat['dicts']['masses.total']
         ) * header['HubbleParam']                                                   # Msun/h
 

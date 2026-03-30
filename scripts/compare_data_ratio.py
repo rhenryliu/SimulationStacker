@@ -288,14 +288,27 @@ def main(path2config: str, verbose: bool = True) -> None:
         for k, key in enumerate(data.keys()):
             # Symmetric horizontal jitter to separate overlapping error bars.
             # Example for n_data=4: offsets [-0.075, -0.025, 0.025, 0.075] arcmin.
+            print(key)
+            if key == 'source_bin_0':
+                colour = 'black'
+                fmt = 's'
+                label = f'HSC combined'
+            else:
+                break
+                colour = data_colours[k]
+                fmt = 'o'
+                label = f'HSC Bin {k+1}'
+            
             jitter = (k - (n_data - 1) / 2) * 0.05
+            jitter = 0.0  # disable jitter for now since the data points are already well separated
+
             ax.errorbar(
                 data[key]['ksz_theta_arcmin'] + jitter,
                 data[key]['ratio'],
                 yerr=data[key]['ratio_err'],
-                fmt='s',
-                color=data_colours[k+1],
-                label=key,
+                fmt=fmt,
+                color=colour,
+                label=label,
                 markersize=6,
                 capsize=2,
             )

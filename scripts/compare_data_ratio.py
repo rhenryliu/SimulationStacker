@@ -292,7 +292,7 @@ def main(path2config: str, verbose: bool = True) -> None:
             if key == 'source_bin_0':
                 colour = 'black'
                 fmt = 's'
-                label = f'HSC combined'
+                label = f'DESI x ACT x HSC combined'
             else:
                 break
                 colour = data_colours[k]
@@ -300,7 +300,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 label = f'HSC Bin {k+1}'
             
             jitter = (k - (n_data - 1) / 2) * 0.05
-            jitter = 0.0  # disable jitter for now since the data points are already well separated
+            jitter = 0.0  # disable jitter for now since we only plot the one combined data point
 
             ax.errorbar(
                 data[key]['ksz_theta_arcmin'] + jitter,
@@ -330,12 +330,12 @@ def main(path2config: str, verbose: bool = True) -> None:
     if pType == 'ionized_gas':
         label_pType = 'kSZ'
     if pType2 == 'total':
-        label_pType2 = 'gg'
+        label_pType2 = 'lens'
     
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
     ax.set_xlabel('R [arcmin]')
     ax.set_ylabel(
-        rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \;/\; (\Omega_b / \Omega_m)$'
+        rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \times \frac{{\Omega_m}}{{\Omega_b}}$'
     )
     ax.set_xlim(0.0, max_radius * rad_distance + 0.5)
     ax.legend(loc='upper left')

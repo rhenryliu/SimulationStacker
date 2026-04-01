@@ -12,14 +12,18 @@ stack:
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
 
-  pixel_size: 0.2 # in arcmin if stack_field is false
   n_pixels: 1000 # Number of pixels on a side if stack_field is true
   projection: 'yz' # 'xy', 'xz', 'yz'
 
   filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
+  pixel_size: 0.5 # in arcmin
+  beam_size: 1.6 # in arcmin
+
   filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type_2: 'total'
+  pixel_size_2: 0.2 # in arcmin
+  beam_size_2: null # in arcmin
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
   use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
@@ -32,8 +36,8 @@ plot:
   # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   # data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
-  fig_name: 'halos_yz_data'
-  fig_type: 'pdf'
+  fig_name: 'yz_data'
+  fig_type: 'png'
   plot_error_bars: true
 
 

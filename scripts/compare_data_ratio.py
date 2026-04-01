@@ -123,13 +123,18 @@ def main(path2config: str, verbose: bool = True) -> None:
     load_field   = stack_config.get('load_field', True)
     save_field   = stack_config.get('save_field', True)
     rad_distance = stack_config.get('rad_distance', 1.0)   # arcmin per unit radius
+
     pType        = stack_config.get('particle_type',   'ionized_gas')
     filter_type  = stack_config.get('filter_type',     'CAP')
+    pixel_size   = stack_config.get('pixel_size', 0.5)    # arcmin
+    beam_size    = stack_config.get('beam_size', 1.6)     # arcmin; None → no smoothing
+
     pType2       = stack_config.get('particle_type_2', 'total')
     filter_type2 = stack_config.get('filter_type_2',   'DSigma')
+    pixel_size_2 = stack_config.get('pixel_size_2', 0.2)    # arcmin
+    beam_size_2  = stack_config.get('beam_size_2', None)     # arcmin; None → no smoothing
+
     projection   = stack_config.get('projection', 'yz')
-    pixel_size   = stack_config.get('pixel_size', 0.5)    # arcmin
-    beam_size    = stack_config.get('beam_size', None)     # arcmin; None → no smoothing
     min_radius   = stack_config.get('min_radius', 1.0)
     max_radius   = stack_config.get('max_radius', 6.0)
     n_radii      = stack_config.get('num_radii', 11)
@@ -236,9 +241,11 @@ def main(path2config: str, verbose: bool = True) -> None:
             )
 
             # profiles shape: (n_radii, n_halos)
-            radii0, profiles0 = stacker.stackMap(pType,  filterType=filter_type,  **base_kwargs)
-            radii1, profiles1 = stacker.stackMap(pType2, filterType=filter_type2,
+            radii0, profiles0 = stacker.stackMap(pType,  filterType=filter_type,  
                                                  pixelSize=pixel_size, beamSize=beam_size,
+                                                 **base_kwargs)
+            radii1, profiles1 = stacker.stackMap(pType2, filterType=filter_type2,
+                                                 pixelSize=pixel_size_2, beamSize=beam_size_2,
                                                  **base_kwargs)
 
             # When plotting DM vs total, rescale profiles0 so it is expressed in

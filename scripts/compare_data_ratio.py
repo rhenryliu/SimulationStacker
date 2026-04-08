@@ -248,18 +248,31 @@ def main(path2config: str, verbose: bool = True) -> None:
                                                  pixelSize=pixel_size_2, beamSize=beam_size_2,
                                                  **base_kwargs)
 
-            # When plotting DM vs total, rescale profiles0 so it is expressed in
-            # baryon-equivalent units rather than raw DM mass.
-            if pType == 'DM' and pType2 == 'total':
+
+            f_baryon = omega_b / stacker.header['Omega0']
+            if pType == 'ionized_gas' and pType2 == 'total':
+                # When plotting ionized gas vs total, ratio factor is the baryon fraction.
+                factor = 1.0 / f_baryon
+            elif pType == 'DM' and pType2 == 'total':
+                # When plotting DM vs total, rescale profiles0 so it is expressed in
+                # baryon-equivalent units rather than raw DM mass.
                 profiles0 = profiles0 / ((stacker.header['Omega0'] - omega_b) / omega_b)
+                # f_baryon = omega_b / stacker.header['Omega0']
+                factor = 1.0 / f_baryon
+            elif pType == pType2:
+                # When plotting the same component in numerator and denominator, no rescaling is needed 
+                # since the ratio will be unity (and thus already baryon-normalised).
+                factor = 1.0
+            else:
+                factor = 1.0  # no rescaling for other combinations; ratio will not be baryon-normalised
 
             # ---- Ratio-of-means normalised by the cosmic baryon fraction ----
             # Using ratio-of-means (not mean-of-ratio) for consistency with the
             # error propagation below.
-            f_baryon      = omega_b / stacker.header['Omega0']
+            # f_baryon      = omega_b / stacker.header['Omega0']
             mean0         = np.mean(profiles0, axis=1)   # (n_radii,)
             mean1         = np.mean(profiles1, axis=1)
-            profiles_plot = mean0 / mean1 / f_baryon
+            profiles_plot = mean0 / mean1 * factor  # apply baryon fraction normalisation if relevant
 
             ax.plot(
                 radii0 * rad_distance,
@@ -334,9 +347,21 @@ def main(path2config: str, verbose: bool = True) -> None:
 
     # ---- Axes labels and cosmetics ----
     # Dashed horizontal line at R=1: the baryon fraction equals the cosmic mean.
+    label_pType = pType.replace('_', r'\_')
+    label_pType2 = pType2.replace('_', r'\_')
+    
     if pType == 'ionized_gas':
         label_pType = 'kSZ'
-    if pType2 == 'total':
+    elif pType == 'DM':
+        label_pType = 'DM'
+    elif pType == 'total':
+        label_pType = 'lens'
+        
+    if pType2 == 'ionized_gas':
+        label_pType2 = 'kSZ'
+    elif pType2 == 'DM':
+        label_pType2 = 'DM'
+    elif pType2 == 'total':
         label_pType2 = 'lens'
     
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')

@@ -7,7 +7,7 @@ stack:
   rad_distance: 1.0 # in arcmin, or comoving kpc/h if stack_field is true
   min_radius: 1.0 # in rad_distance units
   max_radius: 6.0 # in rad_distance units
-  num_radii: 11 # Number of radial bins between min_radius and max_radius
+  num_radii: 9 # Number of radial bins between min_radius and max_radius
   
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
@@ -21,9 +21,9 @@ stack:
   beam_size: 1.6 # in arcmin
 
   filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
-  particle_type_2: 'total'
-  pixel_size_2: 0.5 # in arcmin
-  beam_size_2: 1.6 # in arcmin
+  particle_type_2: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
+  pixel_size_2: 0.2 # in arcmin
+  beam_size_2: null # in arcmin
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
   use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
@@ -36,7 +36,7 @@ plot:
   # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
   # data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
-  fig_name: 'beamTest_yz_data'
+  fig_name: 'beamTest_ionized_gas_yz_data'
   fig_type: 'png'
   plot_error_bars: true
 

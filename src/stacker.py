@@ -636,7 +636,8 @@ class SimulationStacker(object):
             elif filterType == 'DSigma':
                 # TODO: This does not work with stackField for some reason. (I think fixed?)
                 if radDistanceUnits == 'arcmin':
-                    dr = 0.5 # 0.5 arcmin in pixels
+                    # dr = 0.5 # 0.5 arcmin in pixels
+                    dr = 0.75 # 0.5 arcmin in pixels
                 else:
                     # dr = 0.2 # 0.2 kpc/h in pixels
                     dr = 3 / RadPixel

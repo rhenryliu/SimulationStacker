@@ -68,10 +68,10 @@ simulations:
     sims:
       # - name: 'TNG100-1'
         # snapshot: 80
-      # - name: 'TNG300-1'
-        # snapshot: 67
-      - name: 'TNG300-2'
+      - name: 'TNG300-1'
         snapshot: 80
+      # - name: 'TNG300-2'
+        # snapshot: 80
       # - name: 'TNG50-3'
       #   snapshot: 67
       - name: 'Illustris-1'

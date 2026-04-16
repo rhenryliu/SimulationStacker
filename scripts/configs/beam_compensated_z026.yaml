@@ -1,0 +1,12 @@
+beam_test_config: mass_ratio_beamTest_z026.yaml
+no_beam_config:   mass_ratio_noBeam_z026.yaml
+
+compensation:
+  use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
+
+plot:
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_ksz_ggl.npz
+  fig_path: '../figures/'
+  fig_name: 'beam_compensated_z026'
+  fig_type: 'pdf'
+  plot_error_bars: true

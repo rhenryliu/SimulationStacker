@@ -7,7 +7,7 @@ stack:
   rad_distance: 1.0 # in arcmin, or comoving kpc/h if stack_field is true
   min_radius: 1.0 # in rad_distance units
   max_radius: 6.0 # in rad_distance units
-  num_radii: 11 # Number of radial bins between min_radius and max_radius
+  num_radii: 9 # Number of radial bins between min_radius and max_radius
   
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
@@ -37,7 +37,7 @@ plot:
   # data_label: 'Hadzhiyska 2024 pz1'
   fig_path: '../figures/'
   fig_name: 'noBeam_yz_data'
-  fig_type: 'png'
+  fig_type: 'pdf'
   plot_error_bars: true
 
 

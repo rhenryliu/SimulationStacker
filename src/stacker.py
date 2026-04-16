@@ -637,7 +637,7 @@ class SimulationStacker(object):
                 # TODO: This does not work with stackField for some reason. (I think fixed?)
                 if radDistanceUnits == 'arcmin':
                     # dr = 0.5 # 0.5 arcmin in pixels
-                    dr = 0.75 # 0.5 arcmin in pixels
+                    dr = 0.75 # 0.75 arcmin in pixels, since the DSigma filter needs a slightly larger dr to be stable at small radii. This is somewhat ad-hoc, but seems to work well in practice.
                 else:
                     # dr = 0.2 # 0.2 kpc/h in pixels
                     dr = 3 / RadPixel

@@ -53,6 +53,7 @@ import astropy.units as u
 sys.path.append('../src/')
 from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
 from stacker import SimulationStacker  # type: ignore
+from snr import detection_snr
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -262,6 +263,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     theta_data = data[key]['ksz_theta_arcmin']
     ratio_data = data[key]['ratio']
     sigma_data = data[key]['ratio_err']
+    cov_data   = data[key]['ratio_cov_h']
 
     # Sanity check: beamTest radii should match the data theta grid (both 9-point,
     # 1–6 arcmin, equally spaced).
@@ -273,10 +275,18 @@ def main(path2config: str, verbose: bool = True) -> None:
 
     R_compensated = ratio_data / beam_factor
 
-    # Propagate statistical error from data plus (optionally) beam factor scatter.
-    sigma_comp_sq = (sigma_data / beam_factor) ** 2
+    # Propagate covariance: D @ cov_data @ D^T where D = diag(1/beam_factor).
+    inv_bf = 1.0 / beam_factor
+    cov_compensated = np.outer(inv_bf, inv_bf) * cov_data
+
+    sigma_comp_sq = (sigma_data * inv_bf) ** 2
     if use_sim_scatter:
-        sigma_comp_sq += (ratio_data * beam_factor_scatter / beam_factor ** 2) ** 2
+        # Full (n_radii, n_radii) beam factor covariance across simulations.
+        cov_beam    = np.cov(beam_factor_arr, rowvar=False)   # (n_radii, n_radii)
+        jac         = ratio_data / beam_factor ** 2            # d(R_comp)/d(bf)
+        cov_scatter = np.outer(jac, jac) * cov_beam
+        cov_compensated += cov_scatter
+        sigma_comp_sq   += np.diag(cov_scatter)
     sigma_compensated = np.sqrt(sigma_comp_sq)
 
     # ==========================================================================
@@ -396,6 +406,12 @@ def main(path2config: str, verbose: bool = True) -> None:
     )
 
     # ==========================================================================
+    # Phase 5: Print out the SNR of the beam-compensated data detection, using the full covarianc
+    # ==========================================================================
+    snr_feedback = detection_snr(R_compensated, cov_compensated, null=1.0)
+    print(f"Beam-compensated data detection SNR (relative to null=1): {snr_feedback:.2f}")
+
+    # ==========================================================================
     # Figure cosmetics — matches compare_data_ratio.py
     # ==========================================================================
     if cosmo_ref is not None:
@@ -423,7 +439,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     out_stem = f'beam_compensated_{nb_pType}_{nb_pType2}_{fig_name}_z{nb_redshift}'
     out_path = fig_path / f'{out_stem}.{fig_type}'
     print(f'Saving figure to {out_path}')
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=150) # type: ignore
     plt.close(fig)
 
     print(f'Done. Elapsed: {time.time() - t0:.1f} s')

@@ -95,7 +95,8 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
             if sim_group['sim_type'] == 'IllustrisTNG':
                 label = sim['name']
             else:
-                label = f"{sim['name']}_{sim['feedback']}"
+                # label = f"{sim['name']}_{sim['feedback']}"
+                label = f"SIMBA-100"
             colour_for_sim[label] = colours[j]
 
     # ---- Figure output path (taken from z05 plot config as reference) ----
@@ -154,7 +155,8 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
                     stacker   = SimulationStacker(sim['name'], sim['snapshot'],
                                                   z=redshift, simType=sim_type_name,
                                                   feedback=sim['feedback'])
-                    sim_label = f"{sim['name']}_{sim['feedback']}"
+                    # sim_label = f"{sim['name']}_{sim['feedback']}"
+                    sim_label = f"SIMBA-100"
                 else:
                     raise ValueError(f"Unknown sim type: {sim_type_name!r}")
 

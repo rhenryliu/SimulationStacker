@@ -10,3 +10,13 @@ plot:
   fig_name: 'beam_compensated_z05'
   fig_type: 'pdf'
   plot_error_bars: true
+
+# Extra simulation ratios to overlay (used only by beam_compensated_ratio_v2.py).
+# Each entry is stacked with the same parameters as the primary ratio but with a
+# different numerator particle type.  The denominator (particle_type_2 from
+# no_beam_config) and all other stacking settings are shared.
+extra_sim_ratios:
+  - numerator: gas
+    linestyle: ':'
+  - numerator: baryon
+    linestyle: '--'

@@ -194,7 +194,8 @@ def main(path2config: str, verbose: bool = True) -> None:
 
             elif sim_type_name == 'SIMBA':
                 feedback  = sim['feedback']
-                sim_label = f"{sim_name}_{feedback}"
+                # sim_label = f"{sim_name}_{feedback}"
+                sim_label = f"SIMBA-100"
                 stacker   = SimulationStacker(sim_name, snapshot, z=redshift,
                                              simType=sim_type_name, feedback=feedback)
                 try:

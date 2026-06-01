@@ -30,6 +30,13 @@ from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, D
 from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data
 from mapMaker import create_field, create_masked_field
 
+try:
+    import Pk_library as PKL
+    import MAS_library as MASL
+    HAS_PK_LIBRARY = True
+except ImportError:
+    HAS_PK_LIBRARY = False
+
 
 class SimulationStacker(object):
 
@@ -839,6 +846,230 @@ class SimulationStacker(object):
                          self.feedback, pType, nPixels, projection, type, 
                          mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
 
+
+
+    # ------------------------------------------------------------------ #
+    # Power spectrum and baryon suppression                               #
+    # ------------------------------------------------------------------ #
+
+    def get_field_baryon_suppression(self, grid=512, save=False, load=False,
+                                     threads=1, base_path=None):
+        """Compute baryon suppression in 3D using power spectrum and correlation functions.
+
+        Uses the DM field from the hydro simulation as a proxy for the
+        dark-matter-only (DMO) reference — an approximation relative to using
+        a paired DMO run.  The suppression proxy is P_tot(k) / P_dm(k).
+
+        Args:
+            grid (int): Grid resolution for the 3D density field (grid^3 voxels).
+                Defaults to 512.
+            save (bool): If True, saves the results dict to an .npz file.
+                Defaults to False.
+            load (bool): If True, tries to load cached results before computing.
+                Defaults to False.
+            threads (int): Number of threads for power spectrum calculation.
+                Defaults to 1; set higher (e.g. 32) in SLURM jobs.
+            base_path (str, optional): Base directory for cache files.
+                Defaults to None (uses /pscratch/ convention).
+
+        Returns:
+            dict: Keys and values:
+                - 'k'         : wavenumber array (h/Mpc)
+                - 'P_dm'      : DM auto power spectrum P_dm(k)
+                - 'P_tot'     : total matter auto power spectrum P_tot(k)
+                - 'PX_dm_tot' : cross power spectrum P_dm×tot(k)
+                - 'r'         : comoving separation array (Mpc/h)
+                - 'X_dm'      : DM auto correlation function ξ_dm(r)
+                - 'X_tot'     : total matter auto correlation function ξ_tot(r)
+                - 'XX_dm_tot' : DM×total cross correlation function ξ_dm×tot(r)
+
+        Notes:
+            Suppression proxy: SP(k) ≈ P_tot(k) / P_dm(k).
+            The cross-correlation coefficient is R(k) = PX_dm_tot / sqrt(P_dm * P_tot).
+            BoxSize is converted from kpc/h (simulation header) to Mpc/h so that
+            k is in h/Mpc, consistent with paper conventions.
+
+        Raises:
+            ImportError: If Pylians (Pk_library / MAS_library) is not installed.
+        """
+        if not HAS_PK_LIBRARY:
+            raise ImportError(
+                "Pylians (Pk_library / MAS_library) is required. "
+                "Install with: pip install Pylians3"
+            )
+
+        if load:
+            try:
+                return self.load_pk_results(grid, base_path=base_path)
+            except (FileNotFoundError, ValueError) as e:
+                print(e)
+                print("Computing power spectrum instead...")
+
+        # BoxSize in Mpc/h (header stores kpc/h)
+        BoxSize = self.header['BoxSize'] / 1000.0
+
+        print(f"Computing 3D density fields at grid resolution {grid}^3...")
+
+        print("Computing DM field...")
+        field_dm = self.makeField('DM', nPixels=grid, save=True, load=True, dim='3D')
+
+        print("Computing total matter field...")
+        field_tot = self.makeField('total', nPixels=grid, save=True, load=True, dim='3D')
+
+        print("Converting to overdensity fields...")
+        delta_dm = field_dm / np.mean(field_dm, dtype=np.float64) - 1.0
+        delta_tot = field_tot / np.mean(field_tot, dtype=np.float64) - 1.0
+
+        print("Computing power spectra...")
+        k, P_dm = self._compute_pk_3D(delta_dm, None, BoxSize, grid, threads)
+        _, P_tot = self._compute_pk_3D(delta_tot, None, BoxSize, grid, threads)
+        kX, PX_dm_tot = self._compute_pk_3D(delta_dm, delta_tot, BoxSize, grid, threads)
+
+        print("Computing correlation functions...")
+        r, X_dm = self._compute_corr_3D(delta_dm, None, BoxSize, grid, threads)
+        _, X_tot = self._compute_corr_3D(delta_tot, None, BoxSize, grid, threads)
+        rX, XX_dm_tot = self._compute_corr_3D(delta_dm, delta_tot, BoxSize, grid, threads)
+
+        results = {
+            'k': k,
+            'P_dm': P_dm,
+            'P_tot': P_tot,
+            'PX_dm_tot': PX_dm_tot,
+            'r': r,
+            'X_dm': X_dm,
+            'X_tot': X_tot,
+            'XX_dm_tot': XX_dm_tot,
+        }
+
+        if save:
+            self.save_pk_results(results, grid, base_path=base_path)
+
+        return results
+
+    def _compute_pk_3D(self, field, field_b=None, BoxSize=205.0, grid=512, threads=1):
+        """Compute the 3D power spectrum (auto or cross) for a density contrast field.
+
+        Args:
+            field (np.ndarray): Primary overdensity field, shape (grid, grid, grid).
+            field_b (np.ndarray, optional): Secondary overdensity field for cross
+                power spectrum. If None, computes auto power spectrum of field.
+            BoxSize (float): Physical box size in Mpc/h. Defaults to 205.0 (TNG300-1).
+            grid (int): Grid resolution. Defaults to 512.
+            threads (int): Number of threads. Defaults to 1.
+
+        Returns:
+            tuple: (k, Pk) — wavenumber array (h/Mpc) and power spectrum (Mpc/h)^3,
+                truncated at the Nyquist frequency.
+        """
+        assert field.ndim == 3, "Input field must have shape (N, N, N)"
+
+        MAS = 'TSC'  # must match makeField(dim='3D'), which uses tsc_parallel
+        axis = 0
+        k_nyq = np.pi * grid / BoxSize
+
+        field = field.astype(np.float32)
+
+        if field_b is None:
+            Pk3D = PKL.Pk(field, BoxSize, axis=axis, MAS=MAS, threads=threads, verbose=False)
+            k = Pk3D.k3D
+            Pk_val = Pk3D.Pk[:, 0]
+        else:
+            field_b = field_b.astype(np.float32)
+            XPk3D = PKL.XPk([field, field_b], BoxSize, axis=axis, MAS=[MAS, MAS], threads=threads)
+            k = XPk3D.k3D
+            Pk_val = XPk3D.XPk[:, 0, 0]
+
+        mask = k <= k_nyq
+        return k[mask], Pk_val[mask]
+
+    def _compute_corr_3D(self, field, field_b=None, BoxSize=205.0, grid=512, threads=1):
+        """Compute the 3D correlation function (auto or cross) for a density contrast field.
+
+        Args:
+            field (np.ndarray): Primary overdensity field, shape (grid, grid, grid).
+            field_b (np.ndarray, optional): Secondary overdensity field for cross
+                correlation. If None, computes auto correlation of field.
+            BoxSize (float): Physical box size in Mpc/h. Defaults to 205.0 (TNG300-1).
+            grid (int): Grid resolution. Defaults to 512.
+            threads (int): Number of threads. Defaults to 1.
+
+        Returns:
+            tuple: (r, xi) — comoving separation array (Mpc/h) and correlation function,
+                limited to r <= BoxSize.
+        """
+        assert field.ndim == 3, "Input field must have shape (N, N, N)"
+
+        MAS = 'TSC'  # must match makeField(dim='3D'), which uses tsc_parallel
+        axis = 0
+
+        field = field.astype(np.float32)
+
+        if field_b is None:
+            CF = PKL.Xi(field, BoxSize, MAS, axis, threads)
+            r = CF.r3D
+            xi = CF.xi[:, 0]
+        else:
+            field_b = field_b.astype(np.float32)
+            CCF = PKL.XXi(field, field_b, BoxSize, axis=axis, MAS=[MAS, MAS], threads=threads)
+            r = CCF.r3D
+            xi = CCF.xi[:, 0]
+
+        mask = r <= BoxSize
+        return r[mask], xi[mask]
+
+    def _pk_results_path(self, grid, base_path=None):
+        """Return the Path for a cached power spectrum results file.
+
+        Args:
+            grid (int): Grid resolution used when computing the power spectrum.
+            base_path (str, optional): Override for the base data directory.
+
+        Returns:
+            pathlib.Path: Full path to the .npz file.
+        """
+        from pathlib import Path
+        if base_path is None:
+            base_path = '/pscratch/sd/r/rhliu/simulations/'
+        if self.simType == 'SIMBA':
+            fname = f'{self.sim}_{self.feedback}_{self.snapshot}_Pk_{grid}.npz'
+        else:
+            fname = f'{self.sim}_{self.snapshot}_Pk_{grid}.npz'
+        return Path(base_path) / self.simType / 'products' / '3D' / fname
+
+    def save_pk_results(self, results, grid, base_path=None):
+        """Save power spectrum results dict to a .npz file.
+
+        Args:
+            results (dict): Dict returned by get_field_baryon_suppression.
+            grid (int): Grid resolution — used to construct the filename.
+            base_path (str, optional): Override for the base data directory.
+        """
+        path = self._pk_results_path(grid, base_path=base_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(path, **results)
+        print(f'Saved power spectrum results to: {path}')
+
+    def load_pk_results(self, grid, base_path=None):
+        """Load cached power spectrum results from a .npz file.
+
+        Args:
+            grid (int): Grid resolution — used to construct the filename.
+            base_path (str, optional): Override for the base data directory.
+
+        Returns:
+            dict: Power spectrum results (same keys as get_field_baryon_suppression).
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        path = self._pk_results_path(grid, base_path=base_path)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"No cached power spectrum found at '{path}'. "
+                "Run get_field_baryon_suppression(save=True) first."
+            )
+        data = np.load(path)
+        return {k: data[k] for k in data.files}
 
 
 if __name__ == "__main__":

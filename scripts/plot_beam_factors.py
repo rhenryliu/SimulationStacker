@@ -210,7 +210,7 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
     # Axes cosmetics
     # ==========================================================================
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
-    ax.set_xlabel('R [arcmin]')
+    ax.set_xlabel(r'$\theta$ [arcmin]')
     ax.set_ylabel(
         r'$\langle \Delta\Sigma_{\rm kSZ}^{\rm beamed} \rangle'
         r'\,/\,'

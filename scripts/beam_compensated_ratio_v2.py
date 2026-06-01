@@ -437,10 +437,10 @@ def main(path2config: str, verbose: bool = True) -> None:
                 lambda kpc_h:  comoving_to_arcmin(kpc_h,  nb_redshift, cosmo_ref),
             ),
         )
-        secax_x.set_xlabel('R [comoving kpc/h]')
+        secax_x.set_xlabel(r'R [comoving kpc/h]')
 
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
-    ax.set_xlabel('R [arcmin]')
+    ax.set_xlabel(r'$\theta$ [arcmin]')
     ax.set_ylabel(
         r'$\frac{\langle \Delta \Sigma_{\rm kSZ} \rangle}'
         r'{\langle \Delta \Sigma_{\rm lens} \rangle} \times \frac{\Omega_m}{\Omega_b}$'

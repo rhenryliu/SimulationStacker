@@ -344,7 +344,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 lambda kpc_h:  comoving_to_arcmin(kpc_h,  redshift, cosmo_ref),
             ),
         )
-        secax_x.set_xlabel('R [comoving kpc/h]')
+        secax_x.set_xlabel(r'R [comoving kpc/h]')
 
     # ---- Axes labels and cosmetics ----
     # Dashed horizontal line at R=1: the baryon fraction equals the cosmic mean.
@@ -366,7 +366,7 @@ def main(path2config: str, verbose: bool = True) -> None:
         label_pType2 = 'lens'
     
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
-    ax.set_xlabel('R [arcmin]')
+    ax.set_xlabel(r'$\theta$ [arcmin]')
     ax.set_ylabel(
         rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \times \frac{{\Omega_m}}{{\Omega_b}}$'
     )

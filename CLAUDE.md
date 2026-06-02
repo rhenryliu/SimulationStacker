@@ -17,6 +17,8 @@ source ~/myenvs/cosmodesi_dr1/bin/activate
 
 Both lines are required. The virtualenv (`cosmodesi_dr1`) holds any extra packages installed on top of the base cosmodesi stack. Do not suggest `conda activate` or `module load python` for this project.
 
+**Important:** if the `cosmodesi_dr1` environment is not activated, the bare `python` command resolves to the system `/usr/bin/python`, which is Python 2.7 and will fail on modern syntax (e.g. f-strings). When the environment is not active, use `python3` explicitly. Once `cosmodesi_dr1` is activated, `python` points to the correct Python 3 interpreter and this is not an issue.
+
 ## Running Scripts
 
 Scripts are run from the `scripts/` directory with a YAML config file:

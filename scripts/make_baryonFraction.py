@@ -34,6 +34,7 @@ Dependencies
 import sys
 import time
 import argparse
+import warnings
 from pathlib import Path
 from datetime import datetime
 from typing import cast
@@ -113,7 +114,8 @@ def make_stacker(sim: dict, redshift: float):
         feedback = sim['feedback']
         stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                     simType=sim_type, feedback=feedback)
-        sim_label = f"{sim_name}_{feedback}"
+        # sim_label = f"{sim_name}_{feedback}"
+        sim_label = "SIMBA-m100"
         OmegaBaryon = 0.048
 
     else:
@@ -129,16 +131,71 @@ def make_stacker(sim: dict, redshift: float):
 
 
 # ---------------------------------------------------------------------------
+# Helper: divide-by-zero-safe baryon fractions
+# ---------------------------------------------------------------------------
+
+def safe_fractions(means, baryon_types):
+    """Normalise per-component means by their sum, guarding empty radial bins.
+
+    A radial bin whose total baryon mass is zero (e.g. the innermost shell when
+    ``min_radius = 0``, which can contain no particles) would otherwise produce
+    a silent ``0 / 0 = NaN`` for some components and a misleading uniform split
+    for others.  Such bins are set to NaN for *every* component and a
+    ``RuntimeWarning`` is emitted, so the stacked plot shows a visible gap there
+    rather than a spurious value.
+
+    Parameters
+    ----------
+    means : dict[str, numpy.ndarray]
+        Per-baryon-type mean profile.  All arrays must share the same shape
+        ``(n_bins,)``.
+    baryon_types : list[str]
+        Component keys into ``means``, in stacking order.
+
+    Returns
+    -------
+    list[numpy.ndarray]
+        One fraction array per baryon type, in the order of ``baryon_types``.
+        Across components the fractions sum to 1 in bins with non-zero total
+        baryon mass and are NaN in bins where the total is zero.
+    """
+    total = sum(means[bt] for bt in baryon_types)
+    empty = total == 0.0
+    if np.any(empty):
+        warnings.warn(
+            f"{int(np.count_nonzero(empty))} radial bin(s) have zero total "
+            "baryon mass; their fractions are set to NaN.",
+            RuntimeWarning, stacklevel=2,
+        )
+    # Avoid the 0/0 warning/NaN-from-division by dividing by 1 where empty,
+    # then overwriting those bins with NaN explicitly.
+    safe_total = np.where(empty, 1.0, total)
+    return [np.where(empty, np.nan, means[bt] / safe_total) for bt in baryon_types]
+
+
+# ---------------------------------------------------------------------------
 # 3-D stacking
 # ---------------------------------------------------------------------------
 
 def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii,
                     projection, saveField, loadField, ax, colours,
-                    radDistance, sphere=True, dr=0.0, verbose=True):
-    """Build 3-D density fields and plot the baryon-fraction stacked-area profile.
+                    radDistance, sphere=True, halo_mass_avg=10**13.22,
+                    halo_mass_upper=5e14, dr=None, verbose=True):
+    """Build 3-D density fields and plot the baryon-fraction profile.
 
-    The denominator is the sum of all baryon fields so that the stacked areas
-    always sum to 1 at every radius.
+    The denominator is the sum of all baryon fields so the plotted fractions
+    sum to 1 at every radius (a composition decomposition).
+
+    The representation depends on ``sphere``:
+
+    * ``sphere=False`` (differential): the ``nRadii`` values of the radial grid
+      are interpreted as bin *edges*, giving ``nRadii - 1`` spherical shells.
+      Shell ``i`` spans ``[edges[i], edges[i+1]]`` and is computed as
+      ``sphere(edges[i+1]) - sphere(edges[i])``.  Drawn as a stacked bar
+      (histogram over radius), which reads as a per-shell quantity.
+    * ``sphere=True`` (cumulative): the field is accumulated within a sphere of
+      radius R at each grid value.  Drawn as a stacked area, which reads as an
+      integral quantity.
 
     Parameters
     ----------
@@ -147,33 +204,45 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
         Component particle types, e.g. ['ionized_gas', 'neutral_gas', 'Stars', 'BH'].
     nPixels : int
         Grid resolution for 3-D fields.
-    minRadius : float
-        Minimum stacking radius [comoving kpc/h].
-    maxRadius : float
-        Maximum stacking radius [comoving kpc/h].
+    minRadius, maxRadius : float
+        Radial-grid endpoints [comoving kpc/h].
     nRadii : int
-        Number of radial bins.
+        Number of radial-grid values (= number of bin edges; differential mode
+        therefore produces ``nRadii - 1`` shells).
     projection : str
-        Projection axis for field ('xy', 'xz', or 'yz').
-    saveField : bool
-        Cache fields to disk.
-    loadField : bool
-        Try to load cached fields from disk.
+        Projection axis ('xy', 'xz', or 'yz').
+    saveField, loadField : bool
+        Cache fields to / from disk.
     ax : matplotlib.axes.Axes
     colours : array-like
         One colour per baryon type.
     radDistance : float
         Multiplicative scaling applied to radii for the x-axis.
     sphere : bool
-        If True (default), each bin accumulates all mass within a sphere of
-        radius R (cumulative aperture).  If False, each bin considers only the
-        shell between R and R+dr, computed as sphere(R+dr) − sphere(R).
-    dr : float
-        Shell width [comoving kpc/h].  Used only when ``sphere=False``.  Should
-        be set by the caller (``main`` computes a sensible default from the
-        radii spacing).
+        Cumulative spheres (stacked area) if True; differential shells from
+        consecutive grid edges (stacked bar) if False.  Default True.
+    halo_mass_avg : float
+        Target average halo mass [M_sun/h] passed to ``select_massive_halos``.
+        Default ``10**13.22``.  Matches the default used by ``stacker.stackMap``
+        in the 2-D path so the two panels stack the same halo sample.
+    halo_mass_upper : float
+        Upper halo-mass bound [M_sun/h] for the same selection.  Default ``5e14``.
+    dr : float, optional
+        Deprecated and ignored.  Shell widths are derived from consecutive
+        radial-grid edges, not from ``dr``.  Retained only for backward
+        compatibility; supplying a non-zero value emits a ``DeprecationWarning``.
     verbose : bool
     """
+    if dr is not None and dr != 0.0:
+        warnings.warn(
+            "`dr` is deprecated and ignored; shell widths are derived from "
+            "consecutive radial-grid edges. Remove `dr` from the config.",
+            DeprecationWarning, stacklevel=2,
+        )
+
+    if not baryon_types:
+        raise ValueError("baryon_types must contain at least one component.")
+
     baryon_fields = {}
     for bt in baryon_types:
         if verbose:
@@ -190,58 +259,65 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
 
     haloes = stacker.loadHalos()
     haloMass = haloes['GroupMass']
-    halo_mask = select_massive_halos(haloMass, 10**13.22, 5e14)
+    halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
 
     haloes['GroupMass'] = haloes['GroupMass'][halo_mask]
     haloes['GroupRad'] = haloes['GroupRad'][halo_mask]
     GroupPos_px = np.round(haloes['GroupPos'][halo_mask] / kpcPerPixel).astype(int) % nPixels
+    n_haloes = len(haloes['GroupMass'])
 
     if verbose:
-        print(f"  Number of selected haloes: {halo_mask.sum()}")
+        print(f"  Number of selected haloes: {n_haloes}")
 
-    radii = np.linspace(minRadius, maxRadius, nRadii)
+    # Radial-grid values are treated as bin EDGES -> (nRadii - 1) shells.
+    edges = np.linspace(minRadius, maxRadius, nRadii)
 
-    profiles_baryon = {bt: [] for bt in baryon_types}
-
+    # Cumulative baryon mass within a sphere at each edge, per halo.
+    # Computed once per edge and differenced for shells, so each edge's
+    # cutout is evaluated only once (≈2x fewer cutout calls than computing
+    # an inner and outer sphere per shell).
+    cumulative = {bt: [] for bt in baryon_types}
     t0 = time.time()
-    for r in radii:
-        if sphere:
-            # Cumulative sphere of radius R
-            rr = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
-            mask_indices = get_cutout_indices_3d(first_field, GroupPos_px, rr)
-            for bt in baryon_types:
-                profiles_baryon[bt].append(
-                    sum_over_cutouts(baryon_fields[bt], mask_indices.copy())
-                )
-        else:
-            # Shell from R to R+dr: sphere(R+dr) - sphere(R)
-            rr_inner = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
-            rr_outer = np.ones(len(haloes['GroupMass'])) * (r + dr) / kpcPerPixel
-            mask_inner = get_cutout_indices_3d(first_field, GroupPos_px, rr_inner)
-            mask_outer = get_cutout_indices_3d(first_field, GroupPos_px, rr_outer)
-            for bt in baryon_types:
-                shell_sum = (
-                    sum_over_cutouts(baryon_fields[bt], mask_outer.copy())
-                    - sum_over_cutouts(baryon_fields[bt], mask_inner.copy())
-                )
-                profiles_baryon[bt].append(shell_sum)
+    for edge in edges:
+        rr = np.full(n_haloes, edge / kpcPerPixel)
+        mask_indices = get_cutout_indices_3d(first_field, GroupPos_px, rr)
+        for bt in baryon_types:
+            cumulative[bt].append(
+                sum_over_cutouts(baryon_fields[bt], mask_indices.copy())
+            )
         if verbose:
-            print(f"    r={r:.0f} kpc/h  elapsed={time.time()-t0:.1f}s")
-
+            print(f"    r={edge:.0f} kpc/h  elapsed={time.time()-t0:.1f}s")
     for bt in baryon_types:
-        profiles_baryon[bt] = np.array(profiles_baryon[bt])  # type: ignore
+        cumulative[bt] = np.array(cumulative[bt])  # (nRadii, n_haloes) # type: ignore
 
-    # Mean over haloes at each radius for each component
-    means = {bt: np.mean(profiles_baryon[bt], axis=1) for bt in baryon_types}
+    if sphere:
+        # Cumulative composition -> stacked area (continuous / integral reading).
+        # The r=0 edge encloses no mass, so its bin is empty and safe_fractions
+        # sets it to NaN (a gap at the origin) instead of dividing 0/0.
+        means = {bt: np.mean(cumulative[bt], axis=1) for bt in baryon_types}
+        fractions = safe_fractions(means, baryon_types)
+        ax.stackplot(edges * radDistance, fractions, labels=baryon_types,
+                     alpha=0.8, colors=colours)
+    else:
+        # Differential composition -> stacked bar (per-shell / histogram reading).
+        # Difference the cumulative sums between adjacent edges to get the
+        # per-shell mass, then average over haloes.
+        shells = {bt: cumulative[bt][1:] - cumulative[bt][:-1] # type: ignore
+                  for bt in baryon_types}                       # (nRadii-1, n_haloes)
+        means = {bt: np.mean(shells[bt], axis=1) for bt in baryon_types}
+        # Shells with no enclosed particles (e.g. the innermost one when
+        # min_radius=0) have zero total baryon mass; safe_fractions flags them
+        # as NaN so the bar shows a gap rather than a spurious uniform split.
+        fractions = safe_fractions(means, baryon_types)
 
-    # Denominator: sum of all baryon components (so fractions sum to 1)
-    total_baryon = sum(means[bt] for bt in baryon_types)
-
-    fractions = [means[bt] / total_baryon for bt in baryon_types]
-
-    ax.stackplot(radii * radDistance, fractions, labels=baryon_types,
-                 alpha=0.8, colors=colours)
-
+        left = edges[:-1] * radDistance          # inner edge of each shell
+        widths = np.diff(edges) * radDistance    # shell width (per bar)
+        bottom = np.zeros_like(left)
+        for bt, frac, colour in zip(baryon_types, fractions, colours):
+            ax.bar(left, frac, width=widths, bottom=bottom,
+                   align='edge', color=colour, alpha=0.8, label=bt,
+                   edgecolor='white', linewidth=0.0)
+            bottom = bottom + frac
 
 # ---------------------------------------------------------------------------
 # 2-D stacking
@@ -249,7 +325,8 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
 
 def run_2d_stacking(stacker, baryon_types, filterType, minRadius, maxRadius, nRadii,
                     projection, saveField, loadField, radDistance,
-                    ax, colours, inverse_arcmin, forward_arcmin, verbose=True):
+                    ax, colours, inverse_arcmin, forward_arcmin,
+                    halo_mass_avg=10**13.22, halo_mass_upper=5e14, verbose=True):
     """Stack 2-D projected maps and plot the baryon-fraction stacked-area profile.
 
     The denominator is the sum of all stacked baryon maps so fractions sum to 1.
@@ -275,6 +352,12 @@ def run_2d_stacking(stacker, baryon_types, filterType, minRadius, maxRadius, nRa
         comoving kpc/h → arcmin.
     forward_arcmin : callable
         arcmin → comoving kpc/h (for secondary axis).
+    halo_mass_avg : float
+        Target average halo mass [M_sun/h] for the 'massive' selection inside
+        ``stacker.stackMap``.  Passed explicitly so the 2-D and 3-D panels stack
+        the same halo sample.  Default ``10**13.22``.
+    halo_mass_upper : float
+        Upper halo-mass bound [M_sun/h] for the same selection.  Default ``5e14``.
     verbose : bool
 
     Returns
@@ -282,6 +365,9 @@ def run_2d_stacking(stacker, baryon_types, filterType, minRadius, maxRadius, nRa
     maxRadius_arcmin : float
         Maximum stacking radius in arcmin (used to set xlim on the caller).
     """
+    if not baryon_types:
+        raise ValueError("baryon_types must contain at least one component.")
+
     minRadius_arcmin = inverse_arcmin(minRadius)
     maxRadius_arcmin = inverse_arcmin(maxRadius)
 
@@ -299,18 +385,17 @@ def run_2d_stacking(stacker, baryon_types, filterType, minRadius, maxRadius, nRa
             minRadius=minRadius_arcmin, maxRadius=maxRadius_arcmin, numRadii=nRadii,
             save=saveField, load=loadField, radDistance=radDistance,
             projection=projection,
+            halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
         )
         if radii_out is None:
             radii_out = radii0
         if verbose:
             print(f"    done in {time.time()-t1:.1f}s")
 
+    # Denominator: sum of all baryon-component means.  Bins with zero total are
+    # flagged as NaN by safe_fractions rather than dividing 0/0.
     means = {bt: np.mean(profiles_baryon[bt], axis=1) for bt in baryon_types}
-
-    # Denominator: sum of all baryon-component means
-    total_baryon = sum(means[bt] for bt in baryon_types)
-
-    fractions = [means[bt] / total_baryon for bt in baryon_types]
+    fractions = safe_fractions(means, baryon_types)
 
     ax.stackplot(radii_out * radDistance, fractions, labels=baryon_types,
                  alpha=0.8, colors=colours)
@@ -337,12 +422,16 @@ def main(path2config: str, verbose: bool = True):
     -----------------------------------
     sphere : bool, default True
         If True, each 3D radial bin accumulates all mass within a sphere of
-        radius R.  If False, each bin considers only the shell from R to R+dr
-        (computed as sphere(R+dr) − sphere(R)).
+        radius R (cumulative).  If False, each bin is the spherical shell
+        between consecutive radial-grid edges (differential).
+    halo_mass_avg : float, default 10**13.22
+        Target average halo mass [M_sun/h] for the 'massive' halo selection,
+        applied identically to the 3-D and 2-D stacks.
+    halo_mass_upper : float, default 5e14
+        Upper halo-mass bound [M_sun/h] for the same selection.
     dr : float, optional
-        Shell width in comoving kpc/h.  Only used when ``sphere: false``.
-        Defaults to the spacing of the ``np.linspace`` radii grid,
-        i.e. ``(max_radius - min_radius) / (num_radii - 1)``.
+        Deprecated and ignored.  Shell widths are derived from consecutive
+        radial-grid edges.  Supplying it emits a ``DeprecationWarning``.
     """
     with open(path2config) as f:
         config = yaml.safe_load(f)
@@ -365,16 +454,13 @@ def main(path2config: str, verbose: bool = True):
     nRadii       = stack_config.get('num_radii', 15)
     nPixels      = stack_config.get('n_pixels', 1000)
     sphere       = stack_config.get('sphere', True)
-    dr           = stack_config.get('dr', None)            # comoving kpc/h; shell width
-
-    # Resolve default shell width: spacing of the np.linspace radii grid
-    if not sphere and dr is None:
-        if nRadii > 1:
-            dr = (maxRadius - minRadius) / (nRadii - 1)
-        else:
-            dr = maxRadius * 0.1
-        if verbose:
-            print(f"Shell mode: dr not specified, using radii spacing dr={dr:.1f} kpc/h")
+    # Cast to float: PyYAML parses unsigned-exponent literals (e.g. '5.0e14')
+    # as strings, which would crash deep in the halo-selection comparison.
+    halo_mass_avg   = float(stack_config.get('halo_mass_avg', 10**13.22))   # M_sun/h
+    halo_mass_upper = float(stack_config.get('halo_mass_upper', 5e14))      # M_sun/h
+    # `dr` is deprecated and ignored; read only so a stale config still triggers
+    # the DeprecationWarning emitted inside run_3d_stacking.
+    dr           = stack_config.get('dr', None)
 
     # -----------------------------------------------------------------------
     # Read plotting parameters
@@ -439,13 +525,15 @@ def main(path2config: str, verbose: bool = True):
             colours=colours,
             radDistance=radDistance,
             sphere=sphere,
-            dr=dr if dr is not None else 0.0,
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
+            dr=dr,
             verbose=verbose,
         )
         ax_3d.set_ylabel('Baryon fraction')
         ax_3d.set_xlim(0.0, maxRadius * radDistance)
         ax_3d.set_ylim(0.0, 1.0)
-        ax_3d.grid(True)
+        ax_3d.grid(False)
         # Show bottom ticks on all panels but suppress labels; labels live on
         # the top of the top panel and bottom of the bottom panel (set after the loop).
         ax_3d.tick_params(axis='x', bottom=True, labelbottom=False, top=True, labeltop=False)
@@ -478,6 +566,8 @@ def main(path2config: str, verbose: bool = True):
             colours=colours,
             inverse_arcmin=inverse_arcmin,
             forward_arcmin=forward_arcmin,
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
             verbose=verbose,
         )
         ax_2d.set_ylabel('Baryon fraction')

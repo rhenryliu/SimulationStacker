@@ -115,7 +115,8 @@ def make_stacker(sim: dict, redshift: float):
         stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                     simType=sim_type, feedback=feedback)
         OmegaBaryon = 0.048  # Standard value for SIMBA runs
-        sim_label = f"{sim_name}_{feedback}"
+        # sim_label = f"{sim_name}_{feedback}"
+        sim_label = "SIMBA-m100"
 
     else:
         raise ValueError(f"Unknown sim_type '{sim_type}'.  Supported: 'IllustrisTNG', 'SIMBA'.")
@@ -136,13 +137,16 @@ def make_stacker(sim: dict, redshift: float):
 def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
                     nPixels, minRadius, maxRadius, nRadii,
                     projection, saveField, loadField,
-                    ax, colours, radDistance, verbose=True):
+                    ax, colours, radDistance,
+                    halo_mass_avg=10**13.22, halo_mass_upper=5e14, verbose=True):
     """Build 3-D density fields, cut out spheres around massive haloes, and plot
     the resulting baryon-fraction stacked-area profile.
 
     The radii are in comoving kpc/h (the native 3-D field unit).  A sphere of
     radius r is grown from each halo centre and the enclosed mass summed via
-    ``get_cutout_indices_3d`` / ``sum_over_cutouts``.
+    ``get_cutout_indices_3d`` / ``sum_over_cutouts``.  A radius of exactly 0 is
+    dropped: a zero-radius sphere collapses to the single central voxel, which
+    is non-informative and misleading for a cumulative profile.
 
     Parameters
     ----------
@@ -161,8 +165,15 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
     ax         : matplotlib Axes
     colours    : array-like   — one colour per baryon type
     radDistance : float       — multiplicative scaling applied to radii for x-axis
+    halo_mass_avg : float     — target average halo mass [M_sun/h] for the 'massive'
+                                selection.  Default 10**13.22.
+    halo_mass_upper : float   — upper halo-mass bound [M_sun/h] for the same
+                                selection.  Default 5e14.
     verbose    : bool
     """
+    if not baryon_types:
+        raise ValueError("baryon_types must contain at least one component.")
+
     # Build the 3-D field for each baryon type (numerators of the fractions)
     baryon_fields = {}
     for bt in baryon_types:
@@ -184,20 +195,24 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
     if verbose:
         print(f"  kpcPerPixel = {kpcPerPixel:.3f}")
 
-    # Load haloes and select massive ones (log10 M > 13.22, M < 5e14 M_sun/h)
+    # Load haloes and select massive ones (config-driven mass cuts)
     haloes = stacker.loadHalos()
     haloMass = haloes['GroupMass']
-    halo_mask = select_massive_halos(haloMass, 10**13.22, 5e14)
+    halo_mask = select_massive_halos(haloMass, halo_mass_avg, halo_mass_upper)
 
     haloes['GroupMass'] = haloes['GroupMass'][halo_mask]
     haloes['GroupRad'] = haloes['GroupRad'][halo_mask]  # R200c [comoving kpc/h]
     GroupPos_px = np.round(haloes['GroupPos'][halo_mask] / kpcPerPixel).astype(int) % nPixels
+    n_haloes = len(haloes['GroupMass'])
 
     if verbose:
-        print(f"  Number of selected haloes: {halo_mask.shape}")
+        print(f"  Number of selected haloes: {n_haloes}")
 
-    # Linearly-spaced radii at which to evaluate the stacked profiles
+    # Linearly-spaced radii at which to evaluate the stacked profiles.
+    # Drop r=0: a zero-radius sphere collapses to the central voxel and is
+    # non-informative/misleading for a cumulative profile.
     radii = np.linspace(minRadius, maxRadius, nRadii)  # [comoving kpc/h]
+    radii = radii[radii > 0]
 
     # Accumulate profile arrays: shape will be (nRadii, nHalos) after stacking
     profiles_baryon = {bt: [] for bt in baryon_types}
@@ -206,11 +221,11 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
     t0 = time.time()
     for r in radii:
         # Cutout radius converted to pixels (same for all haloes at a given r)
-        rr = np.ones(len(haloes['GroupMass'])) * r / kpcPerPixel
+        rr = np.ones(n_haloes) * r / kpcPerPixel
         mask_indices = get_cutout_indices_3d(field_total, GroupPos_px, rr)
         for bt in baryon_types:
-            profiles_baryon[bt].append(sum_over_cutouts(baryon_fields[bt], mask_indices.copy()))
-        profiles_total.append(sum_over_cutouts(field_total, mask_indices.copy()))
+            profiles_baryon[bt].append(sum_over_cutouts(baryon_fields[bt], mask_indices))
+        profiles_total.append(sum_over_cutouts(field_total, mask_indices))
         if verbose:
             print(f"    r={r:.0f} kpc/h  elapsed={time.time()-t0:.1f}s")
 
@@ -242,13 +257,15 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
 def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
                     filterType, filterType2, minRadius, maxRadius, nRadii,
                     projection, saveField, loadField, radDistance,
-                    ax, colours, forward_arcmin, inverse_arcmin, verbose=True):
+                    ax, colours, forward_arcmin, inverse_arcmin,
+                    halo_mass_avg=10**13.22, halo_mass_upper=5e14, verbose=True):
     """Stack 2-D projected maps and plot the resulting baryon-fraction profile.
 
     The stacking radii are expressed in arcmin (converted from the comoving kpc/h
     values in the config using the simulation cosmology).  The x-axis of the
     returned plot is in arcmin; the caller is responsible for adding a secondary
-    comoving-kpc/h axis via ``forward_arcmin`` / ``inverse_arcmin``.
+    comoving-kpc/h axis via ``forward_arcmin`` / ``inverse_arcmin``.  An r = 0
+    radius (0 arcmin) is dropped from the plotted profile, mirroring the 3-D path.
 
     Parameters
     ----------
@@ -271,8 +288,15 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
     colours     : array-like
     forward_arcmin  : callable  — arcmin → comoving kpc/h (for secondary axis)
     inverse_arcmin  : callable  — comoving kpc/h → arcmin (for secondary axis)
+    halo_mass_avg : float       — target average halo mass [M_sun/h] forwarded to
+                                  stackMap's 'massive' selection.  Default 10**13.22.
+    halo_mass_upper : float     — upper halo-mass bound [M_sun/h] for the same
+                                  selection.  Default 5e14.
     verbose     : bool
     """
+    if not baryon_types:
+        raise ValueError("baryon_types must contain at least one component.")
+
     # Convert stacking radii from comoving kpc/h → arcmin using the sim cosmology
     minRadius_arcmin = inverse_arcmin(minRadius)
     maxRadius_arcmin = inverse_arcmin(maxRadius)
@@ -286,6 +310,7 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
         minRadius=minRadius_arcmin, maxRadius=maxRadius_arcmin, numRadii=nRadii,
         save=saveField, load=loadField, radDistance=radDistance,
         projection=projection,
+        halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
     )
 
     # Stack each baryon-type map (numerators)
@@ -299,6 +324,7 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
             minRadius=minRadius_arcmin, maxRadius=maxRadius_arcmin, numRadii=nRadii,
             save=saveField, load=loadField, radDistance=radDistance,
             projection=projection,
+            halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
         )
         if verbose:
             print(f"    done in {time.time()-t1:.1f}s")
@@ -313,8 +339,14 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
         fractions.append(mean_bt / mean_total / (OmegaBaryon / stacker.header['Omega0']))
         bt_labels.append(bt)
 
+    # Drop r=0 (0 arcmin) so both panels start at the same physical radius;
+    # inverse_arcmin(0) is exactly 0, so this removes the innermost point only
+    # when min_radius == 0.
+    keep = radii0 > 0
+    fractions = [frac[keep] for frac in fractions]
+
     # x-axis: radii in arcmin scaled by radDistance
-    ax.stackplot(radii0 * radDistance, fractions, labels=bt_labels, alpha=0.8, colors=colours)
+    ax.stackplot(radii0[keep] * radDistance, fractions, labels=bt_labels, alpha=0.8, colors=colours)
 
     # Store the final arcmin radius so the caller can set xlim
     return maxRadius_arcmin
@@ -362,6 +394,11 @@ def main(path2config: str, verbose: bool = True):
     maxRadius   = stack_config.get('max_radius', 6000.0)
     nRadii      = stack_config.get('num_radii', 15)
     nPixels     = stack_config.get('n_pixels', 1000)     # pixels per side for 3-D fields
+
+    # Cast to float: PyYAML parses unsigned-exponent literals (e.g. '5.0e14')
+    # as strings, which would crash deep in the halo-selection comparison.
+    halo_mass_avg   = float(stack_config.get('halo_mass_avg', 10**13.22))   # M_sun/h
+    halo_mass_upper = float(stack_config.get('halo_mass_upper', 5e14))      # M_sun/h
 
     # -----------------------------------------------------------------------
     # Read plotting parameters
@@ -429,6 +466,8 @@ def main(path2config: str, verbose: bool = True):
             ax=ax_3d,
             colours=colours,
             radDistance=radDistance,
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
             verbose=verbose,
         )
         # Style: 3-D subplot
@@ -465,6 +504,8 @@ def main(path2config: str, verbose: bool = True):
             colours=colours,
             forward_arcmin=forward_arcmin,
             inverse_arcmin=inverse_arcmin,
+            halo_mass_avg=halo_mass_avg,
+            halo_mass_upper=halo_mass_upper,
             verbose=verbose,
         )
         # Style: 2-D subplot
@@ -489,7 +530,7 @@ def main(path2config: str, verbose: bool = True):
     axes[0, 0].annotate('3D stacking', xy=(-0.25, 0.5), xycoords='axes fraction',
                         ha='right', va='center', rotation=90, fontsize=14,
                         fontweight='bold')
-    axes[1, 0].annotate('2D stacking', xy=(-0.25, 0.5), xycoords='axes fraction',
+    axes[1, 0].annotate(f'2D {filterType} stacking', xy=(-0.25, 0.5), xycoords='axes fraction',
                         ha='right', va='center', rotation=90, fontsize=14,
                         fontweight='bold')
 

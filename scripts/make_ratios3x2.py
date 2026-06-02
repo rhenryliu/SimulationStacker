@@ -186,7 +186,8 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
     radii : ndarray   — comoving kpc/h
     ratio : ndarray
     err   : ndarray
-    R200c : float     — mean R200c for the selected halos (comoving kpc/h)
+    R200m : float     — mean R200m (mean-overdensity radius) for the selected
+                        halos (comoving kpc/h)
     """
     nPixels     = params['n_pixels']
     minR        = params['min_radius_3d']
@@ -219,7 +220,7 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
     GroupPos_masked = (
         np.round(haloes['GroupPos'][halo_mask] / kpc_per_pixel).astype(int) % nPixels
     )
-    R200c = np.mean(haloes['GroupRad'][halo_mask])  # comoving kpc/h
+    R200m = np.mean(haloes['GroupRad'][halo_mask])  # comoving kpc/h (mean overdensity)
 
     # Stack in spherical apertures at each radius.
     radii     = np.linspace(minR, maxR, nRadii)
@@ -236,7 +237,7 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
 
     ratio, err = _profile_ratio_and_err(profiles0, profiles1,
                                         OmegaBaryon, stacker.header['Omega0'])
-    return radii, ratio, err, R200c
+    return radii, ratio, err, R200m
 
 
 def compute_2d_profile_ratio(stacker: SimulationStacker,
@@ -317,8 +318,8 @@ def plot_panel(ax, radii: np.ndarray, ratio: np.ndarray, err: np.ndarray,
 
 def configure_subplot(ax, row_idx: int, col_idx: int,
                       pType: str, pType2: str,
-                      R200c_kpch: float | None,
-                      R200c_arcmin: float | None,
+                      R200m_kpch: float | None,
+                      R200m_arcmin: float | None,
                       forward_arcmin, inverse_arcmin,
                       max_radius_2d: float, rad_distance: float,
                       suite_name: str, panel_label: str):
@@ -331,10 +332,12 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
         Position in the 2×3 grid.
     pType, pType2 : str
         Particle type names used for y-axis label.
-    R200c_kpch : float or None
-        R200c in comoving kpc/h for the vertical reference line (col 0 only).
-    R200c_arcmin : float or None
-        R200c in arcmin for the vertical reference line (cols 1, 2 only).
+    R200m_kpch : float or None
+        R200m (mean-overdensity radius) in comoving kpc/h for the vertical
+        reference line (col 0 only).
+    R200m_arcmin : float or None
+        R200m (mean-overdensity radius) in arcmin for the vertical reference
+        line (cols 1, 2 only).
     forward_arcmin, inverse_arcmin : callable
         Conversion functions between arcmin and comoving kpc/h, used to add
         a secondary x-axis on the top row (cols 1, 2).
@@ -350,11 +353,11 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
     # --- Horizontal reference line at unity ---
     ax.axhline(1.0, color='k', ls='--', lw=2)
 
-    # --- R200c vertical reference line ---
-    if col_idx == 0 and R200c_kpch is not None:
-        ax.axvline(R200c_kpch, color='gray', ls=':', lw=2, label=r'$R_{200c}$')
-    elif col_idx > 0 and R200c_arcmin is not None:
-        ax.axvline(R200c_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200c}$')
+    # --- R200m vertical reference line (mean-overdensity radius) ---
+    if col_idx == 0 and R200m_kpch is not None:
+        ax.axvline(R200m_kpch, color='gray', ls=':', lw=2, label=r'$R_{200\mathrm{m}}$')
+    elif col_idx > 0 and R200m_arcmin is not None:
+        ax.axvline(R200m_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200\mathrm{m}}$')
 
     # --- Axis limits ---
     ax.set_xlim(0.0, None if col_idx == 0
@@ -508,11 +511,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # ------------------------------------------------------------------
     fig, axes = plt.subplots(2, 3, figsize=(18, 9), sharex='col', sharey='row')
 
-    # R200c placeholders (set during the first processed sim in each suite).
-    R200c_kpch_tng   = None
-    R200c_kpch_simba = None
-    R200c_arcmin_tng   = None
-    R200c_arcmin_simba = None
+    # R200m placeholders (set during the first processed sim in each suite).
+    R200m_kpch_tng   = None
+    R200m_kpch_simba = None
+    R200m_arcmin_tng   = None
+    R200m_arcmin_simba = None
 
     # Arcmin ↔ comoving kpc/h conversion functions (set after first TNG stacker).
     forward_arcmin  = None
@@ -557,14 +560,14 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             # ==============================================================
             if verbose:
                 print(f"    Computing 3D profiles...")
-            radii_3d, ratio_3d, err_3d, R200c_kpch = compute_3d_profile_ratio(
+            radii_3d, ratio_3d, err_3d, R200m_kpch = compute_3d_profile_ratio(
                 stacker, pType, pType2, params_3d, OmegaBaryon)
 
-            # Cache R200c for vline decoration.
-            if sim_type_name == 'IllustrisTNG' and R200c_kpch_tng is None:
-                R200c_kpch_tng = R200c_kpch
-            if sim_type_name == 'SIMBA' and R200c_kpch_simba is None:
-                R200c_kpch_simba = R200c_kpch
+            # Cache R200m for vline decoration.
+            if sim_type_name == 'IllustrisTNG' and R200m_kpch_tng is None:
+                R200m_kpch_tng = R200m_kpch
+            if sim_type_name == 'SIMBA' and R200m_kpch_simba is None:
+                R200m_kpch_simba = R200m_kpch
 
             plot_panel(axes[row_idx, 0], radii_3d, ratio_3d, err_3d,
                        sim_label, colours[j], plot_error_bars)
@@ -577,11 +580,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             radii_2d_cum, ratio_2d_cum, err_2d_cum = compute_2d_profile_ratio(
                 stacker, pType, pType2, ft_col1, ft2_col1, params_2d, OmegaBaryon)
 
-            # Cache R200c in arcmin.
-            if sim_type_name == 'IllustrisTNG' and R200c_arcmin_tng is None:
-                R200c_arcmin_tng = comoving_to_arcmin(R200c_kpch, redshift, cosmo)
-            if sim_type_name == 'SIMBA' and R200c_arcmin_simba is None:
-                R200c_arcmin_simba = comoving_to_arcmin(R200c_kpch, redshift, cosmo)
+            # Cache R200m in arcmin.
+            if sim_type_name == 'IllustrisTNG' and R200m_arcmin_tng is None:
+                R200m_arcmin_tng = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
+            if sim_type_name == 'SIMBA' and R200m_arcmin_simba is None:
+                R200m_arcmin_simba = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
 
             plot_panel(axes[row_idx, 1], radii_2d_cum, ratio_2d_cum, err_2d_cum,
                        sim_label, colours[j], plot_error_bars)
@@ -601,8 +604,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # Axis decorations
     # ------------------------------------------------------------------
     suite_names = ['IllustrisTNG', 'SIMBA']
-    R200c_kpch_per_row   = [R200c_kpch_tng,   R200c_kpch_simba]
-    R200c_arcmin_per_row = [R200c_arcmin_tng, R200c_arcmin_simba]
+    R200m_kpch_per_row   = [R200m_kpch_tng,   R200m_kpch_simba]
+    R200m_arcmin_per_row = [R200m_arcmin_tng, R200m_arcmin_simba]
 
     panel_idx = 0
     for row_idx, suite_name in enumerate(suite_names):
@@ -613,8 +616,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 col_idx=col_idx,
                 pType=pType,
                 pType2=pType2,
-                R200c_kpch=R200c_kpch_per_row[row_idx],
-                R200c_arcmin=R200c_arcmin_per_row[row_idx],
+                R200m_kpch=R200m_kpch_per_row[row_idx],
+                R200m_arcmin=R200m_arcmin_per_row[row_idx],
                 forward_arcmin=forward_arcmin,
                 inverse_arcmin=inverse_arcmin,
                 max_radius_2d=max_radius_2d,

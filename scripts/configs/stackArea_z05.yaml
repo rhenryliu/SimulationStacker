@@ -17,8 +17,8 @@ stack:
   # Stacking radii expressed in comoving kpc/h.
   # For 2D runs these are automatically converted to arcmin via the cosmology.
   min_radius: 0.0    # comoving kpc/h
-  max_radius: 6000.0   # comoving kpc/h
-  num_radii: 15        # number of linearly-spaced radial bins
+  max_radius: 4000.0   # comoving kpc/h
+  num_radii: 19        # number of linearly-spaced radial bins
 
   # Overall multiplicative scale for the plotted x-axis values (set to 1 for
   # no scaling).
@@ -44,8 +44,17 @@ stack:
   particle_type_2: 'total'
 
   # Baryon components to decompose.  The stacked-area fraction of each is plotted
-  # separately, normalised by Omega_b / Omega_m.
+  # separately, normalised by the sum of all baryon-type fields (so the
+  # components always sum to 1; no Omega_b / Omega_m normalisation is applied).
   baryon_types: ['ionized_gas', 'neutral_gas', 'Stars', 'BH']
+
+  # Halo selection ('massive' method): pick the highest-mass haloes whose
+  # cumulative average mass matches halo_mass_avg, capped at halo_mass_upper.
+  # Applied identically to the 3-D and 2-D stacks so both use the same sample.
+  # NB: exponents must be signed (e.g. 5.0e+14, not 5.0e14) or PyYAML parses
+  # them as strings rather than floats.
+  halo_mass_avg: 1.6595869e+13   # target average halo mass [M_sun/h] (= 10**13.22)
+  halo_mass_upper: 5.0e+14       # upper halo-mass bound [M_sun/h]
 
   # Halo masking (set mask_haloes: true to excise neighbouring haloes)
   mask_haloes: false

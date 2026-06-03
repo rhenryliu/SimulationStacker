@@ -36,7 +36,7 @@ Layout
 ------
 Single panel with one line per simulation, shaded uncertainty bands, a
 horizontal dashed reference line at 1.0 with a ±5 % shaded band, and a
-vertical dotted line at the mean R200c of TNG300-1 (from the mass-cut
+vertical dotted line at the mean R200m of TNG300-1 (from the mass-cut
 halo selection).
 
 Usage
@@ -245,14 +245,14 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
     params  : dict
         Stacking parameters extracted from the YAML config.
     cosmo   : FlatLambdaCDM
-        Cosmology object for the R200c → arcmin conversion.
+        Cosmology object for the R200m → arcmin conversion.
 
     Returns
     -------
     radii        : ndarray  — stacking radii in arcmin (scaled by rad_distance)
     ratio        : ndarray  — f_gas(SHAM) / f_gas(mass-cut)
     err          : ndarray  — one-sigma uncertainty on ratio
-    R200c_arcmin : float    — mean R200c of mass-cut halos, in arcmin
+    R200m_arcmin : float    — mean R200m of mass-cut halos, in arcmin
     """
     pType  = params['particle_type']    # ionized_gas (numerator of f_gas)
     fType  = params['filter_type']
@@ -353,21 +353,21 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
     )
 
     # ------------------------------------------------------------------
-    # Mean R200c from mass-cut halo selection, converted to arcmin.
+    # Mean R200m from mass-cut halo selection, converted to arcmin.
     # Used for the vertical reference line in the figure.
     # ------------------------------------------------------------------
     haloes    = stacker.loadHalos()
     halo_mask = select_halos(haloes['GroupMass'], 'massive',
                              target_average_mass=halo_mass_avg,
                              upper_mass_bound=halo_mass_upper)
-    R200c_kpch   = np.mean(haloes['GroupRad'][halo_mask])   # comoving kpc/h
-    R200c_arcmin = comoving_to_arcmin(R200c_kpch, z, cosmo=cosmo)
+    R200m_kpch   = np.mean(haloes['GroupRad'][halo_mask])   # comoving kpc/h
+    R200m_arcmin = comoving_to_arcmin(R200m_kpch, z, cosmo=cosmo)
 
     # Return radii scaled by rad_distance, matching the convention in
     # compute_2d_profile_ratio from make_ratios3x2.py.  radii from stackMap
     # is in arcmin; radDist=1.0 (the YAML default) is a pure display scale
     # factor and leaves the values unchanged.
-    return radii * radDist, ratio, err, R200c_arcmin
+    return radii * radDist, ratio, err, R200m_arcmin
 
 
 # ===========================================================================
@@ -484,11 +484,11 @@ def main(path2config: str, verbose: bool = True):
     # ------------------------------------------------------------------
     fig, ax = plt.subplots(1, 1, figsize=(9, 7))
 
-    # R200c reference line: stored from the first IllustrisTNG sim processed
+    # R200m reference line: stored from the first IllustrisTNG sim processed
     # (TNG300-1 when the config lists IllustrisTNG first, as in the default
     # fgas_hod_ratio_z05.yaml).  Uses the mass-cut halo selection.
-    R200c_ref_arcmin = None
-    R200c_ref_label  = None
+    R200m_ref_arcmin = None
+    R200m_ref_label  = None
 
     t0 = time.time()
 
@@ -519,17 +519,17 @@ def main(path2config: str, verbose: bool = True):
                 print(f"  Stacking {pT}/{pT2} CAP profiles "
                       f"(mass-cut ×2, then SHAM ×2)...")
 
-            radii, ratio, err, R200c_arcmin = compute_fgas_hod_ratio(
+            radii, ratio, err, R200m_arcmin = compute_fgas_hod_ratio(
                 stacker, params, cosmo)
 
             if verbose:
-                print(f"  R200c(mass-cut) = {R200c_arcmin:.3f} arcmin")
+                print(f"  R200m(mass-cut) = {R200m_arcmin:.3f} arcmin")
                 print(f"  ratio range:     [{ratio.min():.3f}, {ratio.max():.3f}]")
 
-            # Cache R200c from the first IllustrisTNG sim for the vline.
-            if sim_type_name == 'IllustrisTNG' and R200c_ref_arcmin is None:
-                R200c_ref_arcmin = R200c_arcmin
-                R200c_ref_label  = sim_label
+            # Cache R200m from the first IllustrisTNG sim for the vline.
+            if sim_type_name == 'IllustrisTNG' and R200m_ref_arcmin is None:
+                R200m_ref_arcmin = R200m_arcmin
+                R200m_ref_label  = sim_label
 
             # ---- Plot line and shaded ±1σ uncertainty band ----
             ax.plot(radii, ratio, label=sim_label, color=colour, lw=2,
@@ -549,10 +549,10 @@ def main(path2config: str, verbose: bool = True):
     ax.axhspan(0.95, 1.05, color='grey', alpha=0.15, zorder=0,
                label=r'$\pm 5\%$')
 
-    # Vertical dotted line at mean R200c from TNG300-1 mass-cut halos.
-    if R200c_ref_arcmin is not None:
-        ax.axvline(R200c_ref_arcmin, color='gray', ls=':', lw=2,
-                   label=rf'$\langle R_{{200c}} \rangle$ ({R200c_ref_label})')
+    # Vertical dotted line at mean R200m from TNG300-1 mass-cut halos.
+    if R200m_ref_arcmin is not None:
+        ax.axvline(R200m_ref_arcmin, color='gray', ls=':', lw=2,
+                   label=rf'$\langle R_{{200\mathrm{{m}}}} \rangle$ ({R200m_ref_label})')
 
     ax.set_xlabel('R [arcmin]', fontsize=20)
     ax.set_ylabel(

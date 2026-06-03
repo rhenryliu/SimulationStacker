@@ -314,7 +314,7 @@ def compute_fgas_2d(stacker: SimulationStacker, params: dict,
         Stacking parameters from the YAML config.
     OmegaBaryon : float
     cosmo       : FlatLambdaCDM
-        Cosmology object for the R200c → arcmin conversion.
+        Cosmology object for the R200m → arcmin conversion.
 
     Returns
     -------
@@ -323,7 +323,7 @@ def compute_fgas_2d(stacker: SimulationStacker, params: dict,
     err_mass     : ndarray
     fgas_sham    : ndarray — normalised f_gas for SHAM selection
     err_sham     : ndarray
-    R200c_arcmin : float   — mean R200c of mass-cut halos in arcmin
+    R200m_arcmin : float   — mean R200m of mass-cut halos in arcmin
     """
     pType  = params['particle_type']
     fType  = params['filter_type']
@@ -415,15 +415,15 @@ def compute_fgas_2d(stacker: SimulationStacker, params: dict,
     fgas_sham, err_sham = _fgas_profile_and_err(
         profiles_ig_sham, profiles_tot_sham, OmegaBaryon, Omega0)
 
-    # R200c from mass-cut halos, converted to arcmin.
+    # R200m from mass-cut halos, converted to arcmin.
     haloes    = stacker.loadHalos()
     halo_mask = select_halos(haloes['GroupMass'], 'massive',
                              target_average_mass=halo_mass_avg,
                              upper_mass_bound=halo_mass_upper)
-    R200c_kpch   = np.mean(haloes['GroupRad'][halo_mask])
-    R200c_arcmin = comoving_to_arcmin(R200c_kpch, z, cosmo=cosmo)
+    R200m_kpch   = np.mean(haloes['GroupRad'][halo_mask])
+    R200m_arcmin = comoving_to_arcmin(R200m_kpch, z, cosmo=cosmo)
 
-    return radii * radDist, fgas_mass, err_mass, fgas_sham, err_sham, R200c_arcmin
+    return radii * radDist, fgas_mass, err_mass, fgas_sham, err_sham, R200m_arcmin
 
 
 def compute_fgas_3d(stacker: SimulationStacker, params: dict,
@@ -453,7 +453,7 @@ def compute_fgas_3d(stacker: SimulationStacker, params: dict,
     err_mass   : ndarray
     fgas_sham  : ndarray — normalised f_gas for SHAM selection
     err_sham   : ndarray
-    R200c_kpch : float   — mean R200c of mass-cut halos (comoving kpc/h)
+    R200m_kpch : float   — mean R200m of mass-cut halos (comoving kpc/h)
     """
     nPixels               = params['n_pixels']
     minR                  = params['min_radius_3d']
@@ -495,7 +495,7 @@ def compute_fgas_3d(stacker: SimulationStacker, params: dict,
         np.round(haloes['GroupPos'][halo_mask] / kpc_per_pixel).astype(int)
         % nPixels
     )
-    R200c_kpch = np.mean(haloes['GroupRad'][halo_mask])
+    R200m_kpch = np.mean(haloes['GroupRad'][halo_mask])
 
     profiles_ig_mass  = []
     profiles_tot_mass = []
@@ -554,7 +554,7 @@ def compute_fgas_3d(stacker: SimulationStacker, params: dict,
     fgas_sham, err_sham = _fgas_profile_and_err(
         profiles_ig_sham, profiles_tot_sham, OmegaBaryon, Omega0)
 
-    return radii, fgas_mass, err_mass, fgas_sham, err_sham, R200c_kpch
+    return radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_kpch
 
 
 # ===========================================================================
@@ -682,9 +682,9 @@ def main(path2config: str, verbose: bool = True):
     ax_mass = axes[0]   # left  panel: mass-cut selection
     ax_sham = axes[1]   # right panel: SHAM selection
 
-    # R200c reference line: cached from the first IllustrisTNG sim processed.
-    R200c_ref   = None
-    R200c_label = None
+    # R200m reference line: cached from the first IllustrisTNG sim processed.
+    R200m_ref   = None
+    R200m_label = None
 
     t0 = time.time()
 
@@ -716,7 +716,7 @@ def main(path2config: str, verbose: bool = True):
                     pT2 = params['particle_type_2']
                     print(f"  Stacking {pT}/{pT2} 2D profiles "
                           f"(mass-cut ×2, SHAM ×2)...")
-                radii, fgas_mass, err_mass, fgas_sham, err_sham, R200c_val = \
+                radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_val = \
                     compute_fgas_2d(stacker, params, OmegaBaryon, cosmo)
             else:
                 if verbose:
@@ -724,17 +724,17 @@ def main(path2config: str, verbose: bool = True):
                     pT2 = params['particle_type_2']
                     print(f"  Stacking {pT}/{pT2} 3D profiles "
                           f"(mass-cut + SHAM)...")
-                radii, fgas_mass, err_mass, fgas_sham, err_sham, R200c_val = \
+                radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_val = \
                     compute_fgas_3d(stacker, params, OmegaBaryon)
 
             if verbose:
                 units = 'arcmin' if dim == '2D' else 'kpc/h'
-                print(f"  R200c(mass-cut) = {R200c_val:.3f} {units}")
+                print(f"  R200m(mass-cut) = {R200m_val:.3f} {units}")
 
-            # Cache R200c from the first IllustrisTNG sim for the vline.
-            if sim_type_name == 'IllustrisTNG' and R200c_ref is None:
-                R200c_ref   = R200c_val
-                R200c_label = sim_label
+            # Cache R200m from the first IllustrisTNG sim for the vline.
+            if sim_type_name == 'IllustrisTNG' and R200m_ref is None:
+                R200m_ref   = R200m_val
+                R200m_label = sim_label
 
             # ---- Plot mass-cut panel ----
             ax_mass.plot(radii, fgas_mass, label=sim_label, color=colour,
@@ -771,10 +771,10 @@ def main(path2config: str, verbose: bool = True):
         ax.axhspan(0.95, 1.05, color='grey', alpha=0.15, zorder=0,
                    label=r'$\pm 5\%$')
 
-        # Vertical dotted line at mean R200c from TNG300-1 mass-cut halos.
-        if R200c_ref is not None:
-            ax.axvline(R200c_ref, color='gray', ls=':', lw=2,
-                       label=rf'$\langle R_{{200c}} \rangle$ ({R200c_label})')
+        # Vertical dotted line at mean R200m from TNG300-1 mass-cut halos.
+        if R200m_ref is not None:
+            ax.axvline(R200m_ref, color='gray', ls=':', lw=2,
+                       label=rf'$\langle R_{{200\mathrm{{m}}}} \rangle$ ({R200m_label})')
 
         ax.set_xlabel(x_label, fontsize=20)
         ax.set_xlim(0.0, xlim_max)

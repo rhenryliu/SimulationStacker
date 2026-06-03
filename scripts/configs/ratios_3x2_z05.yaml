@@ -48,11 +48,15 @@ stack:
   # ------------------------------------------------------------------
   # Columns 1 & 2 — 2D projected profile parameters
   # ------------------------------------------------------------------
+  # The 2D columns reuse the 3D comoving radial range (min_radius_3d,
+  # max_radius_3d, num_radii_3d) above, converted to arcmin per-simulation, so
+  # they extend to the same comoving extent (4000 ckpc/h) as the 3D column.
   pixel_size:    0.5      # map pixel size (arcmin)
+  rad_distance:  1.0      # multiplicative scaling applied to arcmin radii in plots
+  # Depreciated yaml params:
   min_radius_2d: 1.0      # innermost radial bin (arcmin, before rad_distance scaling)
   max_radius_2d: 10.0     # outermost radial bin (arcmin, before rad_distance scaling)
   num_radii_2d:  11       # number of radial bins
-  rad_distance:  1.0      # multiplicative scaling applied to arcmin radii in plots
 
   # Column 1: filter applied to numerator and denominator when stacking in 2D
   filter_type_col1:   'cumulative'   # options: 'CAP', 'cumulative', 'DSigma', 'upsilon'

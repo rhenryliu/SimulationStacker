@@ -244,8 +244,14 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
                               pType: str, pType2: str,
                               filterType: str, filterType2: str,
                               params: dict,
-                              OmegaBaryon: float):
+                              OmegaBaryon: float,
+                              minR_com: float, maxR_com: float, nRadii: int,
+                              inverse_arcmin):
     """Compute 2D projected fraction profiles via ``stackMap``.
+
+    The radial range is supplied in comoving kpc/h (matching the 3D column) and
+    converted to arcmin per-simulation via ``inverse_arcmin`` (the sim's own
+    cosmology), so that every 2D profile reaches the same comoving extent.
 
     Parameters
     ----------
@@ -255,10 +261,15 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
     filterType, filterType2 : str
         Filter applied when stacking (e.g. ``'CAP'``, ``'cumulative'``).
     params : dict
-        Sub-dict of stack parameters (``pixel_size``, ``min_radius_2d``,
-        ``max_radius_2d``, ``num_radii_2d``, ``rad_distance``, ``projection``,
-        ``save_field``, ``load_field``, ``subtract_mean``).
+        Sub-dict of stack parameters (``pixel_size``, ``rad_distance``,
+        ``projection``, ``save_field``, ``load_field``, ``subtract_mean``).
     OmegaBaryon : float
+    minR_com, maxR_com : float
+        Inner/outer stacking radius in comoving kpc/h.
+    nRadii : int
+        Number of radial bins.
+    inverse_arcmin : callable
+        comoving kpc/h → arcmin conversion for this simulation's cosmology.
 
     Returns
     -------
@@ -267,14 +278,15 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
     err   : ndarray
     """
     pixelSize   = params['pixel_size']
-    minR        = params['min_radius_2d']
-    maxR        = params['max_radius_2d']
-    nRadii      = params['num_radii_2d']
     radDistance = params['rad_distance']
     projection  = params['projection']
     save        = params['save_field']
     load        = params['load_field']
     sub_mean    = params['subtract_mean']
+
+    # Convert the comoving radial range to arcmin using this sim's cosmology.
+    minR = inverse_arcmin(minR_com)
+    maxR = inverse_arcmin(maxR_com)
 
     radii0, profiles0 = stacker.stackMap(
         pType, filterType=filterType,
@@ -294,6 +306,8 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
     ratio, err = _profile_ratio_and_err(profiles0, profiles1,
                                         OmegaBaryon, stacker.header['Omega0'])
     # radii0 and radii1 share the same x-axis (same stacking parameters).
+    # stackMap returns radii in units of radDistance (the rr grid spans
+    # +/- n_vir in multiples of radDistance), so multiply to get arcmin.
     return radii0 * radDistance, ratio, err
 
 
@@ -321,7 +335,7 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
                       R200m_kpch: float | None,
                       R200m_arcmin: float | None,
                       forward_arcmin, inverse_arcmin,
-                      max_radius_2d: float, rad_distance: float,
+                      xlim_2d: float,
                       suite_name: str, panel_label: str):
     """Apply axis decorations to a single subplot panel.
 
@@ -341,10 +355,9 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
     forward_arcmin, inverse_arcmin : callable
         Conversion functions between arcmin and comoving kpc/h, used to add
         a secondary x-axis on the top row (cols 1, 2).
-    max_radius_2d : float
-        Upper limit for 2D x-axis (arcmin).
-    rad_distance : float
-        Scaling factor applied to 2D arcmin radii.
+    xlim_2d : float
+        Upper limit for the 2D x-axis (arcmin), already scaled by
+        ``rad_distance`` and padded to avoid clipping any profile.
     suite_name : str
         Suite label used in the column 0 title (ignored for cols 1, 2).
     panel_label : str
@@ -360,8 +373,7 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
         ax.axvline(R200m_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200\mathrm{m}}$')
 
     # --- Axis limits ---
-    ax.set_xlim(0.0, None if col_idx == 0
-                else (max_radius_2d * rad_distance + 0.5))
+    ax.set_xlim(0.0, None if col_idx == 0 else xlim_2d)
     ax.grid(True)
 
     # --- Y axis label (left column only) ---
@@ -456,13 +468,12 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     }
 
     # --- 2D column parameters ---
+    # The 2D columns reuse the 3D comoving radial range (min_radius_3d,
+    # max_radius_3d, num_radii_3d), converted to arcmin per-simulation, so both
+    # columns extend to the same comoving extent (4000 ckpc/h) as the 3D column.
     rad_distance = stack_cfg.get('rad_distance', 1.0)
-    max_radius_2d = stack_cfg.get('max_radius_2d', 10.0)
     params_2d = {
         'pixel_size':    stack_cfg.get('pixel_size', 0.5),
-        'min_radius_2d': stack_cfg.get('min_radius_2d', 1.0),
-        'max_radius_2d': max_radius_2d,
-        'num_radii_2d':  stack_cfg.get('num_radii_2d', 11),
         'rad_distance':  rad_distance,
         'projection':    projection,
         'save_field':    save_field,
@@ -521,6 +532,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     forward_arcmin  = None
     inverse_arcmin  = None
 
+    # Largest plotted arcmin radius across all sims/2D panels; used to set a
+    # shared x-limit for the 2D columns (per-sim cosmologies map 4000 ckpc/h to
+    # slightly different arcmin, and sharex='col' ties each column's rows).
+    max_arcmin_2d = 0.0
+
     t0 = time.time()
 
     # ------------------------------------------------------------------
@@ -547,13 +563,17 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             stacker, OmegaBaryon, cosmo, sim_label = setup_stacker(
                 sim, sim_type_name, redshift)
 
-            # ---- Arcmin ↔ kpc/h conversion (initialised from first TNG sim) ----
+            # ---- Arcmin ↔ kpc/h conversion ----
+            # Per-sim converters (this sim's own cosmology) convert the 2D
+            # stacking range to arcmin.  The global converters (first TNG sim)
+            # drive the shared secondary top axis in configure_subplot.
+            def _make_converters(c, z):
+                def _fwd(arcmin): return arcmin_to_comoving(arcmin, z, c)
+                def _inv(comov):  return comoving_to_arcmin(comov,  z, c)
+                return _fwd, _inv
+            fwd_sim, inv_sim = _make_converters(cosmo, redshift)
             if forward_arcmin is None:
-                def _make_converters(c, z):
-                    def _fwd(arcmin): return arcmin_to_comoving(arcmin, z, c)
-                    def _inv(comov):  return comoving_to_arcmin(comov,  z, c)
-                    return _fwd, _inv
-                forward_arcmin, inverse_arcmin = _make_converters(cosmo, redshift)
+                forward_arcmin, inverse_arcmin = fwd_sim, inv_sim
 
             # ==============================================================
             # Column 0 — 3D spherical profiles
@@ -578,7 +598,12 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             if verbose:
                 print(f"    Computing 2D cumulative profiles (filter={ft_col1}/{ft2_col1})...")
             radii_2d_cum, ratio_2d_cum, err_2d_cum = compute_2d_profile_ratio(
-                stacker, pType, pType2, ft_col1, ft2_col1, params_2d, OmegaBaryon)
+                stacker, pType, pType2, ft_col1, ft2_col1, params_2d, OmegaBaryon,
+                params_3d['min_radius_3d'], params_3d['max_radius_3d'],
+                params_3d['num_radii_3d'], inv_sim)
+
+            # Track the largest plotted arcmin radius for the shared 2D x-limit.
+            max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii_2d_cum)))
 
             # Cache R200m in arcmin.
             if sim_type_name == 'IllustrisTNG' and R200m_arcmin_tng is None:
@@ -595,7 +620,12 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             if verbose:
                 print(f"    Computing 2D CAP profiles (filter={ft_col2}/{ft2_col2})...")
             radii_2d_cap, ratio_2d_cap, err_2d_cap = compute_2d_profile_ratio(
-                stacker, pType, pType2, ft_col2, ft2_col2, params_2d, OmegaBaryon)
+                stacker, pType, pType2, ft_col2, ft2_col2, params_2d, OmegaBaryon,
+                params_3d['min_radius_3d'], params_3d['max_radius_3d'],
+                params_3d['num_radii_3d'], inv_sim)
+
+            # Track the largest plotted arcmin radius for the shared 2D x-limit.
+            max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii_2d_cap)))
 
             plot_panel(axes[row_idx, 2], radii_2d_cap, ratio_2d_cap, err_2d_cap,
                        sim_label, colours[j], plot_error_bars)
@@ -606,6 +636,9 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     suite_names = ['IllustrisTNG', 'SIMBA']
     R200m_kpch_per_row   = [R200m_kpch_tng,   R200m_kpch_simba]
     R200m_arcmin_per_row = [R200m_arcmin_tng, R200m_arcmin_simba]
+
+    # Shared upper x-limit (arcmin) for the 2D columns, padded to avoid clipping.
+    xlim_2d = max_arcmin_2d + 0.5
 
     panel_idx = 0
     for row_idx, suite_name in enumerate(suite_names):
@@ -620,8 +653,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 R200m_arcmin=R200m_arcmin_per_row[row_idx],
                 forward_arcmin=forward_arcmin,
                 inverse_arcmin=inverse_arcmin,
-                max_radius_2d=max_radius_2d,
-                rad_distance=rad_distance,
+                xlim_2d=xlim_2d,
                 suite_name=suite_name,
                 panel_label=_PANEL_LABELS[panel_idx],
             )

@@ -139,6 +139,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     max_radius   = stack_config.get('max_radius', 6.0)
     n_radii      = stack_config.get('num_radii', 11)
     use_subhalos = stack_config.get('use_subhalos', False)
+    halo_abundance_target = stack_config.get('halo_abundance_target', None)
     mask_haloes  = stack_config.get('mask_haloes', False)
     mask_radii   = stack_config.get('mask_radii', 3.0)
 
@@ -239,6 +240,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 mask=mask_haloes,
                 maskRad=mask_radii,
                 use_subhalos=use_subhalos,
+                halo_abundance_target=halo_abundance_target,
             )
 
             # profiles shape: (n_radii, n_halos)

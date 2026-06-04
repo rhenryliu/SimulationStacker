@@ -203,6 +203,7 @@ def main(path2config: str, verbose: bool = True) -> None:
         mask         = bt_stack.get('mask_haloes',  False),
         maskRad      = bt_stack.get('mask_radii',   3.0),
         use_subhalos = bt_stack.get('use_subhalos', False),
+        halo_abundance_target = bt_stack.get('halo_abundance_target', None),
     )
 
     beam_factors: list = []   # one (n_radii,) array per simulation
@@ -308,6 +309,7 @@ def main(path2config: str, verbose: bool = True) -> None:
         mask         = nb_stack.get('mask_haloes',  False),
         maskRad      = nb_stack.get('mask_radii',   3.0),
         use_subhalos = nb_stack.get('use_subhalos', False),
+        halo_abundance_target = nb_stack.get('halo_abundance_target', None),
     )
 
     # Pre-build sim_label → colour mapping from the noBeam config, using the
@@ -394,7 +396,7 @@ def main(path2config: str, verbose: bool = True) -> None:
 
                 profiles_extra = mean_e / mean1 * factor
                 ax.plot(radii_e * nb_rad_distance, profiles_extra,
-                        label='_nolegend_', color=colour, lw=2, ls=extra_ls)
+                        label='_nolegend_', color=colour, lw=2, ls=extra_ls, alpha=0.7)
 
                 # if plot_error_bars:
                 if False:

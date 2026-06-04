@@ -298,7 +298,8 @@ class SimulationStacker(object):
                  z=None, projection='xy', save=False, load=True, radDistance=1.0,
                  pixelSize=0.5, beamSize=1.6,
                  mask=False, maskRad=3.0, subtract_mean=False,
-                 use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
+                 use_subhalos=False, halo_abundance_target=5e-4,
+                 halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
                  halo_mask=None):
         """Stack the map of a given particle type.
 
@@ -321,6 +322,7 @@ class SimulationStacker(object):
                 Defaults to 3x virial radii.
             subtract_mean (bool, optional): If True, subtracts the mean of the map before stacking. Defaults to False.
             use_subhalos (bool, optional): If True, uses subhalos in the stacking process. Defaults to False.
+            halo_abundance_target (float, optional): Target halo abundance for subhalo selection. If None, falls back to the default of 5e-4. Defaults to 5e-4.
             halo_mass_avg (float, optional): Average halo mass for selecting halos. Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos. Defaults to None.
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
@@ -362,6 +364,7 @@ class SimulationStacker(object):
             z=z,
             pixelSize=pixelSize,
             use_subhalos=use_subhalos,
+            halo_abundance_target=halo_abundance_target,
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
             halo_mask=halo_mask,
@@ -400,7 +403,8 @@ class SimulationStacker(object):
     def stackField(self, pType, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                    projection='xy', nPixels=None, save=False, load=True, radDistance=1000.0,
                    mask=False, maskRad=3.0, subtract_mean=False,
-                   use_subhalos=False, halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
+                   use_subhalos=False, halo_abundance_target=5e-4,
+                   halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
                    halo_mask=None):
         """Do stacking on the computed field.
 
@@ -421,6 +425,7 @@ class SimulationStacker(object):
                 Defaults to 3x virial radii.
             subtract_mean (bool, optional): If True, subtracts the mean of the field before stacking. Defaults to False.
             use_subhalos (bool, optional): If True, uses subhalos in the stacking. Defaults to False.
+            halo_abundance_target (float, optional): Target halo abundance for subhalo selection. If None, falls back to the default of 5e-4. Defaults to 5e-4.
             halo_mass_avg (float, optional): Average halo mass for subhalo selection. Defaults to 10^(13.22).
             halo_mass_upper (float, optional): Upper halo mass limit for subhalo selection. Defaults to 5*10^(14).
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
@@ -468,6 +473,7 @@ class SimulationStacker(object):
             radDistance=radDistance,
             radDistanceUnits='kpc/h',
             use_subhalos=use_subhalos,
+            halo_abundance_target=halo_abundance_target,
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
             halo_mask=halo_mask,
@@ -504,7 +510,7 @@ class SimulationStacker(object):
             radDistanceUnits (str, optional): Units for radDistance. Either 'kpc/h' or 'arcmin'. Defaults to 'kpc/h'.
             halo_mass_avg (float, optional): Average halo mass for selecting halos ('massive' method). Defaults to 10**(13.22).
             halo_mass_upper (float, optional): Upper mass bound for selecting halos ('massive' method). Defaults to 5*10**(14).
-            halo_abundance_target (float, optional): Target number density in (cMpc/h)^-3 for subhalo abundance matching ('abundance' method). Subhalos are ranked by stellar mass (SubhaloMStar) rather than total bound mass, following the observational motivation for stellar-mass-based SHAM (Reddick et al. 2013). Defaults to 5e-4.
+            halo_abundance_target (float, optional): Target number density in (cMpc/h)^-3 for subhalo abundance matching ('abundance' method). Subhalos are ranked by stellar mass (SubhaloMStar) rather than total bound mass, following the observational motivation for stellar-mass-based SHAM (Reddick et al. 2013). If None, falls back to the default of 5e-4. Defaults to 5e-4.
             z (float, optional): Redshift for angular distance calculation (required if radDistanceUnits='arcmin'). Defaults to None.
             pixelSize (float, optional): Pixel size in arcminutes (required if radDistanceUnits='arcmin'). Defaults to 0.5.
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
@@ -517,6 +523,10 @@ class SimulationStacker(object):
 
         nPixels = array.shape[0]
         assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
+
+        # Allow callers to pass halo_abundance_target=None to request the default.
+        if halo_abundance_target is None:
+            halo_abundance_target = 5e-4
 
         # Load the halo catalog (always needed for haloPos in the stacking loop below).
         if use_subhalos:

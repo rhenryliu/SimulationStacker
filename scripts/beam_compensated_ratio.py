@@ -211,6 +211,7 @@ def main(path2config: str, verbose: bool = True) -> None:
         mask         = bt_stack.get('mask_haloes',  False),
         maskRad      = bt_stack.get('mask_radii',   3.0),
         use_subhalos = bt_stack.get('use_subhalos', False),
+        halo_abundance_target = bt_stack.get('halo_abundance_target', None),
     )
 
     beam_factors: list = []   # one (n_radii,) array per simulation
@@ -316,6 +317,7 @@ def main(path2config: str, verbose: bool = True) -> None:
         mask         = nb_stack.get('mask_haloes',  False),
         maskRad      = nb_stack.get('mask_radii',   3.0),
         use_subhalos = nb_stack.get('use_subhalos', False),
+        halo_abundance_target = nb_stack.get('halo_abundance_target', None),
     )
 
     # Pre-build sim_label → colour mapping from the noBeam config, using the

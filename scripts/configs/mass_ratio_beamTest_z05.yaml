@@ -27,6 +27,7 @@ stack:
 
   subtract_mean: false # Whether to subtract the mean of the field before stacking
   use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
+  halo_abundance_target: 5.0e-4 # Target halo abundance for subhalo selection when use_subhalos is true. In units of h^3/Mpc^3.
 
 
 plot:

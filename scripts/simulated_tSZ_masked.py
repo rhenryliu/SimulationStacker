@@ -259,7 +259,7 @@ def main(path2config, verbose=True):
                 secax_x = ax.secondary_xaxis('top',
                                              functions=(forward_arcmin,
                                                        inverse_arcmin))
-                secax_x.set_xlabel('R [kpc/h]')
+                secax_x.set_xlabel('R [ckpc/h]')
             
             # Set secondary y-axis only on rightmost column
             if col_idx == 3:

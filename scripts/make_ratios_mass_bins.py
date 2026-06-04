@@ -206,7 +206,7 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
     radii : ndarray   — comoving kpc/h
     ratio : ndarray
     err   : ndarray
-    R200c : float     — mean R200c for the selected halos (comoving kpc/h)
+    R200m : float     — mean R200m for the selected halos (comoving kpc/h)
     """
     nPixels    = params['n_pixels']
     minR       = params['min_radius_3d']
@@ -234,7 +234,7 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
     GroupPos_masked = (
         np.round(haloes['GroupPos'][halo_mask] / kpc_per_pixel).astype(int) % nPixels
     )
-    R200c = np.mean(haloes['GroupRad'][halo_mask])  # comoving kpc/h
+    R200m = np.mean(haloes['GroupRad'][halo_mask])  # comoving kpc/h
 
     # Stack in spherical apertures at each radius.
     radii     = np.linspace(minR, maxR, nRadii)
@@ -251,7 +251,7 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
 
     ratio, err = _profile_ratio_and_err(profiles0, profiles1,
                                         OmegaBaryon, stacker.header['Omega0'])
-    return radii, ratio, err, R200c
+    return radii, ratio, err, R200m
 
 
 def compute_2d_profile_ratio(stacker: SimulationStacker,
@@ -336,8 +336,8 @@ def plot_panel(ax, radii: np.ndarray, ratio: np.ndarray, err: np.ndarray,
 
 def configure_subplot(ax, row_idx: int, col_idx: int,
                       pType: str, pType2: str,
-                      R200c_kpch: float | None,
-                      R200c_arcmin: float | None,
+                      R200m_kpch: float | None,
+                      R200m_arcmin: float | None,
                       forward_arcmin, inverse_arcmin,
                       max_radius_2d: float, rad_distance: float,
                       suite_name: str, panel_label: str,
@@ -351,10 +351,10 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
         Position in the grid.
     pType, pType2 : str
         Particle type names used for the y-axis label.
-    R200c_kpch : float or None
-        R200c in comoving kpc/h for the vertical reference line (col 0 only).
-    R200c_arcmin : float or None
-        R200c in arcmin for the vertical reference line (cols 1, 2 only).
+    R200m_kpch : float or None
+        R200m in comoving kpc/h for the vertical reference line (col 0 only).
+    R200m_arcmin : float or None
+        R200m in arcmin for the vertical reference line (cols 1, 2 only).
     forward_arcmin, inverse_arcmin : callable
         Conversion functions between arcmin and comoving kpc/h, used to add
         a secondary x-axis.
@@ -378,11 +378,11 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
     # --- Horizontal reference line at unity ---
     ax.axhline(1.0, color='k', ls='--', lw=2)
 
-    # --- R200c vertical reference line ---
-    if col_idx == 0 and R200c_kpch is not None:
-        ax.axvline(R200c_kpch, color='gray', ls=':', lw=2, label=r'$R_{200c}$')
-    elif col_idx > 0 and R200c_arcmin is not None:
-        ax.axvline(R200c_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200c}$')
+    # --- R200m vertical reference line ---
+    if col_idx == 0 and R200m_kpch is not None:
+        ax.axvline(R200m_kpch, color='gray', ls=':', lw=2, label=r'$R_{200m}$')
+    elif col_idx > 0 and R200m_arcmin is not None:
+        ax.axvline(R200m_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200m}$')
 
     # --- Axis limits ---
     ax.set_xlim(0.0, None if col_idx == 0
@@ -612,11 +612,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             print(f"Row {row_idx}: mass bin {bin_ind}  ({bin_label})")
             print(f"{'='*60}")
 
-        # R200c reference line for this row comes from TNG300-1.
+        # R200m reference line for this row comes from TNG300-1.
         tng300_halos    = tng300_stacker.loadHalos()
         tng300_bin_mask = select_binned_halos(tng300_halos['GroupMass'], bin_ind)
-        R200c_kpch   = np.mean(tng300_halos['GroupRad'][tng300_bin_mask])
-        R200c_arcmin = comoving_to_arcmin(R200c_kpch, redshift, cosmo_tng300)
+        R200m_kpch   = np.mean(tng300_halos['GroupRad'][tng300_bin_mask])
+        R200m_arcmin = comoving_to_arcmin(R200m_kpch, redshift, cosmo_tng300)
 
         # ------------------------------------------------------------------
         # Inner loop: simulations
@@ -683,8 +683,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 col_idx=col_idx,
                 pType=pType,
                 pType2=pType2,
-                R200c_kpch=R200c_kpch,
-                R200c_arcmin=R200c_arcmin,
+                R200m_kpch=R200m_kpch,
+                R200m_arcmin=R200m_arcmin,
                 forward_arcmin=_fwd_arcmin,
                 inverse_arcmin=_inv_arcmin,
                 max_radius_2d=max_radius_2d,

@@ -19,7 +19,7 @@ stack:
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
 
 plot:
-  plot_data: true
+  plot_data: false
 
   # data_path: '../data/tSZ/fig4.csv'
   # rad_key: 'RApArcmin'

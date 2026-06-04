@@ -10,8 +10,13 @@ figures/
 .vscode/
 external/
 data/
-*.sh
 old/
 scripts/clean_mass_bin_stack.py
 scripts/get_AP_sz_marvin.py
 .ipynb_checkpoints/
+
+# Ignore shell scripts
+*.sh
+# except for the ones below:
+!scripts/make_unboundGas_plots.sh
+!scripts/make_lensing_plots.sh

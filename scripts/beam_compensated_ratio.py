@@ -54,6 +54,7 @@ sys.path.append('../src/')
 from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
 from stacker import SimulationStacker  # type: ignore
 from snr import detection_snr
+from halos import select_halos  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -143,6 +144,44 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
     return stacker, sim_label, omega_b
 
 
+def sham_r200m_arcmin(stacker: SimulationStacker, z: float, cosmo,
+                      halo_abundance_target: Optional[float],
+                      halo_mass_upper: float = 5e14) -> float:
+    """Mean R200m (arcmin) of the parent FoF halos of the SHAM-selected subhalos.
+
+    Replicates the subhalo selection performed inside
+    ``SimulationStacker.stack_on_array`` (the ``use_subhalos=True`` branch):
+    subhalos are abundance-matched by stellar mass within a parent-mass
+    pre-filter, then the GroupRad of their parent FoF groups is averaged and
+    converted to arcmin.  ``halo_mass_upper`` defaults to the ``stackMap``
+    default (5e14) since the data configs do not set it.
+
+    Args:
+        stacker: Instantiated SimulationStacker.
+        z: Redshift used for the comoving → arcmin conversion.
+        cosmo: Cosmology object for the conversion.
+        halo_abundance_target: Target number density in (cMpc/h)^-3.  If None,
+            falls back to the stack_on_array default of 5e-4.
+        halo_mass_upper: Upper parent-mass bound (Msun/h) for the pre-filter.
+
+    Returns:
+        Mean parent-halo R200m in arcmin.
+    """
+    if halo_abundance_target is None:
+        halo_abundance_target = 5e-4
+    subhalos    = stacker.loadSubHalos()
+    parents     = stacker.loadHalos()
+    parent_mass = parents['GroupMass'][subhalos['SubhaloGrNr']]
+    valid       = np.where(parent_mass <= halo_mass_upper)[0]
+    local_mask  = select_halos(subhalos['SubhaloMStar'][valid], 'abundance',
+                               target_number=halo_abundance_target,
+                               Lbox=stacker.header['BoxSize'])
+    halo_mask   = valid[local_mask]
+    parent_grnr = subhalos['SubhaloGrNr'][halo_mask]
+    R200m_kpch  = np.mean(parents['GroupRad'][parent_grnr])
+    return comoving_to_arcmin(R200m_kpch, z, cosmo=cosmo)
+
+
 def main(path2config: str, verbose: bool = True) -> None:
     """Run the beam-compensated gas fraction comparison and save the figure.
 
@@ -178,9 +217,14 @@ def main(path2config: str, verbose: bool = True) -> None:
     fig_name        = plot_config.get('fig_name', 'beam_compensated_ratio')
     fig_type        = plot_config.get('fig_type', 'pdf')
     plot_error_bars = plot_config.get('plot_error_bars', True)
+    do_plot_r200m   = plot_config.get('plot_r200m', True)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     cosmo_ref: Optional[FlatLambdaCDM] = None
+
+    # R200m reference line: cached from the first IllustrisTNG noBeam sim.
+    R200m_arcmin_ref: Optional[float] = None
+    R200m_label: Optional[str] = None
 
     t0 = time.time()
 
@@ -350,6 +394,14 @@ def main(path2config: str, verbose: bool = True) -> None:
             if cosmo_ref is None:
                 cosmo_ref = cosmo
 
+            # Cache R200m (arcmin) from the first IllustrisTNG sim for the vline.
+            if (do_plot_r200m and sim_type_name == 'IllustrisTNG'
+                    and R200m_arcmin_ref is None):
+                R200m_arcmin_ref = sham_r200m_arcmin(
+                    stacker, nb_redshift, cosmo,
+                    nb_stack.get('halo_abundance_target', None))
+                R200m_label = sim_label
+
             if verbose:
                 print(f"[noBeam] Processing {sim_label}")
 
@@ -427,6 +479,12 @@ def main(path2config: str, verbose: bool = True) -> None:
         secax_x.set_xlabel('R [comoving kpc/h]')
 
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
+
+    # Vertical dotted line at mean R200m of the first IllustrisTNG sim's halos.
+    if do_plot_r200m and R200m_arcmin_ref is not None:
+        ax.axvline(R200m_arcmin_ref, color='gray', ls=':', lw=2,
+                   label=rf'$\langle R_{{200\mathrm{{m}}}} \rangle$ ({R200m_label})')
+
     ax.set_xlabel('R [arcmin]')
     ax.set_ylabel(
         r'$\frac{\langle \Delta \Sigma_{\rm kSZ} \rangle}'

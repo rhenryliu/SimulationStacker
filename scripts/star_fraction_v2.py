@@ -34,6 +34,7 @@ import matplotlib
 matplotlib.rcParams.update({
     "font.family": "serif",
     "font.serif": ["Computer Modern", "CMU Serif", "DejaVu Serif", "Times New Roman"],
+    "text.usetex": True,
     "font.size": 14,
     "axes.titlesize": 18,
     "axes.labelsize": 16,
@@ -236,9 +237,9 @@ def main(path2config, verbose=True):
     ax.tick_params(axis='both', which='both', labelsize=14)
 
     ax.bar(x - width / 2, global_vals, width=width, color='skyblue',
-           edgecolor='none', alpha=0.8, label=r'$f_{\mathrm{star}}^{\mathrm{global}}$')
+           edgecolor='none', alpha=0.8, label=r'$f_{\star}^{\mathrm{global}}$')
     ax.bar(x + width / 2, r200m_vals, width=width, color='salmon',
-           edgecolor='none', alpha=0.8, label=r'$f_{\mathrm{star}}^{R_{200\mathrm{m}}}$')
+           edgecolor='none', alpha=0.8, label=r'$f_{\star}^{\mathrm{halo}}$')
 
     ax.set_xlabel('Simulation Suites', fontsize=18)
     ax.set_ylabel(r'Stellar Fraction (compared to total baryons.)', fontsize=18)

@@ -135,28 +135,27 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
     return stacker, sim_label, omega_b
 
 
-def sham_r200m_arcmin(stacker: SimulationStacker, z: float, cosmo,
-                      halo_abundance_target: Optional[float],
-                      halo_mass_upper: float = 5e14) -> float:
-    """Mean R200m (arcmin) of the parent FoF halos of the SHAM-selected subhalos.
+def sham_parent_halo_stats(stacker: SimulationStacker,
+                           halo_abundance_target: Optional[float],
+                           halo_mass_upper: float = 5e14) -> tuple:
+    """Mean parent-halo mass (Msun/h) and R200m (comoving kpc/h) of the SHAM sample.
 
     Replicates the subhalo selection performed inside
     ``SimulationStacker.stack_on_array`` (the ``use_subhalos=True`` branch):
     subhalos are abundance-matched by stellar mass within a parent-mass
-    pre-filter, then the GroupRad of their parent FoF groups is averaged and
-    converted to arcmin.  ``halo_mass_upper`` defaults to the ``stackMap``
-    default (5e14) since the data configs do not set it.
+    pre-filter, then the GroupMass and GroupRad of their parent FoF groups are
+    averaged.  ``halo_mass_upper`` defaults to the ``stackMap`` default (5e14)
+    since the data configs do not set it.
 
     Args:
         stacker: Instantiated SimulationStacker.
-        z: Redshift used for the comoving → arcmin conversion.
-        cosmo: Cosmology object for the conversion.
         halo_abundance_target: Target number density in (cMpc/h)^-3.  If None,
             falls back to the stack_on_array default of 5e-4.
         halo_mass_upper: Upper parent-mass bound (Msun/h) for the pre-filter.
 
     Returns:
-        Mean parent-halo R200m in arcmin.
+        Tuple ``(mean_mass, mean_R200m)`` with the mean parent-halo mass in
+        Msun/h and the mean parent-halo R200m in comoving kpc/h.
     """
     if halo_abundance_target is None:
         halo_abundance_target = 5e-4
@@ -169,8 +168,9 @@ def sham_r200m_arcmin(stacker: SimulationStacker, z: float, cosmo,
                                Lbox=stacker.header['BoxSize'])
     halo_mask   = valid[local_mask]
     parent_grnr = subhalos['SubhaloGrNr'][halo_mask]
-    R200m_kpch  = np.mean(parents['GroupRad'][parent_grnr])
-    return comoving_to_arcmin(R200m_kpch, z, cosmo=cosmo)
+    mean_mass   = np.mean(parents['GroupMass'][parent_grnr])   # Msun/h
+    mean_R200m  = np.mean(parents['GroupRad'][parent_grnr])    # comoving kpc/h
+    return mean_mass, mean_R200m
 
 
 def main(path2config: str, verbose: bool = True) -> None:
@@ -387,12 +387,18 @@ def main(path2config: str, verbose: bool = True) -> None:
             if cosmo_ref is None:
                 cosmo_ref = cosmo
 
+            # Mean parent-halo mass and R200m of the SHAM-selected sample.
+            mean_mass, R200m_kpch = sham_parent_halo_stats(
+                stacker, nb_stack.get('halo_abundance_target', None))
+            if verbose:
+                print(f"  {sim_label}: mean M = {mean_mass:.3e} Msun/h "
+                      f"(log10 = {np.log10(mean_mass):.3f}), "
+                      f"mean R200m = {R200m_kpch:.3f} comoving kpc/h")
+
             # Cache R200m (arcmin) from the first IllustrisTNG sim for the vline.
             if (do_plot_r200m and sim_type_name == 'IllustrisTNG'
                     and R200m_arcmin_ref is None):
-                R200m_arcmin_ref = sham_r200m_arcmin(
-                    stacker, nb_redshift, cosmo,
-                    nb_stack.get('halo_abundance_target', None))
+                R200m_arcmin_ref = comoving_to_arcmin(R200m_kpch, nb_redshift, cosmo=cosmo)
                 R200m_label = sim_label
 
             if verbose:

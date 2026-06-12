@@ -116,6 +116,81 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
     return stacker, sim_label
 
 
+def _is_7smooth(n: int) -> bool:
+    """Return True if ``n`` has no prime factors greater than 7.
+
+    7-smooth grid sizes (factors only 2, 3, 5, 7) give near-optimal FFTW
+    performance in Pylians; prime or large-prime-factor sizes are
+    catastrophically slow for 3D transforms.
+
+    Parameters
+    ----------
+    n : int
+        Positive integer to test.
+
+    Returns
+    -------
+    bool
+        True if every prime factor of ``n`` is <= 7.
+    """
+    if n < 1:
+        return False
+    for p in (2, 3, 5, 7):
+        while n % p == 0:
+            n //= p
+    return n == 1
+
+
+def _snap_7smooth(x: float) -> int:
+    """Snap a (possibly fractional) grid size to the nearest 7-smooth integer.
+
+    Searches outward symmetrically from ``round(x)`` and returns the closest
+    integer whose prime factors are all <= 7 (ties resolved downward).
+
+    Parameters
+    ----------
+    x : float
+        Target grid size (e.g. base_grid * box / min_box).
+
+    Returns
+    -------
+    int
+        Nearest 7-smooth integer >= 1.
+    """
+    centre = int(round(x))
+    for delta in range(0, centre + 1):
+        for candidate in (centre - delta, centre + delta):
+            if candidate >= 1 and _is_7smooth(candidate):
+                return candidate
+    return centre  # unreachable for centre >= 1 (powers of 2 are 7-smooth)
+
+
+def compute_grids(box_sizes, base_grid: int):
+    """Compute per-simulation grid sizes that share a common cell size.
+
+    The smallest box keeps ``base_grid``; every other box is assigned a grid
+    such that its cell size (box / grid) matches that of the smallest box, so
+    all simulations share the same Nyquist frequency and therefore the same
+    maximum k in the power spectrum. Grid sizes are snapped to the nearest
+    7-smooth integer for FFT performance (a <0.1% shift in k_max).
+
+    Parameters
+    ----------
+    box_sizes : sequence of float
+        Box size of each simulation, any consistent unit (the ratio is
+        unit-independent).
+    base_grid : int
+        Grid resolution applied to the smallest box (the reference cell size).
+
+    Returns
+    -------
+    list of int
+        Grid size per simulation, aligned with ``box_sizes``.
+    """
+    min_box = min(box_sizes)
+    return [_snap_7smooth(base_grid * box / min_box) for box in box_sizes]
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -128,8 +203,9 @@ def main(path2config: str, grid: int, threads: int) -> None:
     path2config : str
         Path to the YAML configuration file.
     grid : int
-        3D field resolution (grid^3 voxels) passed to
-        ``get_field_baryon_suppression``.
+        Reference 3D field resolution applied to the *smallest* box in the
+        config. Larger boxes get proportionally larger grids so that every
+        simulation shares the same cell size (and hence the same maximum k).
     threads : int
         Number of Pylians threads.
     """
@@ -169,6 +245,32 @@ def main(path2config: str, grid: int, threads: int) -> None:
             suite_entries.append((sim_type_name, sim, colour))
 
     # ------------------------------------------------------------------
+    # Pre-pass: instantiate stackers (header-only, cheap) and read each
+    # box size so we can pick per-sim grids that share a common cell size.
+    # The smallest box keeps the reference grid; larger boxes are refined
+    # so all sims reach the same Nyquist frequency (same maximum k).
+    # ------------------------------------------------------------------
+    stackers   = []  # SimulationStacker per entry, aligned with suite_entries
+    sim_labels = []  # legend label per entry
+    box_sizes  = []  # header BoxSize (kpc/h) per entry
+
+    for sim_type_name, sim, _colour in suite_entries:
+        stacker, sim_label = setup_stacker(sim, sim_type_name, redshift)
+        stackers.append(stacker)
+        sim_labels.append(sim_label)
+        box_sizes.append(stacker.header['BoxSize'])  # kpc/h
+
+    grids = compute_grids(box_sizes, base_grid=grid)
+
+    print(f"\nReference grid {grid} applied to smallest box "
+          f"({min(box_sizes) / 1000.0:.1f} Mpc/h); per-sim grids:")
+    for (sim_type_name, sim, _c), box, g in zip(suite_entries, box_sizes, grids):
+        k_nyq = np.pi * g / (box / 1000.0)  # h/Mpc
+        print(f"  {sim_type_name:12s} {sim['name']:12s} "
+              f"box={box / 1000.0:6.1f} Mpc/h  grid={g:5d}  "
+              f"k_max={k_nyq:6.2f} h/Mpc")
+
+    # ------------------------------------------------------------------
     # Figure
     # ------------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -195,13 +297,15 @@ def main(path2config: str, grid: int, threads: int) -> None:
         print(f"\n[{i+1}/{len(suite_entries)}] {sim_type_name} — "
               f"{sim_name}{feedback_str}")
 
-        stacker, sim_label = setup_stacker(sim, sim_type_name, redshift)
+        stacker   = stackers[i]
+        sim_label = sim_labels[i]
+        sim_grid  = grids[i]
 
         print(f"  Running get_field_baryon_suppression "
-              f"(grid={grid}, threads={threads})...")
+              f"(grid={sim_grid}, threads={threads})...")
         t1 = time.time()
         results = stacker.get_field_baryon_suppression(
-            grid=grid, save=False, load=False, threads=threads,
+            grid=sim_grid, save=False, load=False, threads=threads,
         )
         print(f"  Done in {time.time() - t1:.1f}s")
 
@@ -219,7 +323,7 @@ def main(path2config: str, grid: int, threads: int) -> None:
     fig.tight_layout()
 
     out_path = fig_path / f"{fig_name}_pk_suppression.{fig_type}"
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=150) # type: ignore
     print(f"\nFigure saved to: {out_path}")
     print(f"Total elapsed: {time.time() - t0:.1f}s")
 
@@ -233,16 +337,19 @@ if __name__ == '__main__':
         description='Plot matter power spectrum suppression SP(k) for simulations in a config.'
     )
     parser.add_argument(
-        '-p', '--config', required=True,
+        '-p', '--path2config', 
+        type=str,
+        default='./configs/mass_ratio_data_z05.yaml',
         help='Path to YAML config file (e.g. configs/mass_ratio_data_z05.yaml)',
     )
     parser.add_argument(
         '--grid', type=int, default=512,
-        help='3D field grid resolution (default: 512)',
+        help='Reference 3D grid resolution for the smallest box (default: 512); '
+             'larger boxes are refined to share the same cell size / max k',
     )
     parser.add_argument(
         '--threads', type=int, default=1,
         help='Number of Pylians threads (default: 1; increase for batch jobs)',
     )
     args = parser.parse_args()
-    main(args.config, args.grid, args.threads)
+    main(args.path2config, args.grid, args.threads)

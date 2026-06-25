@@ -492,10 +492,11 @@ def main(path2config: str, verbose: bool = True) -> None:
                    label=rf'$\langle R_{{200\mathrm{{m}}}} \rangle$ ({R200m_label})')
 
     ax.set_xlabel('R [arcmin]')
-    ax.set_ylabel(
-        r'$\frac{\langle \Delta \Sigma_{\rm kSZ} \rangle}'
-        r'{\langle \Delta \Sigma_{\rm lens} \rangle} \times \frac{\Omega_m}{\Omega_b}$'
-    )
+    # ax.set_ylabel(
+    #     r'$\frac{\langle \Delta \Sigma_{\rm kSZ} \rangle}'
+    #     r'{\langle \Delta \Sigma_{\rm lens} \rangle} \times \frac{\Omega_m}{\Omega_b}$'
+    # )
+    ax.set_ylabel(r'$f_{\rm gas}(R)$')
     ax.set_xlim(0.0, nb_stack.get('max_radius', 6.0) * nb_rad_distance + 0.5)
     ax.legend(loc='upper left')
     ax.grid(True, alpha=0.3)

@@ -434,7 +434,8 @@ def main(path2config: str, verbose: bool = True) -> None:
 
     ax.set_xlabel(r'$\theta$ [arcmin]')
     ax.set_ylabel(
-        rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \times \frac{{\Omega_m}}{{\Omega_b}}$'
+        # rf'$\frac{{\langle \Delta \Sigma_{{\rm {label_pType}}} \rangle}}{{\langle \Delta \Sigma_{{\rm {label_pType2}}} \rangle}} \times \frac{{\Omega_m}}{{\Omega_b}}$'
+        r'$f_{\rm gas}^{\rm obs}(R)$'
     )
     ax.set_xlim(0.0, max_radius * rad_distance + 0.5)
     ax.legend(loc='upper left')

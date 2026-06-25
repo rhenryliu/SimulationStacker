@@ -1,0 +1,38 @@
+# requirements-optional.txt
+#
+# Dependencies that SimulationStacker uses but that are NOT clean PyPI installs:
+# they are compiled (need a build toolchain), depend on system libraries, or are
+# only distributed via GitHub. Install these on top of requirements.txt as needed
+# for the workflow you are running. Versions match the NERSC cosmodesi_dr1 env.
+#
+#   pip install -r requirements.txt
+#   pip install -r requirements-optional.txt   # after reading the notes below
+
+# illustris_python -- REQUIRED for any IllustrisTNG loading (src/loadIO.py and ~46
+# call sites). Not on PyPI; install from GitHub. SIMBA-only workflows do not need
+# it (SIMBA group/particle data is read from HDF5 directly).
+git+https://github.com/illustristng/illustris_python.git
+
+# nbodykit -- currently a hard import for the core library: stacker -> mapMaker ->
+# tools.py has an unguarded `from nbodykit.lab import ...`, so `import stacker`
+# fails without it even though nbodykit is only actually used in the power-spectrum
+# scripts. Legacy package with a non-trivial build (cython, mpi4py, pmesh, ...);
+# see https://nbodykit.readthedocs.io for install guidance.
+nbodykit==0.3.16
+
+# Pylians -- provides Pk_library / MAS_library. Optional: guarded by try/except in
+# src/stacker.py and only exercised by the power-spectrum paths. Needs a C/Cython
+# build toolchain (gcc, cython, numpy headers).
+Pylians==0.12
+
+# hdf5plugin -- needed by the 3D masking scripts (scripts/mask_sims_3D_JSON.py and
+# scripts/powerspectra/). Pure-pip, but optional for the core stacking workflow.
+hdf5plugin==4.4.0
+
+# --- The following are only needed by specific peripheral scripts ---
+
+# mpi4py + pixell -- used only by scripts/get_AP_sz_marvin.py. mpi4py must be built
+# against the system MPI (on NERSC this is Cray MPICH; elsewhere OpenMPI/MPICH).
+# pixell needs a Fortran compiler and automake for its C/Fortran extensions.
+mpi4py==3.1.5
+pixell==0.23.14

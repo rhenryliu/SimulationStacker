@@ -1,0 +1,34 @@
+# requirements.txt
+#
+# Core, pip-installable dependencies for the SimulationStacker library (src/) and
+# the main analysis scripts. Versions are pinned to the validated NERSC
+# cosmodesi_dr1 environment (Python 3.10.13).
+#
+# This file is intentionally curated from the project's actual imports rather than
+# produced by `pip freeze`, because the NERSC venv inherits a large cosmodesi/DESI
+# conda base (include-system-site-packages = true) that a blind freeze would pull
+# in. See:
+#   - requirements-optional.txt  : compiled / non-PyPI deps that need special steps
+#   - requirements-freeze.txt    : full exact snapshot of the NERSC environment
+#
+# Install (portable, e.g. a fresh Python 3.10 venv):
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Note: src/ is not an installed package; scripts add ../src/ to sys.path.
+
+numpy==1.26.3
+scipy==1.11.4
+matplotlib==3.7.1
+astropy==6.0.0
+h5py==3.10.0
+pandas==2.1.4
+numba==0.58.1
+PyYAML==6.0.1
+asdf==4.0.0
+
+# abacusutils provides the `abacusnbody` module (used in src/mapMaker.py and
+# src/field_utils.py). The NERSC env runs an unreleased dev build
+# (2.0.2.dev65+gdb7f1a1, recorded exactly in requirements-freeze.txt), which is not
+# installable from PyPI; pin a compatible release range for portability.
+abacusutils>=2.0,<3

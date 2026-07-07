@@ -25,6 +25,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import matplotlib
@@ -35,6 +36,7 @@ import argparse
 
 sys.path.append('../src/')
 from stacker import SimulationStacker  # type: ignore
+from halos import select_halos  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -63,6 +65,44 @@ _REDSHIFT_STYLES = {
     'z05':  {'ls': '-',  'label': r'$z = 0.5$'},
     'z026': {'ls': '--', 'label': r'$z = 0.26$'},
 }
+
+
+def sham_parent_halo_stats(stacker: SimulationStacker,
+                           halo_abundance_target: Optional[float],
+                           halo_mass_upper: float = 5e14) -> tuple:
+    """Mean parent-halo mass (Msun/h) and R200m (comoving kpc/h) of the SHAM sample.
+
+    Replicates the subhalo selection performed inside
+    ``SimulationStacker.stack_on_array`` (the ``use_subhalos=True`` branch):
+    subhalos are abundance-matched by stellar mass within a parent-mass
+    pre-filter, then the GroupMass and GroupRad of their parent FoF groups are
+    averaged.  ``halo_mass_upper`` defaults to the ``stackMap`` default (5e14)
+    since the beamTest configs do not set it.
+
+    Args:
+        stacker: Instantiated SimulationStacker.
+        halo_abundance_target: Target number density in (cMpc/h)^-3.  If None,
+            falls back to the stack_on_array default of 5e-4.
+        halo_mass_upper: Upper parent-mass bound (Msun/h) for the pre-filter.
+
+    Returns:
+        Tuple ``(mean_mass, mean_R200m)`` with the mean parent-halo mass in
+        Msun/h and the mean parent-halo R200m in comoving kpc/h.
+    """
+    if halo_abundance_target is None:
+        halo_abundance_target = 5e-4
+    subhalos    = stacker.loadSubHalos()
+    parents     = stacker.loadHalos()
+    parent_mass = parents['GroupMass'][subhalos['SubhaloGrNr']]
+    valid       = np.where(parent_mass <= halo_mass_upper)[0]
+    local_mask  = select_halos(subhalos['SubhaloMStar'][valid], 'abundance',
+                               target_number=halo_abundance_target,
+                               Lbox=stacker.header['BoxSize'])
+    halo_mask   = valid[local_mask]
+    parent_grnr = subhalos['SubhaloGrNr'][halo_mask]
+    mean_mass   = np.mean(parents['GroupMass'][parent_grnr])   # Msun/h
+    mean_R200m  = np.mean(parents['GroupRad'][parent_grnr])    # comoving kpc/h
+    return mean_mass, mean_R200m
 
 
 def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
@@ -142,6 +182,7 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
             mask         = stack.get('mask_haloes',  False),
             maskRad      = stack.get('mask_radii',   3.0),
             use_subhalos = stack.get('use_subhalos', False),
+            halo_abundance_target = stack.get('halo_abundance_target', None),
         )
 
         for sim_group in config['simulations']:
@@ -162,6 +203,14 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
 
                 if verbose:
                     print(f"[{z_key}] Processing {sim_label}")
+
+                # Mean parent-halo mass and R200m of the SHAM-selected sample.
+                mean_mass, R200m_kpch = sham_parent_halo_stats(
+                    stacker, stack.get('halo_abundance_target', None))
+                if verbose:
+                    print(f"  [{z_key}] {sim_label}: mean M = {mean_mass:.3e} Msun/h "
+                          f"(log10 = {np.log10(mean_mass):.3f}), "
+                          f"mean R200m = {R200m_kpch:.3f} comoving kpc/h")
 
                 radii_b, profiles_b = stacker.stackMap(
                     pType,  filterType=filter_type,

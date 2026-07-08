@@ -77,3 +77,15 @@ simulations:
         snapshot: 103
       # - name: 'Illustris-2'
       #   snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

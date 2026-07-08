@@ -315,6 +315,69 @@ def create_field(stacker, pType, nPixels, projection, dim='2D', load=True):
         return make_mass_field(stacker, pType, nPixels, projection, dim=dim)
 
 
+def _flamingo_sz_weights(particles, h, a, pix_area_cm2):
+    """Compute per-particle tSZ/kSZ/tau contributions for FLAMINGO gas.
+
+    FLAMINGO (SWIFT) does not output ElectronAbundance or InternalEnergy, so
+    the TNG-style derivation of T_e and n_e in make_sz_field cannot be used.
+    Instead, FLAMINGO provides per particle (computed from the COLIBRE cooling
+    tables at run time):
+
+    - ``ComptonYParameters``: y * (physical area), i.e. the particle's full
+      Compton-y contribution integrated over its volume, stored in physical
+      Mpc^2. The tSZ pixel value is simply the sum of these divided by the
+      physical pixel area.
+    - ``ElectronNumberDensities``: physical electron number density n_e in
+      Mpc^-3. The electron count is N_e = n_e * V with the particle volume
+      V = Masses/Densities converted to physical units, giving
+      tau = sigma_T * N_e / pix_area and kSZ b = tau * v/c.
+
+    Both fields are 0 for star-forming particles (a small, documented bias).
+
+    Unit bookkeeping (see loadIO._convert_flamingo_particles): loadIO returns
+    Masses multiplied by h (pipeline convention), while Densities and the two
+    SZ fields above are passed through in FLAMINGO native units (no h). The
+    h factor is divided back out here so V = M/D is in native comoving Mpc^3.
+    Velocities are peculiar km/s (SWIFT convention) — unlike the Gadget-style
+    km*sqrt(a)/s of TNG/SIMBA, so NO sqrt(a) factor is applied; (v/c) uses
+    c in cm/s to match the convention of the TNG branch exactly, keeping kSZ
+    fields comparable across simulation suites.
+
+    Args:
+        particles (dict): Gas particle fields from load_subset with keys
+            'Masses' (1e10 Msun/h), 'Densities' (comoving 1e10 Msun/Mpc^3),
+            'ComptonYParameters' (physical Mpc^2), 'ElectronNumberDensities'
+            (physical Mpc^-3), 'Velocities' (peculiar km/s).
+        h (float): Hubble parameter (dimensionless).
+        a (float): Scale factor of the snapshot.
+        pix_area_cm2 (float): Physical pixel area in cm^2 (the d_A^2 factor
+            used by make_sz_field).
+
+    Returns:
+        tuple: (dY, b, tau) per-particle arrays; dY and tau are dimensionless,
+        b has one column per velocity component (matching the TNG branch).
+    """
+    sigma_T = 6.6524587158e-29 * 1.e2**2  # cm^2, Thomson cross section
+    c = 29979245800.  # cm/s, speed of light
+    Mpc_to_cm = ((1. * u.Mpc).to(u.cm)).value  # cm # type: ignore
+
+    # tSZ: ComptonYParameters is already y*area in physical Mpc^2
+    dY = particles['ComptonYParameters'] * Mpc_to_cm**2 / pix_area_cm2
+
+    # Electron count: n_e [phys Mpc^-3] * particle volume [phys Mpc^3]
+    M_native = particles['Masses'].astype(np.float64) / h        # 1e10 Msun
+    D_native = particles['Densities'].astype(np.float64)         # comoving 1e10 Msun/Mpc^3
+    V_phys_Mpc3 = (M_native / D_native) * a**3                   # physical Mpc^3
+    N_e = particles['ElectronNumberDensities'] * V_phys_Mpc3     # electron count
+
+    # sigma_T [cm^2] * N_e [count] / pix_area [cm^2] -> dimensionless optical depth
+    tau = sigma_T * N_e / pix_area_cm2
+    Ve = particles['Velocities']  # peculiar km/s; NO sqrt(a) (SWIFT convention)
+    b = tau[:, None] * (Ve / c)
+
+    return dY, b, tau
+
+
 def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """Create a projected SZ field from gas particle data.
 
@@ -350,6 +413,8 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         nPixels = stacker.nPixels
         
     if pType == 'tau_DM':
+        if stacker.simType == 'FLAMINGO':
+            raise NotImplementedError("'tau_DM' not implemented for FLAMINGO")
         pType = 'tau'
         print("Warning: 'tau_DM' is experimental.")
         use_tau_DM = True
@@ -397,6 +462,9 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         # print('Folder Path:', folderPath + f'*_{stacker.snapshot}.hdf5')
         snaps = glob.glob(folderPath)
         # print('Snaps:', snaps)
+    elif stacker.simType == 'FLAMINGO':
+        # Raw chunk files flamingo_NNNN.{i}.hdf5 (64 for L1_m9); sorted for determinism
+        snaps = sorted(glob.glob(folderPath + 'flamingo_*.hdf5'))
 
     # Convert coordinates to pixel coordinates        
     if dim == '2D':
@@ -413,35 +481,47 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     t0 = time.time()
     for i, snap in enumerate(snaps):
 
-        # particles = stacker.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
-        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
-                                snap_path=snap, header=stacker.header, sim_name=stacker.sim,
-                                keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
+        if stacker.simType == 'FLAMINGO':
+            # FLAMINGO/SWIFT has no ElectronAbundance/InternalEnergy; use the
+            # precomputed ComptonYParameters and ElectronNumberDensities
+            # instead (see _flamingo_sz_weights for units and conventions).
+            particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType,
+                                    snap_path=snap, header=stacker.header, sim_name=stacker.sim,
+                                    keys=['Coordinates', 'Masses', 'Densities',
+                                          'ComptonYParameters', 'ElectronNumberDensities', 'Velocities'])
+            Co = particles['Coordinates']
+            pix_area_cm2 = (a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.  # d_A**2, same as TNG branch
+            dY, b, tau = _flamingo_sz_weights(particles, h, a, pix_area_cm2)
+        else:
+            # particles = stacker.loadSubset(pType, snapPath=snap, keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
+            particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType,
+                                    snap_path=snap, header=stacker.header, sim_name=stacker.sim,
+                                    keys=['Coordinates', 'Masses', 'ElectronAbundance', 'InternalEnergy', 'Density', 'Velocities'])
 
-        Co = particles['Coordinates']
-        EA = particles['ElectronAbundance']
-        IE = particles['InternalEnergy']
-        D = particles['Density']
-        M = particles['Masses']
-        V = particles['Velocities']
+            Co = particles['Coordinates']
+            EA = particles['ElectronAbundance']
+            IE = particles['InternalEnergy']
+            D = particles['Density']
+            M = particles['Masses']
+            V = particles['Velocities']
 
-        
-        # for each cell, compute its total volume (gas mass by gas density) and convert density units
-        dV = M/D # ckpc/h^3 
-        D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
-        # unit_c = 1.e10 # TNG faq is wrong (see README.md)
 
-        # obtain electron temperature, electron number density and velocity
-        Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
-        ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
-        Ve = V*np.sqrt(a) # km/s
+            # for each cell, compute its total volume (gas mass by gas density) and convert density units
+            dV = M/D # ckpc/h^3
+            D *= unit_dens # g/ccm^3 # True for TNG and mixed for MTNG because of unit difference
+            # unit_c = 1.e10 # TNG faq is wrong (see README.md)
 
-        # compute the contribution to the y and b signals of each cell
-        # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
-        # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
-        dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Compton Y parameter
-        b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
-        tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Optical depth. This is what we use for tau
+            # obtain electron temperature, electron number density and velocity
+            Te = (gamma - 1.)*IE/k_B * 4*m_p/(1 + 3*X_H + 4*X_H*EA) * unit_c # K
+            ne = EA*X_H*D/m_p # ccm^-3 # True for TNG and mixed for MTNG because of unit difference
+            Ve = V*np.sqrt(a) # km/s
+
+            # compute the contribution to the y and b signals of each cell
+            # ne*dV cancel unit length of simulation and unit_vol converts ckpc/h^3 to cm^3
+            # both should be unitless (const*Te/d_A**2 is cm^2/cm^2; sigma_T/d_A^2 is unitless)
+            dY = const*(ne*Te*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Compton Y parameter
+            b = sigma_T*(ne[:, None]*(Ve/c)*dV[:, None])*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2.#d_A**2 # kSZ signal
+            tau = sigma_T*(ne*dV)*unit_vol/(a*Lbox_hkpc*(kpc_to_cm/h)/nPixels)**2. #d_A**2 # Optical depth. This is what we use for tau
 
         # Now we make the fields:
         
@@ -527,7 +607,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     else:
         use_ionized_gas = False
         get_neutral_gas = False
-            
+
     Lbox = stacker.header['BoxSize'] # kpc/h
     
     # Get all particle snap chunks:
@@ -538,6 +618,9 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     elif stacker.simType == 'SIMBA':
         snaps = glob.glob(folderPath)
         print('Snaps:', snaps)
+    elif stacker.simType == 'FLAMINGO':
+        # Raw chunk files flamingo_NNNN.{i}.hdf5 (64 for L1_m9); sorted for determinism
+        snaps = sorted(glob.glob(folderPath + 'flamingo_*.hdf5'))
     # The code below does the statistic by chunk rather than by the whole dataset
     
     # Initialize empty maps
@@ -556,31 +639,49 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     for i, snap in enumerate(snaps):
         # particles = stacker.loadSubset(pType, snapPath=snap)
         if use_ionized_gas:
-            keys = ['Coordinates', 'Masses', 'ElectronAbundance']
+            if stacker.simType == 'FLAMINGO':
+                # No ElectronAbundance in FLAMINGO; electron counts come from
+                # the cooling-table ElectronNumberDensities (cf. make_sz_field)
+                keys = ['Coordinates', 'Masses', 'Densities', 'ElectronNumberDensities']
+            else:
+                keys = ['Coordinates', 'Masses', 'ElectronAbundance']
         else:
             keys = ['Coordinates', 'Masses']
-        
-        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType, 
+
+        particles = load_subset(stacker.simPath, stacker.snapshot, stacker.simType, pType,
                                 snap_path=snap, header=stacker.header, sim_name=stacker.sim,
                                 keys=keys)
         coordinates = particles['Coordinates'] # kpc/h
         # masses = particles['Masses'].astype(np.float64)  * 1e10 #/ stacker.header['HubbleParam'] # Msun
         masses = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h # this is better than doing just Msun
-        
+
         if use_ionized_gas:
             solar_mass = 1.989e33 # g
             m_p = 1.6726e-24 # g, mass of proton
             X_H = 0.76 # unitless, primordial hydrogen fraction
             h = stacker.header['HubbleParam'] # Hubble Parameter
-            
-            Mgas_g = particles['Masses'].astype(np.float64)  * 1e10 * (solar_mass / h) # convert to grams
-            xe = particles['ElectronAbundance']
-            Ne = xe * X_H * Mgas_g / m_p # dimensionless count of electrons
+
             mu_e = 2.0 / (1.0 + X_H)
+
+            if stacker.simType == 'FLAMINGO':
+                # Electron count N_e = n_e * V with n_e (physical Mpc^-3, zero
+                # for star-forming particles) and particle volume V = M/D
+                # converted to physical Mpc^3; the Mpc^3 factors cancel.
+                # Same construction as _flamingo_sz_weights; the /h undoes the
+                # loadIO mass convention to recover native 1e10 Msun.
+                a = 1. / (1. + stacker.z) # scale factor
+                M_native = particles['Masses'].astype(np.float64) / h      # 1e10 Msun
+                D_native = particles['Densities'].astype(np.float64)       # comoving 1e10 Msun/Mpc^3
+                V_phys = (M_native / D_native) * a**3                      # physical Mpc^3
+                Ne = particles['ElectronNumberDensities'] * V_phys         # electron count
+            else:
+                Mgas_g = particles['Masses'].astype(np.float64)  * 1e10 * (solar_mass / h) # convert to grams
+                xe = particles['ElectronAbundance']
+                Ne = xe * X_H * Mgas_g / m_p # dimensionless count of electrons
 
             Mion_e_g = Ne * m_p * mu_e # grams of ionized gas
             masses = Mion_e_g * (h / solar_mass) # convert back to Msun/h
-            
+
             # ionized_fractions = xe * X_H / (1 + X_H + xe * 2) # number of electrons per baryon
             # ionized_fractions = particles['IonizedFractions']
             # masses *= ionized_fractions

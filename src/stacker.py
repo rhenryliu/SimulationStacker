@@ -27,7 +27,7 @@ import illustris_python as il
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import halo_ind, select_halos
 from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon
-from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data
+from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data, load_flamingo_header
 from mapMaker import create_field, create_masked_field
 
 try:
@@ -56,14 +56,17 @@ class SimulationStacker(object):
             sim (str): Simulation name. IllustrisTNG options: 'TNG300-1',
                 'TNG300-2', 'TNG100-1', 'TNG100-2', 'TNG50-1', 'Illustris-1'.
                 SIMBA options: 'm50n512', 'm100n1024'.
+                FLAMINGO options: 'L1_m9'.
             snapshot (int): Snapshot number in the simulation.
             nPixels (int, optional): Number of pixels per side of 2D fields,
                 i.e. field shape will be (nPixels, nPixels). Defaults to 2000.
             simType (str, optional): Simulation code, one of
-                ['IllustrisTNG', 'SIMBA']. Defaults to 'IllustrisTNG'.
-            feedback (str, optional): Feedback model variant for SIMBA only.
-                One of ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet'].
-                Required if simType='SIMBA'. Defaults to None.
+                ['IllustrisTNG', 'SIMBA', 'FLAMINGO']. Defaults to 'IllustrisTNG'.
+            feedback (str, optional): Feedback model variant for SIMBA and
+                FLAMINGO. SIMBA: one of ['s50', 's50nox', 's50noagn',
+                's50nofb', 's50nojet']. FLAMINGO: one of ['L1_m9' (fiducial),
+                'fgas-8sigma', 'Jet_fgas-4sigma'] (raw directory names).
+                Required for both. Defaults to None.
             z (float, optional): Redshift of the snapshot. Used for
                 cosmological distance calculations in maps. Defaults to 0.0.
 
@@ -77,6 +80,11 @@ class SimulationStacker(object):
         elif self.simType == 'SIMBA':
             self.simPath = '/pscratch/sd/r/rhliu/simulations/SIMBA/' + sim + '/' + feedback + '/' # type: ignore
             assert feedback in ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet']
+        elif self.simType == 'FLAMINGO':
+            # feedback holds the FLAMINGO variant, using raw directory names
+            # (the fiducial run is 'L1_m9', i.e. sim == feedback for it).
+            self.simPath = '/pscratch/sd/r/rhliu/simulations/FLAMINGO/' + sim + '/' + feedback + '/' # type: ignore
+            assert feedback in ['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma']
         else:
             raise NotImplementedError('Simulation type not implemented')
 
@@ -85,11 +93,15 @@ class SimulationStacker(object):
         self.nPixels = nPixels
         self.feedback = feedback
         self.z = z
-        
-        # with h5py.File(il.snapshot.snapPath(self.simPath, self.snapshot), 'r') as f:
-        with h5py.File(self.snapPath(), 'r') as f:
-        
-            self.header = dict(f['Header'].attrs.items())
+
+        if self.simType == 'FLAMINGO':
+            # SWIFT headers use different units/keys (comoving Mpc, no h,
+            # cosmology in a separate group); normalize to TNG-style.
+            self.header = load_flamingo_header(self.snapPath())
+        else:
+            # with h5py.File(il.snapshot.snapPath(self.simPath, self.snapshot), 'r') as f:
+            with h5py.File(self.snapPath(), 'r') as f:
+                self.header = dict(f['Header'].attrs.items())
         
         # self.Lbox = self.header['BoxSize'] # kpc/h
         self.h = self.header['HubbleParam'] # Hubble parameter
@@ -1040,7 +1052,8 @@ class SimulationStacker(object):
         from pathlib import Path
         if base_path is None:
             base_path = '/pscratch/sd/r/rhliu/simulations/'
-        if self.simType == 'SIMBA':
+        if self.simType in ('SIMBA', 'FLAMINGO'):
+            # Both suites have feedback variants, included in the filename
             fname = f'{self.sim}_{self.feedback}_{self.snapshot}_Pk_{grid}.npz'
         else:
             fname = f'{self.sim}_{self.snapshot}_Pk_{grid}.npz'

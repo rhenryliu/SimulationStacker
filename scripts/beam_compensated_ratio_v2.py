@@ -65,8 +65,9 @@ matplotlib.rcParams.update({
     "legend.fontsize": 14,
 })
 
-_OMEGA_B_TNG_FALLBACK   = 0.0456
-_OMEGA_B_SIMBA_FALLBACK = 0.048
+_OMEGA_B_TNG_FALLBACK      = 0.0456
+_OMEGA_B_SIMBA_FALLBACK    = 0.048
+_OMEGA_B_FLAMINGO_FALLBACK = 0.0486  # header provides it; fallback should never trigger
 
 
 def load_measurements_npz(path: str) -> dict:
@@ -128,9 +129,23 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
                 print(f"  [warn] OmegaBaryon missing in {sim_label} header; "
                       f"using fallback {_OMEGA_B_SIMBA_FALLBACK}")
 
+    elif sim_type_name == 'FLAMINGO':
+        stacker   = SimulationStacker(sim['name'], sim['snapshot'],
+                                      z=redshift, simType=sim_type_name,
+                                      feedback=sim['feedback'])
+        # '-' instead of '_' so labels render under usetex
+        sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+        try:
+            omega_b = stacker.header['OmegaBaryon']
+        except KeyError:
+            omega_b = _OMEGA_B_FLAMINGO_FALLBACK
+            if verbose:
+                print(f"  [warn] OmegaBaryon missing in {sim_label} header; "
+                      f"using fallback {_OMEGA_B_FLAMINGO_FALLBACK}")
+
     else:
         raise ValueError(f"Unknown simulation type: {sim_type_name!r}. "
-                         "Expected 'IllustrisTNG' or 'SIMBA'.")
+                         "Expected 'IllustrisTNG', 'SIMBA' or 'FLAMINGO'.")
 
     return stacker, sim_label, omega_b
 
@@ -361,12 +376,14 @@ def main(path2config: str, verbose: bool = True) -> None:
     # for the same simulations.
     colour_for_sim: dict = {}
     for i, sim_group in enumerate(nb_config['simulations']):
-        cmap    = matplotlib.colormaps[['plasma', 'twilight'][i]]  # type: ignore[attr-defined]
+        cmap    = matplotlib.colormaps[['plasma', 'twilight', 'hot'][i]]  # type: ignore[attr-defined]
         n_sims  = len(sim_group['sims'])
         colours = cmap(np.linspace(0.2, 0.85, n_sims))
         for j, sim in enumerate(sim_group['sims']):
             if sim_group['sim_type'] == 'IllustrisTNG':
                 label = sim['name']
+            elif sim_group['sim_type'] == 'FLAMINGO':
+                label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
             else:
                 label = f"{sim['name']}_{sim['feedback']}"
                 label = f"SIMBA-100"

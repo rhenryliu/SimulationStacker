@@ -11,14 +11,18 @@ def snap_path(sim_path, snapshot, sim_type, sim_name=None, feedback=None, chunk_
     Args:
         sim_path (str): Base path to the simulation.
         snapshot (int): Snapshot number.
-        sim_type (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA').
+        sim_type (str): The type of simulation (e.g., 'IllustrisTNG', 'SIMBA', 'FLAMINGO').
         sim_name (str, optional): Name of the simulation (for SIMBA).
         feedback (str, optional): Feedback type (for SIMBA).
-        chunk_num (int): The chunk number for the simulation (Only used for IllustrisTNG).
+        chunk_num (int): The chunk number for the simulation (Only used for IllustrisTNG.
+            For FLAMINGO, chunks are found by globbing the folder path instead).
         path_only (bool): If True, returns only the folder path.
 
     Returns:
-        str: The path to the snapshot file or folder.
+        str: The path to the snapshot file or folder. For FLAMINGO the file path is
+        the *virtual* snapshot file (which stitches all chunk files plus the halo
+        membership files), while the folder path is the directory holding the raw
+        chunk files ``flamingo_NNNN.{i}.hdf5`` for per-chunk iteration.
     """
     if sim_type == 'IllustrisTNG':
         folder_path = sim_path + '/snapdir_' + str(snapshot).zfill(3) + '/'
@@ -27,11 +31,57 @@ def snap_path(sim_path, snapshot, sim_type, sim_name=None, feedback=None, chunk_
         folder_path = sim_path + 'snapshots/'
         snap_path = folder_path + 'snap_' + sim_name + '_' + str(snapshot) + '.hdf5'
         folder_path = snap_path  # SIMBA has different file structure
-    
+    elif sim_type == 'FLAMINGO':
+        snap_str = str(snapshot).zfill(4)
+        base = sim_path + 'snapshots/flamingo_' + snap_str + '/'
+        folder_path = base + 'swift_snapshot_' + snap_str + '/'
+        snap_path = base + 'flamingo_' + snap_str + '.hdf5'  # virtual file
+
     if path_only:
         return folder_path
     else:
         return snap_path
+
+
+def load_flamingo_header(snap_file):
+    """Load a FLAMINGO virtual snapshot header, normalized to TNG-style conventions.
+
+    FLAMINGO (SWIFT) uses comoving Mpc and 1e10 Msun with NO factors of h,
+    and stores cosmology in a separate 'Cosmology' group. This function
+    synthesizes the Gadget-style header dict the rest of the pipeline expects
+    (BoxSize in ckpc/h, scalar attributes, 'HubbleParam'/'Omega0' keys).
+
+    Note: the virtual file's 'NumPart_Total' overflows 32 bits, so the true
+    counts (from 'NumPart_ThisFile', which covers the whole box in the virtual
+    file) are stored under 'NumPart_Total' here.
+
+    Args:
+        snap_file (str): Path to the FLAMINGO virtual snapshot HDF5 file.
+
+    Returns:
+        dict: TNG-style header with keys 'BoxSize' (ckpc/h), 'HubbleParam',
+        'Omega0', 'OmegaBaryon', 'OmegaLambda', 'Redshift', 'Time' (scale
+        factor), 'MassTable' (all zeros; every FLAMINGO ptype has a
+        per-particle mass field), 'NumPart_Total', and 'NumFilesPerSnapshot'.
+    """
+    with h5py.File(snap_file, 'r') as f:
+        raw = dict(f['Header'].attrs.items())
+        cosmo = dict(f['Cosmology'].attrs.items())
+
+    h = float(cosmo['h'][0])
+    header = {
+        'BoxSize': float(raw['BoxSize'][0]) * 1000.0 * h,  # cMpc -> ckpc/h
+        'HubbleParam': h,
+        'Omega0': float(cosmo['Omega_m'][0]),
+        'OmegaBaryon': float(cosmo['Omega_b'][0]),
+        'OmegaLambda': float(cosmo['Omega_lambda'][0]),
+        'Redshift': float(raw['Redshift'][0]),
+        'Time': float(raw['Scale-factor'][0]),
+        'MassTable': np.asarray(raw['MassTable'], dtype=np.float64),
+        'NumPart_Total': raw['NumPart_ThisFile'].astype(np.int64),
+        'NumFilesPerSnapshot': 1,
+    }
+    return header
 
 
 def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
@@ -54,11 +104,12 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
         # haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
         haloes['GroupRad'] = haloes_cat['Group_R_Mean200']
-        
+        del haloes_cat  # free memory
+
     elif sim_type == 'SIMBA':
         if header is None:
             raise ValueError("Header is required for SIMBA simulations")
-        
+
         halo_path = sim_path + 'catalogs/' + sim_name + '_' + str(snapshot) + '.hdf5'
         haloes = {}
         # Load entire halo catalog - this is doable since catalogs are small
@@ -67,8 +118,29 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         haloes['GroupMass'] = haloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
         # GroupRad here intentionally uses r200 (mean-overdensity radius) rather than r200c (critical-overdensity radius)
         haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200'] * header['HubbleParam']  # kpc/h
+        del haloes_cat  # free memory
 
-    del haloes_cat  # free memory
+    elif sim_type == 'FLAMINGO':
+        if header is None:
+            raise ValueError("Header is required for FLAMINGO simulations")
+
+        h = header['HubbleParam']
+        soap_path = sim_path + 'SOAP-HBT/halo_properties_' + str(snapshot).zfill(4) + '.hdf5'
+        haloes = {}
+        # SOAP native units: comoving Mpc and 1e10 Msun, with NO factors of h.
+        # Only centrals are kept, matching the FoF-halo semantics of the TNG
+        # group catalog (SOAP lists every subhalo, with spherical-overdensity
+        # properties zeroed for satellites).
+        # GroupRad/GroupMass use SO/200_mean to match TNG's Group_R_Mean200 convention.
+        with h5py.File(soap_path, 'r') as f:
+            is_central = f['InputHalos/IsCentral'][:].astype(bool)
+            haloes['GroupPos'] = f['InputHalos/HaloCentre'][:][is_central] * 1000.0 * h  # ckpc/h
+            haloes['GroupMass'] = (f['SO/200_mean/TotalMass'][:][is_central].astype(np.float64)
+                                   * 1e10 * h)  # Msun/h
+            haloes['GroupRad'] = (f['SO/200_mean/SORadius'][:][is_central].astype(np.float64)
+                                  * 1000.0 * h)  # ckpc/h
+        del is_central
+
     return haloes
 
 def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
@@ -150,7 +222,63 @@ def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         subhaloes['SubhaloID']    = subhaloes_cat['GroupID']
         subhaloes['SubhaloMStar'] = subhaloes_cat['dicts']['masses.stellar'] * header['HubbleParam']  # Msun/h
 
+    elif sim_type == 'FLAMINGO':
+        if header is None:
+            raise ValueError("Header is required for FLAMINGO simulations")
+
+        h = header['HubbleParam']
+        soap_path = sim_path + 'SOAP-HBT/halo_properties_' + str(snapshot).zfill(4) + '.hdf5'
+        subhaloes = {}
+        # All SOAP rows are kept (centrals + satellites), matching TNG's SUBFIND
+        # subhalo catalog semantics. SOAP native units: comoving Mpc, 1e10 Msun, no h.
+        # SubhaloMass/SubhaloMStar use BoundSubhalo (HBT gravitationally-bound
+        # particles), the direct analog of TNG's SubhaloMass/SubhaloMassType[:,4].
+        with h5py.File(soap_path, 'r') as f:
+            is_central = f['InputHalos/IsCentral'][:].astype(bool)
+            host_idx = f['SOAP/HostHaloIndex'][:]  # SOAP row of top-level parent; -1 for centrals
+            subhaloes['SubhaloPos'] = f['InputHalos/HaloCentre'][:] * 1000.0 * h  # ckpc/h
+            subhaloes['SubhaloMass'] = (f['BoundSubhalo/TotalMass'][:].astype(np.float64)
+                                        * 1e10 * h)  # Msun/h
+            subhaloes['SubhaloMStar'] = (f['BoundSubhalo/StellarMass'][:].astype(np.float64)
+                                         * 1e10 * h)  # Msun/h
+            subhaloes['SubhaloID'] = f['InputHalos/HaloCatalogueIndex'][:]
+
+        # SubhaloGrNr must index into the centrals-only catalog returned by
+        # load_halos (see stack_on_array's parent-mass lookup). Map each
+        # subhalo's top-level parent SOAP row (itself for centrals) to its rank
+        # among centrals.
+        central_rank = np.cumsum(is_central) - 1  # SOAP row -> centrals-only row
+        parent_row = np.where(host_idx >= 0, host_idx, np.arange(len(is_central)))
+        subhaloes['SubhaloGrNr'] = central_rank[parent_row]
+
     return subhaloes
+
+def _convert_flamingo_particles(particles, header):
+    """Convert FLAMINGO particle fields in place to pipeline conventions.
+
+    FLAMINGO (SWIFT) native units are comoving Mpc and 1e10 Msun with NO
+    factors of h. The pipeline expects Coordinates in ckpc/h and Masses in
+    1e10 Msun/h (mapMaker applies the final *1e10 for all sim types), so:
+    Coordinates *= 1000*h and Masses *= h.
+
+    Velocities (if present) are left in FLAMINGO native units: PECULIAR km/s.
+    Note this differs from the Gadget convention (km*sqrt(a)/s) used by
+    TNG/SIMBA — FLAMINGO-specific code must NOT apply the sqrt(a) factor.
+
+    Args:
+        particles (dict): Particle fields as read from file (modified in place).
+        header (dict): Normalized simulation header (for 'HubbleParam').
+
+    Returns:
+        dict: The same dict, with converted fields.
+    """
+    h = header['HubbleParam']
+    if 'Coordinates' in particles:
+        particles['Coordinates'] = particles['Coordinates'] * (1000.0 * h)  # cMpc -> ckpc/h
+    if 'Masses' in particles:
+        particles['Masses'] = particles['Masses'] * h  # 1e10 Msun -> 1e10 Msun/h
+    return particles
+
 
 def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=None, header=None, keys=None):
     """Load particle subsets for the specified particle type.
@@ -219,7 +347,33 @@ def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=N
         with h5py.File(snap_path, 'r') as f:
             for key in keys:
                 particles[key] = f[p_type_val][key][:] # type: ignore
-        
+
+    elif sim_type == 'FLAMINGO':
+        flamingo_p_type_map = {'gas': 'PartType0', 'DM': 'PartType1',
+                               'Stars': 'PartType4', 'BH': 'PartType5'}
+        if actual_p_type not in flamingo_p_type_map:
+            raise NotImplementedError('Particle Type not implemented: ' + actual_p_type)
+        p_type_val = flamingo_p_type_map[actual_p_type]
+
+        # Read through the virtual snapshot file (stitches all 64 chunk files).
+        # WARNING: full-box reads are huge (5.4e9 gas particles for L1_m9);
+        # prefer per-chunk iteration via load_subset for field making.
+        virtual_file = sim_path + ('snapshots/flamingo_' + str(snapshot).zfill(4)
+                                   + '/flamingo_' + str(snapshot).zfill(4) + '.hdf5')
+        particles = {}
+        with h5py.File(virtual_file, 'r') as f:
+            grp = f[p_type_val]
+            for key in keys:
+                # FLAMINGO black holes have no 'Masses' dataset; DynamicalMasses
+                # (the gravitating mass) is the analog used for mass fields.
+                read_key = 'DynamicalMasses' if (key == 'Masses' and p_type_val == 'PartType5') else key
+                if read_key not in grp: # type: ignore
+                    raise KeyError(f"Dataset '{read_key}' not found in {p_type_val} for FLAMINGO. "
+                                   f"Note FLAMINGO has no ElectronAbundance/InternalEnergy; SZ fields "
+                                   f"use ComptonYParameters/ElectronNumberDensities instead.")
+                particles[key] = grp[read_key][:] # type: ignore
+        _convert_flamingo_particles(particles, header)
+
     # particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
     return particles
 
@@ -272,14 +426,23 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     with h5py.File(snap_path, 'r') as f:
         file_header = dict(f['Header'].attrs.items())
         for key in read_keys:
-            particles[key] = f[p_type_val][key][:] # type: ignore
+            # FLAMINGO black holes have no 'Masses' dataset; use DynamicalMasses
+            # (the gravitating mass) as the analog for mass fields.
+            if key == 'Masses' and p_type_val == 'PartType5' and sim_type == 'FLAMINGO':
+                particles[key] = f[p_type_val]['DynamicalMasses'][:] # type: ignore
+            else:
+                particles[key] = f[p_type_val][key][:] # type: ignore
 
     if add_mass:
         particles['Masses'] = header['MassTable'][1] * np.ones_like(particles['ParticleIDs'])  # DM mass
 
     if (not 'ParticleIDs' in keys) and ('ParticleIDs' in particles):
         del particles['ParticleIDs']  # Remove ParticleIDs if we added Masses
-            
+
+    if sim_type == 'FLAMINGO':
+        # cMpc -> ckpc/h, 1e10 Msun -> 1e10 Msun/h (see _convert_flamingo_particles)
+        _convert_flamingo_particles(particles, header)
+
     # particles['Masses'] = particles['Masses'] * 1e10 / header['HubbleParam']  # Convert masses to Msun/h
     return particles
 
@@ -323,7 +486,8 @@ def _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
             filename = f'{sim_name}_{snapshot}_{p_type}_{n_pixels}_{projection}{suffix}.npy'
         else:  # 3D
             filename = f'{sim_name}_{snapshot}_{p_type}_{n_pixels}{suffix}.npy'
-    elif sim_type == 'SIMBA':
+    elif sim_type in ('SIMBA', 'FLAMINGO'):
+        # Both suites have feedback variants, included in the filename
         if dim == '2D':
             filename = f'{sim_name}_{feedback}_{snapshot}_{p_type}_{n_pixels}_{projection}{suffix}.npy'
         else:  # 3D

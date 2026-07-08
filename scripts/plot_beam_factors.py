@@ -128,12 +128,15 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
     # Both configs list the same simulations, so building from either is equivalent.
     colour_for_sim: dict = {}
     for i, sim_group in enumerate(loaded['z05']['simulations']):
-        cmap    = matplotlib.colormaps[['plasma', 'twilight'][i]]  # type: ignore[attr-defined]
+        cmap    = matplotlib.colormaps[['plasma', 'twilight', 'hot'][i]]  # type: ignore[attr-defined]
         n_sims  = len(sim_group['sims'])
         colours = cmap(np.linspace(0.2, 0.85, n_sims))
         for j, sim in enumerate(sim_group['sims']):
             if sim_group['sim_type'] == 'IllustrisTNG':
                 label = sim['name']
+            elif sim_group['sim_type'] == 'FLAMINGO':
+                # '-' instead of '_' so labels render under usetex
+                label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
             else:
                 # label = f"{sim['name']}_{sim['feedback']}"
                 label = f"SIMBA-100"
@@ -198,6 +201,11 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
                                                   feedback=sim['feedback'])
                     # sim_label = f"{sim['name']}_{sim['feedback']}"
                     sim_label = f"SIMBA-100"
+                elif sim_type_name == 'FLAMINGO':
+                    stacker   = SimulationStacker(sim['name'], sim['snapshot'],
+                                                  z=redshift, simType=sim_type_name,
+                                                  feedback=sim['feedback'])
+                    sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
                 else:
                     raise ValueError(f"Unknown sim type: {sim_type_name!r}")
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-SimulationStacker is a Python toolkit for halo stacking analysis on cosmological simulations (IllustrisTNG and SIMBA). It creates 2D/3D projected fields from particle data, applies stacking filters, and generates comparison figures between simulations and observations.
+SimulationStacker is a Python toolkit for halo stacking analysis on cosmological simulations (IllustrisTNG, SIMBA and FLAMINGO). It creates 2D/3D projected fields from particle data, applies stacking filters, and generates comparison figures between simulations and observations.
 
 ## Python Environment
 
@@ -34,10 +34,19 @@ sbatch scripts/runCPU.sh
 
 ## Testing
 
-Tests are Jupyter notebooks in `tests/`. There is no pytest suite. Validate changes interactively:
+Most tests are Jupyter notebooks in `tests/`. Validate changes interactively:
 ```bash
 jupyter notebook tests/test_3D_fields.ipynb
 ```
+
+FLAMINGO I/O and SZ-field support has a proper pytest suite (skips automatically
+if the FLAMINGO data is not on scratch):
+```bash
+pytest tests/test_flamingo_io.py tests/test_flamingo_sz.py -v
+```
+`test_flamingo_io.py` includes a global-density test that streams ~50 GB of
+particle masses (a few minutes). `tests/test_flamingo.ipynb` is the interactive
+demo of the FLAMINGO data layout and h5py access patterns.
 
 ## Architecture
 
@@ -49,7 +58,7 @@ jupyter notebook tests/test_3D_fields.ipynb
 
 3. **`filters.py`** — Stacking filter functions: `CAP` (Circular Aperture Profile, the primary method), `DSigma`/`delta_sigma` (excess surface mass density), `delta_sigma_ring`, `total_mass`, `upsilon`. These operate on 2D projected fields and return radial profiles.
 
-4. **`loadIO.py`** — Data I/O for TNG and SIMBA group catalogs and particle data. Differences between the two sims are handled here (e.g., halo radius field names differ). Uses `illustris_python` for TNG; reads HDF5 directly for SIMBA.
+4. **`loadIO.py`** — Data I/O for TNG, SIMBA and FLAMINGO group catalogs and particle data. Differences between the sims are handled here (e.g., halo radius field names and unit conventions differ). Uses `illustris_python` for TNG; reads HDF5 directly for SIMBA and FLAMINGO. For FLAMINGO, halo catalogs come from the SOAP-HBT file (`load_halos` keeps centrals only, using `SO/200_mean`; `load_subhalos` keeps all rows, using `BoundSubhalo` masses), `load_flamingo_header` normalizes the SWIFT header to TNG-style conventions, and `_convert_flamingo_particles` applies the no-h-to-h unit conversion at load time.
 
 5. **`tools.py`** — Numba-JIT-compiled histogram binning (`hist2d_numba_seq`, `numba_tsc_3D`). Performance-critical; avoid touching unless necessary.
 
@@ -65,6 +74,8 @@ jupyter notebook tests/test_3D_fields.ipynb
 s = SimulationStacker(sim='TNG300-1', snapshot=67, nPixels=1000,
                       simType='IllustrisTNG', feedback=None, z=0.5)
 ```
+
+`simType` is one of `'IllustrisTNG'`, `'SIMBA'`, `'FLAMINGO'`. `feedback` is required for SIMBA and FLAMINGO; for FLAMINGO it is the variant directory name (`'L1_m9'` = fiducial, `'fgas-8sigma'`, `'Jet_fgas-4sigma'`), e.g. `SimulationStacker(sim='L1_m9', snapshot=67, simType='FLAMINGO', feedback='fgas-8sigma', z=0.5)`.
 
 The two main workflows are **fields** (simulation-native units, kpc/h radii) and **maps** (beam-convolved, arcmin radii):
 
@@ -83,22 +94,24 @@ The two main workflows are **fields** (simulation-native units, kpc/h radii) and
 
 Precomputed fields and maps are cached as `.npy` files under:
 ```
-/pscratch/sd/r/rhliu/simulations/{IllustrisTNG|SIMBA}/products/{2D|3D}/
+/pscratch/sd/r/rhliu/simulations/{IllustrisTNG|SIMBA|FLAMINGO}/products/{2D|3D}/
 ```
-Filename convention: `{sim}_{snapshot}_{pType}_{nPixels}_{projection}.npy`
+Filename convention: `{sim}_{snapshot}_{pType}_{nPixels}_{projection}.npy` for TNG; SIMBA and FLAMINGO insert the feedback variant: `{sim}_{feedback}_{snapshot}_{pType}_{nPixels}_{projection}.npy`
 
 Use `load=True` / `save=True` in `makeField()`/`makeMap()` to control read/write. Results are also cached in-memory in `stacker.fields` and `stacker.maps`.
 
 ## Unit Conventions
 
-| Quantity | IllustrisTNG | SIMBA |
-|----------|-------------|-------|
-| Mass | 10^10 M☉/h | M☉/h |
-| Positions | ckpc/h | ckpc/h |
-| Halo radius field | `Group_R_Mean200` | `virial_quantities.r200c` |
-| DM particle mass | from `MassTable[1]` (no per-particle field) | per-particle field |
+| Quantity | IllustrisTNG | SIMBA | FLAMINGO (native) |
+|----------|-------------|-------|-------------------|
+| Mass | 10^10 M☉/h | M☉/h | 10^10 M☉ (**no h**) |
+| Positions | ckpc/h | ckpc/h | cMpc (**no h**) |
+| Halo radius field | `Group_R_Mean200` | `virial_quantities.r200c` | `SO/200_mean/SORadius` |
+| DM particle mass | from `MassTable[1]` (no per-particle field) | per-particle field | per-particle field |
 
-SZ fields (tSZ, kSZ, τ) are computed from gas `ElectronAbundance`, `InternalEnergy`, `Density`, and `Velocities`, and use CGS constants defined in `mapMaker.py`.
+FLAMINGO's no-h units are converted at load time in `loadIO.py` (positions ×1000·h → ckpc/h; particle masses ×h → 10^10 M☉/h; catalog masses ×1e10·h → M☉/h), so downstream code sees the same conventions for all three suites. The FLAMINGO snapshot header is also normalized (`load_flamingo_header`): `BoxSize` in ckpc/h, cosmology under `HubbleParam`/`Omega0`/`OmegaBaryon`. Note FLAMINGO velocities are peculiar km/s (no √a factor, unlike Gadget-style TNG/SIMBA), and FLAMINGO black holes use `DynamicalMasses` (aliased to `Masses` by the loader).
+
+SZ fields (tSZ, kSZ, τ) are computed from gas `ElectronAbundance`, `InternalEnergy`, `Density`, and `Velocities`, and use CGS constants defined in `mapMaker.py`. FLAMINGO has no `ElectronAbundance`/`InternalEnergy`; its SZ and `ionized_gas` fields instead use the precomputed `ComptonYParameters` (tSZ) and `ElectronNumberDensities` (τ/kSZ/ionized gas electron counts) — see `mapMaker._flamingo_sz_weights`. Both fields are zero for star-forming particles.
 
 ## Configuration System
 
@@ -140,6 +153,7 @@ simulations:
 
 - **IllustrisTNG**: `TNG300-1`, `TNG300-2`, `TNG100-1`, `TNG100-2`, `TNG50-1`, `Illustris-1`, `Illustris-2`
 - **SIMBA**: `m50n512`, `m100n1024` with feedback variants `s50`, `s50nox`, `s50noagn`, `s50nofb`, `s50nojet`
+- **FLAMINGO**: `L1_m9` (1 cGpc box) with feedback variants `L1_m9` (fiducial), `fgas-8sigma`, `Jet_fgas-4sigma`; only snapshot 67 (z=0.5) is downloaded. Snapshots are SWIFT virtual HDF5 files (64 chunk files each + halo-membership files); halo catalogs are SOAP-HBT. Read with plain h5py — **swiftsimio does not work in the cosmodesi environment** (needs NumPy ≥ 2.0).
 
 Simulation data lives at hardcoded paths in `stacker.py` under `/pscratch/sd/r/rhliu/simulations/` — this is known technical debt, do not refactor without being asked.
 

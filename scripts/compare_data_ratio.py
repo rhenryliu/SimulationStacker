@@ -60,9 +60,12 @@ matplotlib.rcParams.update({
 # Fallback Omega_b values for simulations whose snapshot headers omit the key.
 # IllustrisTNG value: from Illustris-1 documentation.
 # SIMBA value: Planck 2015 cosmology used by the SIMBA suite.
+# FLAMINGO value: DES Y3 "3x2pt + All Ext." cosmology (normalized header
+# always provides OmegaBaryon, so this fallback should never trigger).
 # ---------------------------------------------------------------------------
-_OMEGA_B_TNG_FALLBACK   = 0.0456
-_OMEGA_B_SIMBA_FALLBACK = 0.048
+_OMEGA_B_TNG_FALLBACK      = 0.0456
+_OMEGA_B_SIMBA_FALLBACK    = 0.048
+_OMEGA_B_FLAMINGO_FALLBACK = 0.0486
 
 
 def load_measurements_npz(path: str) -> dict:
@@ -209,7 +212,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     # cosmological parameters so using the first is adequate for axis labelling).
     cosmo_ref: Optional[FlatLambdaCDM] = None
 
-    colourmaps = ['plasma', 'twilight']
+    colourmaps = ['plasma', 'twilight', 'hot']
 
     t0 = time.time()
 
@@ -251,9 +254,23 @@ def main(path2config: str, verbose: bool = True) -> None:
                         print(f"  [warn] OmegaBaryon missing in {sim_label} header; "
                               f"using fallback {_OMEGA_B_SIMBA_FALLBACK}")
 
+            elif sim_type_name == 'FLAMINGO':
+                feedback  = sim['feedback']
+                # '-' instead of '_' so labels render under usetex
+                sim_label = f"FLAMINGO {feedback}".replace('_', '-')
+                stacker   = SimulationStacker(sim_name, snapshot, z=redshift,
+                                             simType=sim_type_name, feedback=feedback)
+                try:
+                    omega_b = stacker.header['OmegaBaryon']
+                except KeyError:
+                    omega_b = _OMEGA_B_FLAMINGO_FALLBACK
+                    if verbose:
+                        print(f"  [warn] OmegaBaryon missing in {sim_label} header; "
+                              f"using fallback {_OMEGA_B_FLAMINGO_FALLBACK}")
+
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name!r}. "
-                                 "Expected 'IllustrisTNG' or 'SIMBA'.")
+                                 "Expected 'IllustrisTNG', 'SIMBA' or 'FLAMINGO'.")
 
             # Build the cosmology object for this simulation (used to populate
             # the reference cosmology for the secondary x-axis on first call).

@@ -49,8 +49,8 @@ pip install -r requirements-optional.txt
 Notes on the optional dependencies:
 
 - **`illustris_python`** — required for any IllustrisTNG loading; installed from
-  GitHub. SIMBA-only workflows do not need it (SIMBA data is read from HDF5
-  directly).
+  GitHub. SIMBA- or FLAMINGO-only workflows do not need it (both are read from
+  HDF5 directly).
 - **`nbodykit`** — currently a hard import for the core library (`stacker` →
   `mapMaker` → an unguarded `from nbodykit.lab import ...` in `src/tools.py`),
   even though it is only actually used by the power-spectrum scripts. It is a

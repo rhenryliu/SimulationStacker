@@ -191,26 +191,30 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
         for sim_group in config['simulations']:
             sim_type_name = sim_group['sim_type']
             for sim in sim_group['sims']:
+                # Per-sim redshift override: a sim entry may declare its own
+                # 'redshift' (e.g. a FLAMINGO z=0.30 snapshot substituted into the
+                # z=0.26 slot); otherwise fall back to this config's redshift.
+                sim_z = sim.get('redshift', redshift)
                 if sim_type_name == 'IllustrisTNG':
                     stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=redshift, simType=sim_type_name)
+                                                  z=sim_z, simType=sim_type_name)
                     sim_label = sim['name']
                 elif sim_type_name == 'SIMBA':
                     stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=redshift, simType=sim_type_name,
+                                                  z=sim_z, simType=sim_type_name,
                                                   feedback=sim['feedback'])
                     # sim_label = f"{sim['name']}_{sim['feedback']}"
                     sim_label = f"SIMBA-100"
                 elif sim_type_name == 'FLAMINGO':
                     stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=redshift, simType=sim_type_name,
+                                                  z=sim_z, simType=sim_type_name,
                                                   feedback=sim['feedback'])
                     sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
                 else:
                     raise ValueError(f"Unknown sim type: {sim_type_name!r}")
 
                 if verbose:
-                    print(f"[{z_key}] Processing {sim_label}")
+                    print(f"[{z_key}] Processing {sim_label} (z={sim_z})")
 
                 # Mean parent-halo mass and R200m of the SHAM-selected sample.
                 mean_mass, R200m_kpch = sham_parent_halo_stats(

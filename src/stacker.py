@@ -38,6 +38,13 @@ except ImportError:
     HAS_PK_LIBRARY = False
 
 
+# Tolerance for the snapshot-redshift consistency check in __init__. Wide enough
+# to permit legitimate rounding (e.g. TNG snapshot 80 is z=0.2607, configured as
+# 0.26) while still catching genuine mismatches (e.g. a FLAMINGO z=0.30 snapshot
+# run at z=0.26).
+_Z_MATCH_TOL = 0.02
+
+
 class SimulationStacker(object):
 
     def __init__(self, 
@@ -103,6 +110,25 @@ class SimulationStacker(object):
             with h5py.File(self.snapPath(), 'r') as f:
                 self.header = dict(f['Header'].attrs.items())
         
+        # Guard against a redshift that does not match the loaded snapshot.
+        # self.z drives BOTH the angular projection (makeMap / stack_on_array) and
+        # the scale factor a = 1/(1+z) used for the ionized_gas / SZ fields, so a
+        # silent mismatch (e.g. a FLAMINGO z=0.30 snapshot requested at z=0.26)
+        # would bias those amplitudes by ~(1+z)^3. Warn loudly rather than fail
+        # silently; set a per-sim 'redshift' in the config to match the snapshot.
+        if 'Redshift' in self.header:
+            z_true = float(np.asarray(self.header['Redshift']).ravel()[0])
+            if abs(self.z - z_true) > _Z_MATCH_TOL:
+                feedback_str = f"/{self.feedback}" if self.feedback else ""
+                warnings.warn(
+                    f"Requested z={self.z} disagrees with snapshot {self.snapshot} "
+                    f"true redshift z={z_true:.4f} for {self.simType} "
+                    f"{self.sim}{feedback_str}. self.z sets both the angular "
+                    f"projection and the scale factor a=1/(1+z); set a per-sim "
+                    f"'redshift' in the config to match the snapshot.",
+                    stacklevel=2,
+                )
+
         # self.Lbox = self.header['BoxSize'] # kpc/h
         self.h = self.header['HubbleParam'] # Hubble parameter
 

@@ -226,10 +226,14 @@ def main(path2config: str, verbose: bool = True) -> None:
         for j, sim in enumerate(sim_group['sims']):
             sim_name = sim['name']
             snapshot = sim['snapshot']
+            # Per-sim redshift override: a sim entry may declare its own 'redshift'
+            # (e.g. a FLAMINGO z=0.30 snapshot substituted into a z=0.26 comparison);
+            # otherwise fall back to the config-level redshift.
+            sim_z    = sim.get('redshift', redshift)
 
             # ---- Instantiate the stacker and resolve Omega_b ----
             if sim_type_name == 'IllustrisTNG':
-                stacker   = SimulationStacker(sim_name, snapshot, z=redshift, simType=sim_type_name)
+                stacker   = SimulationStacker(sim_name, snapshot, z=sim_z, simType=sim_type_name)
                 sim_label = sim_name
                 try:
                     omega_b = stacker.header['OmegaBaryon']
@@ -244,7 +248,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 feedback  = sim['feedback']
                 # sim_label = f"{sim_name}_{feedback}"
                 sim_label = f"SIMBA-100"
-                stacker   = SimulationStacker(sim_name, snapshot, z=redshift,
+                stacker   = SimulationStacker(sim_name, snapshot, z=sim_z,
                                              simType=sim_type_name, feedback=feedback)
                 try:
                     omega_b = stacker.header['OmegaBaryon']
@@ -258,7 +262,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 feedback  = sim['feedback']
                 # '-' instead of '_' so labels render under usetex
                 sim_label = f"FLAMINGO {feedback}".replace('_', '-')
-                stacker   = SimulationStacker(sim_name, snapshot, z=redshift,
+                stacker   = SimulationStacker(sim_name, snapshot, z=sim_z,
                                              simType=sim_type_name, feedback=feedback)
                 try:
                     omega_b = stacker.header['OmegaBaryon']
@@ -298,7 +302,7 @@ def main(path2config: str, verbose: bool = True) -> None:
                 R200m_label = sim_label
 
             if verbose:
-                print(f"Processing {sim_label} (snapshot {snapshot})")
+                print(f"Processing {sim_label} (snapshot {snapshot}, z={sim_z})")
 
             # ---- Stack numerator and denominator ----
             # Note: pixelSize/beamSize are intentionally omitted for the numerator

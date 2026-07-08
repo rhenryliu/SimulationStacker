@@ -78,3 +78,22 @@ simulations:
         snapshot: 116
       # - name: 'Illustris-2'
       #   snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      # No FLAMINGO snapshot exists at z=0.26; snapshot 71 (z=0.30) is substituted.
+      # The per-sim 'redshift: 0.3' makes the stacker use z=0.30 for both the
+      # angular projection and the scale factor a=1/(1+z), and matches the snapshot
+      # header so the consistency-check warning stays silent.
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        redshift: 0.3

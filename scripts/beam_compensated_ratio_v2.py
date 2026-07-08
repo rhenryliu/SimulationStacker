@@ -103,9 +103,14 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
     Returns:
         ``(stacker, sim_label, omega_b)``
     """
+    # Per-sim redshift override: a sim entry may declare its own 'redshift'
+    # (e.g. a FLAMINGO z=0.30 snapshot substituted into a z=0.26 comparison);
+    # otherwise fall back to the config-level redshift passed in.
+    z = sim.get('redshift', redshift)
+
     if sim_type_name == 'IllustrisTNG':
         stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                      z=redshift, simType=sim_type_name)
+                                      z=z, simType=sim_type_name)
         sim_label = sim['name']
         try:
             omega_b = stacker.header['OmegaBaryon']
@@ -117,7 +122,7 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
 
     elif sim_type_name == 'SIMBA':
         stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                      z=redshift, simType=sim_type_name,
+                                      z=z, simType=sim_type_name,
                                       feedback=sim['feedback'])
         # sim_label = f"{sim['name']}_{sim['feedback']}"
         sim_label = f"SIMBA-100"
@@ -131,7 +136,7 @@ def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
 
     elif sim_type_name == 'FLAMINGO':
         stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                      z=redshift, simType=sim_type_name,
+                                      z=z, simType=sim_type_name,
                                       feedback=sim['feedback'])
         # '-' instead of '_' so labels render under usetex
         sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')

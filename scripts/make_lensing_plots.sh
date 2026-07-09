@@ -2,8 +2,8 @@
 
 #SBATCH -A desi
 #SBATCH -C cpu
-#SBATCH --qos=regular
-#SBATCH --time=12:00:00
+#SBATCH --qos=debug
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1
 ## SBATCH --ntasks-per-node=1
 #SBATCH -o ../Outputs_Perlmutter/slurm-%j.out # STDOUT

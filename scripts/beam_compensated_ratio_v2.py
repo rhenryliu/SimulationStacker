@@ -540,7 +540,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     # Two-part legend:
     #   1. Sim colours + data (from the labeled artists above)
     #   2. Ratio-type key showing what each linestyle means
-    leg1 = ax.legend(loc='upper left')
+    leg1 = ax.legend(loc='best')
     ax.add_artist(leg1)
 
     if extra_sim_ratios:

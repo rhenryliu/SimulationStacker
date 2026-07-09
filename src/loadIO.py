@@ -342,9 +342,9 @@ def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=N
         else:
             raise NotImplementedError('Particle Type not implemented')
         
-        snap_path = sim_path + 'snapshots/snap_' + sim_name + '_' + str(snapshot) + '.hdf5'
+        virtual_file = snap_path(sim_path, snapshot, sim_type, sim_name=sim_name)
         particles = {}
-        with h5py.File(snap_path, 'r') as f:
+        with h5py.File(virtual_file, 'r') as f:
             for key in keys:
                 particles[key] = f[p_type_val][key][:] # type: ignore
 
@@ -358,8 +358,7 @@ def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=N
         # Read through the virtual snapshot file (stitches all 64 chunk files).
         # WARNING: full-box reads are huge (5.4e9 gas particles for L1_m9);
         # prefer per-chunk iteration via load_subset for field making.
-        virtual_file = sim_path + ('snapshots/flamingo_' + str(snapshot).zfill(4)
-                                   + '/flamingo_' + str(snapshot).zfill(4) + '.hdf5')
+        virtual_file = snap_path(sim_path, snapshot, sim_type)
         particles = {}
         with h5py.File(virtual_file, 'r') as f:
             grp = f[p_type_val]

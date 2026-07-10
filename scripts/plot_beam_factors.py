@@ -60,6 +60,16 @@ matplotlib.rcParams.update({
 _OMEGA_B_TNG_FALLBACK   = 0.0456
 _OMEGA_B_SIMBA_FALLBACK = 0.048
 
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# The 'hot' colormap previously used gave Jet_fgas-4sigma a pale yellow that is
+# illegible in print. Keep in sync with compare_data_ratio.py /
+# beam_compensated_ratio_v2.py.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
 # Redshift label and linestyle for each config slot.
 _REDSHIFT_STYLES = {
     'z05':  {'ls': '-',  'label': r'$z = 0.5$'},
@@ -133,14 +143,17 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
         colours = cmap(np.linspace(0.2, 0.85, n_sims))
         for j, sim in enumerate(sim_group['sims']):
             if sim_group['sim_type'] == 'IllustrisTNG':
-                label = sim['name']
+                label  = sim['name']
+                colour = colours[j]
             elif sim_group['sim_type'] == 'FLAMINGO':
                 # '-' instead of '_' so labels render under usetex
-                label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                label  = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                colour = _FLAMINGO_COLOURS.get(sim['feedback'], colours[j])
             else:
                 # label = f"{sim['name']}_{sim['feedback']}"
-                label = f"SIMBA-100"
-            colour_for_sim[label] = colours[j]
+                label  = f"SIMBA-100"
+                colour = colours[j]
+            colour_for_sim[label] = colour
 
     # ---- Figure output path (taken from z05 plot config as reference) ----
     plot_config = loaded['z05'].get('plot', {})

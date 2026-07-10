@@ -2,8 +2,8 @@
 
 #SBATCH -A desi
 #SBATCH -C cpu
-#SBATCH --qos=debug
-#SBATCH --time=00:30:00
+#SBATCH --qos=regular
+#SBATCH --time=12:00:00
 #SBATCH --nodes=1
 ## SBATCH --ntasks-per-node=1
 #SBATCH -o ../Outputs_Perlmutter/slurm-%j.out # STDOUT
@@ -21,13 +21,17 @@ source ~/myenvs/cosmodesi_dr1/bin/activate
 
 echo "simulated_maps.py"
 
-# Figure 10a
+# Figure 14a
 srun python -u compare_data_ratio.py -p ./configs/mass_ratio_data_z026.yaml
-# Figure 10b
+# Figure 14b
 srun python -u compare_data_ratio.py -p ./configs/mass_ratio_data_z05.yaml
-# Figure 11
-# srun python -u plot_beam_factors.py
-# Figure 12a
+# Figure 15
+srun python -u plot_beam_factors.py
+# Figure 16a (ionized gas only)
 srun python -u beam_compensated_ratio_v2.py -p ./configs/beam_compensated_z026.yaml
-# Figure 12b
+# Figure 16b (ionized gas only)
 srun python -u beam_compensated_ratio_v2.py -p ./configs/beam_compensated_z05.yaml
+# Figure 17a (total baryons, data repeated for reference)
+srun python -u beam_compensated_ratio_v2.py -p ./configs/beam_compensated_z026_baryon.yaml
+# Figure 17b (total baryons, data repeated for reference)
+srun python -u beam_compensated_ratio_v2.py -p ./configs/beam_compensated_z05_baryon.yaml

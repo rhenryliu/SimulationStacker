@@ -67,6 +67,16 @@ _OMEGA_B_TNG_FALLBACK      = 0.0456
 _OMEGA_B_SIMBA_FALLBACK    = 0.048
 _OMEGA_B_FLAMINGO_FALLBACK = 0.0486
 
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# The 'hot' colormap previously used gave Jet_fgas-4sigma a pale yellow that is
+# illegible in print. Keep in sync with beam_compensated_ratio_v2.py /
+# plot_beam_factors.py.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
 
 def load_measurements_npz(path: str) -> dict:
     """Load a nested dict saved by the companion save_measurements_npz helper.
@@ -222,6 +232,9 @@ def main(path2config: str, verbose: bool = True) -> None:
         cmap    = matplotlib.colormaps[colourmaps[i]]  # type: ignore[attr-defined]
         n_sims  = len(sim_group['sims'])
         colours = cmap(np.linspace(0.2, 0.85, n_sims))
+        if sim_type_name == 'FLAMINGO':
+            colours = [_FLAMINGO_COLOURS.get(s['feedback'], colours[k])
+                       for k, s in enumerate(sim_group['sims'])]
 
         for j, sim in enumerate(sim_group['sims']):
             sim_name = sim['name']

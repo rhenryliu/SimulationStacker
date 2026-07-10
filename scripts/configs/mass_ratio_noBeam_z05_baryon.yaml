@@ -1,0 +1,69 @@
+# Copy of mass_ratio_noBeam_z05.yaml with particle_type switched to 'baryon'.
+# Used by beam_compensated_z05_baryon.yaml to produce the total-baryon
+# companion figure (paper Fig. 17); keep stacking settings in sync with the
+# ionized-gas original.
+stack:
+  redshift: 0.5
+  load_field: true
+  save_field: true
+
+  stack_field: false # If false, stacks maps instead of fields
+  rad_distance: 1.0 # in arcmin, or comoving kpc/h if stack_field is true
+  min_radius: 1.0 # in rad_distance units
+  max_radius: 6.0 # in rad_distance units
+  num_radii: 9 # Number of radial bins between min_radius and max_radius
+
+  mask_haloes: false
+  mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
+
+  n_pixels: 1000 # Number of pixels on a side if stack_field is true
+  projection: 'yz' # 'xy', 'xz', 'yz'
+
+  filter_type: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  particle_type: 'baryon' # 'DM', 'gas', 'stars', 'total', 'ionized_gas', 'baryon'
+  pixel_size: 0.2 # in arcmin
+  beam_size: null # in arcmin
+
+  filter_type_2: 'DSigma' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  particle_type_2: 'total'
+  pixel_size_2: 0.2 # in arcmin
+  beam_size_2: null # in arcmin
+
+  subtract_mean: false # Whether to subtract the mean of the field before stacking
+  use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
+  halo_abundance_target: 5.0e-4 # Target halo abundance for subhalo selection when use_subhalos is true. In units of h^3/Mpc^3.
+
+
+plot:
+  plot_data: true
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  fig_path: '../figures/'
+  fig_name: 'noBeam_yz_data'
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

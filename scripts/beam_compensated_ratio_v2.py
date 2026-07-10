@@ -69,6 +69,15 @@ _OMEGA_B_TNG_FALLBACK      = 0.0456
 _OMEGA_B_SIMBA_FALLBACK    = 0.048
 _OMEGA_B_FLAMINGO_FALLBACK = 0.0486  # header provides it; fallback should never trigger
 
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# The 'hot' colormap previously used gave Jet_fgas-4sigma a pale yellow that is
+# illegible in print. Keep in sync with compare_data_ratio.py / plot_beam_factors.py.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
 
 def load_measurements_npz(path: str) -> dict:
     """Load a nested dict saved by the companion save_measurements_npz helper.
@@ -386,13 +395,16 @@ def main(path2config: str, verbose: bool = True) -> None:
         colours = cmap(np.linspace(0.2, 0.85, n_sims))
         for j, sim in enumerate(sim_group['sims']):
             if sim_group['sim_type'] == 'IllustrisTNG':
-                label = sim['name']
+                label  = sim['name']
+                colour = colours[j]
             elif sim_group['sim_type'] == 'FLAMINGO':
-                label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                label  = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                colour = _FLAMINGO_COLOURS.get(sim['feedback'], colours[j])
             else:
-                label = f"{sim['name']}_{sim['feedback']}"
-                label = f"SIMBA-100"
-            colour_for_sim[label] = colours[j]
+                label  = f"{sim['name']}_{sim['feedback']}"
+                label  = f"SIMBA-100"
+                colour = colours[j]
+            colour_for_sim[label] = colour
 
     for sim_group in nb_config['simulations']:
         sim_type_name = sim_group['sim_type']
@@ -533,7 +545,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     #     r'$\frac{\langle \Delta \Sigma_{\rm kSZ} \rangle}'
     #     r'{\langle \Delta \Sigma_{\rm lens} \rangle} \times \frac{\Omega_m}{\Omega_b}$'
     # )
-    ax.set_ylabel(r'$f_{\rm gas}(R)$')
+    ax.set_ylabel(plot_config.get('ylabel', r'$f_{\rm gas}(R)$'))
     ax.set_xlim(0.0, nb_stack.get('max_radius', 6.0) * nb_rad_distance + 0.5)
     ax.grid(True, alpha=0.3)
 

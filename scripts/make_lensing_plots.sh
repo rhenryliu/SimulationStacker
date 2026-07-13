@@ -6,7 +6,7 @@
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 ## SBATCH --ntasks-per-node=1
-#SBATCH -o ../Outputs_Perlmutter/slurm-%j.out # STDOUT
+#SBATCH -o ../Outputs_Perlmutter/make_lensing_plots-%j.out # STDOUT
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=r.henryliu@berkeley.edu
 

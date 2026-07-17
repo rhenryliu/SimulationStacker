@@ -203,7 +203,22 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                                 simType=sim_type_name,
                                                 feedback=feedback)
-                    label = sim_name + '_' + feedback
+                    # The 100 Mpc/h box is captioned 'SIMBA-100' (matches
+                    # beam_compensated_ratio_v2.py); other SIMBA boxes keep the
+                    # name_feedback label.
+                    if sim_name == 'm100n1024':
+                        label = 'SIMBA-100'
+                    else:
+                        label = sim_name + '_' + feedback
+
+                elif sim_type_name == 'FLAMINGO':
+                    # feedback holds the FLAMINGO variant directory name.
+                    feedback = sim['feedback']
+                    stacker = SimulationStacker(sim_name, snapshot, z=redshift,
+                                                simType=sim_type_name,
+                                                feedback=feedback)
+                    # '-' instead of '_' so the label renders under usetex.
+                    label = f"FLAMINGO {feedback}".replace('_', '-')
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 

@@ -1,0 +1,62 @@
+# star_fraction_flamingo.yaml
+# ---------------------------
+# Configuration for star_fraction_v2.py, using the same simulation set as
+# beam_compensated_z05.yaml (via mass_ratio_beamTest_z05.yaml /
+# mass_ratio_noBeam_z05.yaml): SIMBA m100n1024/s50, TNG300-1, Illustris-1, and
+# the three FLAMINGO L1_m9 feedback variants.
+#
+# Produces a grouped bar chart with TWO bars per simulation:
+#   1. Global star fraction        -- Stars / (gas + Stars + BH) over the whole box.
+#   2. Within-R200m star fraction  -- same ratio, but summed only over 3-D spheres
+#      of radius mean(GroupRad) around the selected halo sample.
+#
+# Star fraction definition (both bars): Stars / (gas + Stars + BH), i.e. fraction
+# of total baryonic mass that is in stars.  No Omega_b / Omega_m normalisation.
+
+redshift: 0.5
+
+# 3-D field settings (used for both the global sum and the within-R200m spheres).
+n_pixels: 1000
+load_field: true        # Load cached 3-D fields from disk when available.
+save_field: true        # Save newly computed 3-D fields for future runs.
+projection: 'yz'        # 'xy', 'xz', or 'yz' (passed through to makeField).
+
+# Halo selection -- identical to make_stackArea.py ('massive' method).
+# NB: exponents must be signed (e.g. 5.0e+14, not 5.0e14) or PyYAML parses them
+# as strings rather than floats.
+halo_mass_avg: 1.6595869e+13   # target average halo mass [M_sun/h] (= 10**13.22)
+halo_mass_upper: 5.0e+14       # upper halo-mass bound [M_sun/h]
+
+# Optionally load a previously-saved plot_dict instead of recomputing.
+load: false
+load_path: '../figures/2025-09/star_fraction_flamingo_z0.5_star_fraction.yaml'
+
+fig_path: '../figures/'
+fig_name: 'star_fraction_flamingo'
+fig_type: 'png'
+
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

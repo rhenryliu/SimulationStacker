@@ -1,7 +1,13 @@
 import numpy as np
 import numba
 from numba import njit
-from nbodykit.lab import ArrayCatalog, FieldMesh
+try:
+    # nbodykit is a heavy, legacy optional dependency. These symbols are not
+    # actually used anywhere in this module, so guard the import so the core
+    # library (mapMaker -> tools -> stacker) imports without nbodykit installed.
+    from nbodykit.lab import ArrayCatalog, FieldMesh
+except ImportError:
+    ArrayCatalog = FieldMesh = None
 #from nbodykit.base.mesh import MeshFilter
 
 #from pixell import enmap, enplot, utils

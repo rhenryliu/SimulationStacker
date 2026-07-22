@@ -1,5 +1,11 @@
 # sys.path.append('../../illustrisPython/')
-import illustris_python as il 
+try:
+    # Only IllustrisTNG code paths (in loadIO) actually use illustris_python;
+    # this module-level import is vestigial. Guard it so SIMBA/FLAMINGO-only
+    # and demo workflows can import without illustris_python installed.
+    import illustris_python as il
+except ImportError:
+    il = None
 
 from tools import numba_tsc_3D, hist2d_numba_seq
 # from stacker import SimulationStacker
@@ -12,7 +18,18 @@ import astropy.units as u
 import numpy as np
 import glob
 from scipy.stats import binned_statistic_2d
-from abacusnbody.analysis.tsc import tsc_parallel #put it on a grid using tsc interpolation # type: ignore
+try:
+    # tsc_parallel is only used by the dim='3D' field paths below. Guard the
+    # import so 2D field/map workflows (including the demo) work without
+    # abacusutils installed; the 3D branches raise a clear error if it's missing.
+    from abacusnbody.analysis.tsc import tsc_parallel #put it on a grid using tsc interpolation # type: ignore
+except ImportError:
+    tsc_parallel = None
+
+_NO_TSC_MSG = (
+    "abacusutils (abacusnbody.analysis.tsc.tsc_parallel) is required for 3D "
+    "(dim='3D') field creation. Install it, or use dim='2D'."
+)
 
 from mask_utils import get_cutout_mask_3d
 
@@ -280,7 +297,7 @@ import time
 #     else:
 #         raise ValueError('Particle type not recognized: ' + pType)
 
-def create_field(stacker, pType, nPixels, projection, dim='2D', load=True):
+def create_field(stacker, pType, nPixels, projection, dim='2D', load=True, base_path=None):
     """Dispatch field creation to the appropriate low-level function.
 
     Routes to make_sz_field for SZ particle types ('tSZ', 'kSZ', 'tau'),
@@ -298,19 +315,22 @@ def create_field(stacker, pType, nPixels, projection, dim='2D', load=True):
             Defaults to '2D'.
         load (bool, optional): If True, attempts to load component fields
             from cache (used by make_combined_field). Defaults to True.
+        base_path (str, optional): Base directory for the component-field cache
+            (only used by make_combined_field). Defaults to None, which resolves
+            to the configured data root. Defaults to None.
 
     Returns:
         np.ndarray: Created field, shape (nPixels, nPixels) for 2D or
             (nPixels, nPixels, nPixels) for 3D.
     """
-    
+
     sz_types = ['tSZ', 'kSZ', 'tau']
     combined_types = ['total', 'baryon']
-    
+
     if pType in sz_types:
         return make_sz_field(stacker, pType, nPixels, projection, dim=dim)
     elif pType in combined_types:
-        return make_combined_field(stacker, pType, nPixels, projection, dim=dim, load=load)
+        return make_combined_field(stacker, pType, nPixels, projection, dim=dim, load=load, base_path=base_path)
     else:
         return make_mass_field(stacker, pType, nPixels, projection, dim=dim)
 
@@ -555,6 +575,8 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
             field_total += field
         
         elif dim == '3D':
+            if tsc_parallel is None:
+                raise ImportError(_NO_TSC_MSG)
             if pType == 'tSZ':
                 field_total = tsc_parallel(Co, field_total, Lbox, weights=dY)
             elif pType == 'kSZ':
@@ -709,6 +731,8 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
             field_total += field
             
         elif dim == '3D':
+            if tsc_parallel is None:
+                raise ImportError(_NO_TSC_MSG)
             field_total = tsc_parallel(coordinates, field_total, Lbox, weights=masses)
 
         if i % 10 == 0:

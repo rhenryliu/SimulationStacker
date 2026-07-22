@@ -21,13 +21,19 @@ import glob
 # import pprint 
 
 # sys.path.append('../../illustrisPython/')
-import illustris_python as il 
+try:
+    # illustris_python is only needed for IllustrisTNG I/O (handled in loadIO);
+    # this import is vestigial here. Guard it so SIMBA/FLAMINGO-only and demo
+    # workflows import without illustris_python installed.
+    import illustris_python as il
+except ImportError:
+    il = None
 
 # from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin
 from halos import halo_ind, select_halos
 from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon
-from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data, load_flamingo_header
+from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data, load_flamingo_header, resolve_data_root
 from mapMaker import create_field, create_masked_field
 
 try:
@@ -51,9 +57,10 @@ class SimulationStacker(object):
                  sim: str, 
                  snapshot: int, 
                  nPixels=2000, 
-                 simType='IllustrisTNG', 
+                 simType='IllustrisTNG',
                  feedback=None, # Only for SIMBA
-                 z=0.0):
+                 z=0.0,
+                 sim_root=None):
         """Initialize a SimulationStacker for field creation and halo stacking.
 
         Sets up simulation paths, loads the snapshot header, and initializes
@@ -76,21 +83,32 @@ class SimulationStacker(object):
                 Required for both. Defaults to None.
             z (float, optional): Redshift of the snapshot. Used for
                 cosmological distance calculations in maps. Defaults to 0.0.
+            sim_root (str, optional): Base directory holding the simulation
+                suites and the products cache. Defaults to None, which resolves
+                to the ``SIMSTACK_DATA_ROOT`` environment variable, or the
+                historical NERSC default if that is also unset. Set this (or the
+                env var) to run on a machine where the data lives elsewhere.
+                See :func:`loadIO.resolve_data_root`.
 
         Note:
             TODO: Implement automatic snapshot selection from redshift.
         """
-        
+
         self.simType = simType
+        # Resolve the data root once (explicit sim_root -> SIMSTACK_DATA_ROOT env
+        # var -> historical NERSC default). It roots both the raw simulation data
+        # (self.simPath) and the products cache (self.base_path is threaded in as
+        # the default base_path for makeField/makeMap/loadData below).
+        self.base_path = resolve_data_root(sim_root)
         if self.simType == 'IllustrisTNG':
-            self.simPath = '/pscratch/sd/r/rhliu/simulations/IllustrisTNG/' + sim + '/output/'
+            self.simPath = self.base_path + 'IllustrisTNG/' + sim + '/output/'
         elif self.simType == 'SIMBA':
-            self.simPath = '/pscratch/sd/r/rhliu/simulations/SIMBA/' + sim + '/' + feedback + '/' # type: ignore
+            self.simPath = self.base_path + 'SIMBA/' + sim + '/' + feedback + '/' # type: ignore
             assert feedback in ['s50', 's50nox', 's50noagn', 's50nofb', 's50nojet']
         elif self.simType == 'FLAMINGO':
             # feedback holds the FLAMINGO variant, using raw directory names
             # (the fiducial run is 'L1_m9', i.e. sim == feedback for it).
-            self.simPath = '/pscratch/sd/r/rhliu/simulations/FLAMINGO/' + sim + '/' + feedback + '/' # type: ignore
+            self.simPath = self.base_path + 'FLAMINGO/' + sim + '/' + feedback + '/' # type: ignore
             assert feedback in ['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma']
         else:
             raise NotImplementedError('Simulation type not implemented')
@@ -168,10 +186,12 @@ class SimulationStacker(object):
     
         if nPixels is None:
             nPixels = self.nPixels
+        if base_path is None:
+            base_path = self.base_path
 
         if load:
             try:
-                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field', 
+                return self.loadData(pType, nPixels=nPixels, projection=projection, type='field',
                                      mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
             except ValueError as e:
                 print(e)
@@ -189,7 +209,7 @@ class SimulationStacker(object):
             field = create_masked_field(self, halo_cat=haloes, pType=pType, nPixels=nPixels, projection=projection,
                                         save3D=True, load3D=load, base_path=base_path, dim=dim) # TODO: make save3D and load3D configurable
         else:
-            field = create_field(self, pType, nPixels, projection, dim=dim, load=load)
+            field = create_field(self, pType, nPixels, projection, dim=dim, load=load, base_path=base_path)
         
         if save:
             # TODO: Handle saving and loading of the fields for the masked case.
@@ -224,7 +244,9 @@ class SimulationStacker(object):
         """        
         if z is None:
             z = self.z
-        
+        if base_path is None:
+            base_path = self.base_path
+
         if beamSize == 0.0:
             # Zero beamsize is same as None, so we just change it to None here.
             beamSize = None
@@ -890,8 +912,10 @@ class SimulationStacker(object):
         """
         if nPixels is None:
             nPixels = self.nPixels
-        return load_data(self.simType, self.sim, self.snapshot, 
-                         self.feedback, pType, nPixels, projection, type, 
+        if base_path is None:
+            base_path = self.base_path
+        return load_data(self.simType, self.sim, self.snapshot,
+                         self.feedback, pType, nPixels, projection, type,
                          mask=mask, maskRad=maskRad, base_path=base_path, dim=dim)
 
 
@@ -1077,7 +1101,7 @@ class SimulationStacker(object):
         """
         from pathlib import Path
         if base_path is None:
-            base_path = '/pscratch/sd/r/rhliu/simulations/'
+            base_path = self.base_path
         if self.simType in ('SIMBA', 'FLAMINGO'):
             # Both suites have feedback variants, included in the filename
             fname = f'{self.sim}_{self.feedback}_{self.snapshot}_Pk_{grid}.npz'

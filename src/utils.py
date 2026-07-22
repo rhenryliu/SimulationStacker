@@ -21,7 +21,12 @@ import glob
 # import pprint 
 
 # sys.path.append('../../illustrisPython/')
-import illustris_python as il 
+try:
+    # Vestigial here (no il.* calls in this module); guard so the core library
+    # imports without illustris_python installed.
+    import illustris_python as il
+except ImportError:
+    il = None
 # from stacker import SimulationStacker
 
 # Filter Functions:

@@ -1,0 +1,120 @@
+# demo_stack.yaml
+# =================
+# Configuration for demo_stack.py -- the minimal halo-stacking example.
+#
+#   cd scripts/
+#   python demo_stack.py -p configs/demo_stack.yaml
+#
+# It stacks ONE particle type with ONE filter on selected halos, and overlays
+# the mean radial profile of each simulation below (TNG300-1, SIMBA, FLAMINGO),
+# all at z = 0.5. Edit `particle_type` / `filter_type` / `mode` / `halo_selection`
+# to explore.
+
+stack:
+  # --- Stacking mode ---------------------------------------------------------
+  # 'field': raw projected field, native units, radii in comoving kpc/h, no beam
+  #          (simplest, fastest -- the default).
+  # 'map':   beam-convolved map, radii in arcmin (closer to an observation).
+  mode: 'map'
+
+  # --- What to stack ---------------------------------------------------------
+  # particle_type: 'gas','DM','Stars','BH','total','baryon','ionized_gas',
+  #                'tSZ','kSZ','tau'  (SZ types need gas fields; see mapMaker.py)
+  # Note that tau is really the kSZ, the actual kSZ is unused as simulation velocities
+  # are not reliable, so instead we use the ionized gas field to compute the optical depth tau, then
+  # multiply by the fiducial rms velocity value of the halo galaxy sample in data (300km/s) to 
+  # get the kSZ signal. This is a good approximation and has been used for quite a few papers
+  # to model the kSZ in simulations.
+  # The ionized_gas particletype is the same as the tau particletype except multipled by a constant.
+  # ionized_gas is in mass units while tau is in temperature units (uK).
+  particle_type: 'tau'
+  # filter_type:   'CAP' (default),'cumulative','DSigma','upsilon','ringring'
+  filter_type: 'CAP'
+
+  redshift: 0.5             # snapshot redshift (per-sim override allowed below)
+  projection: 'yz'          # 'xy', 'xz', or 'yz'
+  n_pixels: 1000            # pixels per side of the 2D field
+
+  # --- Halo selection --------------------------------------------------------
+  # This repo can stack on two different samples. Set `method` to switch.
+  #
+  #   'sham'  (DEFAULT, more realistic): SubHalo Abundance Matching. We stack on
+  #           GALAXIES (subhalos), keeping the most massive by stellar mass down
+  #           to a target number density (`abundance_target`) -- i.e. matching the
+  #           galaxy number density of an observed sample. This is the physically
+  #           correct choice: real kSZ / lensing measurements stack on galaxies,
+  #           not on halo centres. Subhalos are pre-filtered by their parent halo
+  #           mass (<= `mass_upper`). Parameters taken from mass_ratio_data_z05.yaml
+  #           (the same setup compare_data_ratio.py uses against real data).
+  #
+  #   'massive' (halo centres): we instead stack on FoF HALO CENTRES, keeping the
+  #           most massive halos whose cumulative average mass matches `mass_avg`
+  #           (capped at `mass_upper`). Simpler and useful for tests, but it stacks
+  #           on halo centres rather than galaxies. Use this if that is what you want.
+  #
+  halo_selection:
+    method: 'sham'             # 'sham' (galaxies, realistic) or 'massive' (halo centres)
+
+    # 'sham' parameters:
+    abundance_target: 5.0e-4   # target galaxy number density, (cMpc/h)^-3  (= h^3/Mpc^3)
+
+    # 'massive' parameters:
+    mass_avg: 1.665e13         # target cumulative-average halo mass, Msun (~10^13.22)
+
+    # Shared: upper mass cap, Msun. For 'sham' it pre-filters subhalos by parent
+    # halo mass; for 'massive' it caps the selected halos.
+    mass_upper: 5.0e14
+
+  # --- Caching ---------------------------------------------------------------
+  load_field: true          # reuse a cached field/map if present
+  save_field: true          # cache the computed field/map for next time
+  subtract_mean: false      # subtract the field mean before stacking
+
+  # --- Data location (optional) ----------------------------------------------
+  # null -> use $SIMSTACK_DATA_ROOT, or the built-in NERSC default if unset.
+  # Set this to run where the simulation data lives elsewhere.
+  data_root: null
+
+  # --- Radial bins for FIELD mode (units of rad_distance = comoving kpc/h) ----
+  field:
+    min_radius:   0.1        # aperture radii run 0.1 - 6.0 x rad_distance ...
+    max_radius:   6.0
+    num_radii:    15
+    rad_distance: 1000.0     # ... i.e. 0.1 - 6.0 Mpc/h
+
+  # --- Radial bins + beam for MAP mode (units of rad_distance = arcmin) -------
+  map:
+    min_radius:   0.5        # arcmin
+    max_radius:   6.0        # arcmin
+    num_radii:    12
+    rad_distance: 1.0        # arcmin per radial unit
+    beam_size:    1.6        # Gaussian beam FWHM in arcmin (0 disables the beam, then its the same as field mode but in arcmin units)
+    pixel_size:   0.5        # arcmin per pixel
+
+plot:
+  fig_path: '../figures/'        # output goes to <fig_path>/<YYYY-MM>/<MM-DD>/
+  fig_name: 'demo_stack'         # file stem: <fig_name>_<ptype>_<filter>_<mode>_z<z>
+  fig_type: 'png'
+  plot_error_bars: true          # draw the standard-error band around each profile
+
+simulations:
+  # Three suites, all at z = 0.5. Comment any block out to skip it.
+  # NOTE: FLAMINGO L1_m9 is a 1 cGpc box -- field creation there is heavy;
+  # 'map' mode on FLAMINGO in particular is slow. TNG300-1 is the quickest start.
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+        redshift: 0.5 # demo for how the per-sim redshift override works.
+
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'

@@ -1,8 +1,60 @@
 import h5py
 import numpy as np
 import glob
-import illustris_python as il
+import os
+try:
+    # illustris_python is only used by the IllustrisTNG branches below and is a
+    # GitHub-only (non-PyPI) dependency. Guard it so SIMBA/FLAMINGO-only and demo
+    # workflows import without it; TNG paths raise a clear error via _require_il().
+    import illustris_python as il
+except ImportError:
+    il = None
 from pathlib import Path
+
+
+# Historical NERSC default; kept as the fallback so existing setups are
+# unaffected. Override with the SIMSTACK_DATA_ROOT env var or a sim_root argument.
+_DEFAULT_DATA_ROOT = '/pscratch/sd/r/rhliu/simulations/'
+
+
+def resolve_data_root(sim_root=None):
+    """Resolve the base directory holding the simulation suites and products.
+
+    Resolution order (first non-empty wins):
+    explicit ``sim_root`` argument, then the ``SIMSTACK_DATA_ROOT`` environment
+    variable, then the historical NERSC default (``_DEFAULT_DATA_ROOT``). The
+    layout beneath the returned root is unchanged: raw data at
+    ``<root>/<SimType>/<sim>/...`` and cached products at
+    ``<root>/<SimType>/products/...``.
+
+    Args:
+        sim_root (str, optional): Explicit base directory. Defaults to None,
+            which falls back to the env var and then the historical default.
+
+    Returns:
+        str: Base directory ending in a trailing '/'.
+    """
+    root = sim_root or os.environ.get('SIMSTACK_DATA_ROOT') or _DEFAULT_DATA_ROOT
+    if not root.endswith('/'):
+        root += '/'
+    return root
+
+
+def _require_il():
+    """Return the illustris_python module or raise a clear ImportError.
+
+    Called at the start of IllustrisTNG code paths so a missing (non-PyPI)
+    illustris_python fails with an actionable message rather than an
+    ``AttributeError`` on ``None``.
+    """
+    if il is None:
+        raise ImportError(
+            "illustris_python is required for IllustrisTNG I/O but is not "
+            "installed. Install it from "
+            "https://github.com/illustristng/illustris_python , or use a "
+            "SIMBA/FLAMINGO simulation which does not need it."
+        )
+    return il
 
 
 def snap_path(sim_path, snapshot, sim_type, sim_name=None, feedback=None, chunk_num=0, path_only=False):
@@ -26,7 +78,7 @@ def snap_path(sim_path, snapshot, sim_type, sim_name=None, feedback=None, chunk_
     """
     if sim_type == 'IllustrisTNG':
         folder_path = sim_path + '/snapdir_' + str(snapshot).zfill(3) + '/'
-        snap_path = il.snapshot.snapPath(sim_path, snapshot, chunkNum=chunk_num)
+        snap_path = _require_il().snapshot.snapPath(sim_path, snapshot, chunkNum=chunk_num)
     elif sim_type == 'SIMBA':
         folder_path = sim_path + 'snapshots/'
         snap_path = folder_path + 'snap_' + sim_name + '_' + str(snapshot) + '.hdf5'
@@ -99,7 +151,7 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
     """
     if sim_type == 'IllustrisTNG':
         haloes = {}
-        haloes_cat = il.groupcat.loadHalos(sim_path, snapshot)
+        haloes_cat = _require_il().groupcat.loadHalos(sim_path, snapshot)
         haloes['GroupPos'] = haloes_cat['GroupPos']
         haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
         # haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
@@ -158,7 +210,7 @@ def load_subhalos(sim_path, snapshot, sim_type, sim_name=None, header=None):
     """
     if sim_type == 'IllustrisTNG':
         subhaloes = {}
-        subhaloes_cat = il.groupcat.loadSubhalos(sim_path, snapshot)
+        subhaloes_cat = _require_il().groupcat.loadSubhalos(sim_path, snapshot)
         
         subhaloes['SubhaloPos'] = subhaloes_cat['SubhaloPos']
         subhaloes['SubhaloMass'] = subhaloes_cat['SubhaloMass'] * 1e10  # Convert to Msun/h
@@ -310,6 +362,7 @@ def load_subsets(sim_path, snapshot, sim_type, p_type, sim_name=None, feedback=N
             keys = ['Coordinates', 'Masses']
         
     if sim_type == 'IllustrisTNG':
+        _require_il()
         if actual_p_type == 'gas':
             if keys is None:
                 particles = il.snapshot.loadSubset(sim_path, snapshot, actual_p_type, fields=['Masses', 'Coordinates'])
@@ -468,9 +521,8 @@ def _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
     Returns:
         Path: Full file path for the data file.
     """
-    if base_path is None:
-        base_path = '/pscratch/sd/r/rhliu/simulations/'
-    
+    base_path = resolve_data_root(base_path)
+
     if dim == '3D' and data_type == 'map':
         raise ValueError("3D maps are not supported. Please use 'field' for 3D data.")
     

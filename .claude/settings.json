@@ -25,8 +25,6 @@
       "Bash(git commit --amend*)",
       "Bash(rm -rf*)",
       "Bash(rm -r*)",
-      "Bash(sbatch*)",
-      "Bash(scancel*)",
       "Write(data/*)",
       "Write(*.fits)",
       "Write(*.hdf5)",

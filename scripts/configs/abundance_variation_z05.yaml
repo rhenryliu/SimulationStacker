@@ -1,0 +1,53 @@
+# Appendix figure: sensitivity of the simulated gas-fraction profiles to the
+# SHAM target number density, at z = 0.5 (DESI LRG sample).
+#
+# All stacking parameters -- projection, filter, pixel size, radial binning,
+# particle types, halo_mass_upper -- are inherited from no_beam_config, so this
+# figure can never drift from the main-text figure it accompanies.
+#
+# Run with:
+#   python abundance_variation_ratio.py -p configs/abundance_variation_z05.yaml
+
+no_beam_config: mass_ratio_noBeam_z05.yaml
+
+# Target number densities in (cMpc/h)^-3, i.e. h^3 Mpc^-3.
+# Factor of two either side of the fiducial.  Because select_abundance_subhalos
+# takes the top-N stellar-mass-ranked subhalos, these samples are exactly
+# nested: 2.5e-4 is the head of 5.0e-4, which is the head of 1.0e-3.
+abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3]
+fiducial_target:   5.0e-4
+
+plot:
+  # Only used for the grey band showing the fractional statistical error.
+  # sigma/R is unchanged by beam compensation, so the raw (uncompensated)
+  # measurement gives the correct band.
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  data_key:  'source_bin_0'
+
+  # Canonical cache, on a stable (non date-stamped) path so --replot finds it.
+  # A provenance copy is also written next to the figure.
+  npz_path:  '../data/abundance_variation/abundance_variation_z05.npz'
+
+  # 'absolute'  -> f_gas(R) itself, one solid (fiducial) + two faded lines per
+  #                simulation.  Same axes as the main-text figure.
+  # 'deviation'  -> 100 * [f_gas(n)/f_gas(n_fid) - 1] in per cent, with a grey
+  #                band for the fractional measurement error.  Written to a
+  #                '_deviation'-suffixed file so it never overwrites the
+  #                default.  Switching modes needs only --replot.
+  mode:      'absolute'
+
+  fig_path:  '../figures/'
+  fig_name:  'abundance_variation_z05'
+  fig_type:  'pdf'
+  figsize:   [8, 6]
+
+  # absolute mode: shaded standard error on the fiducial curve only, matching
+  # the main-text figure.  Bands on all three densities would be unreadable.
+  plot_error_bars: true
+
+  # absolute mode: [lo, hi] to pin the y-axis; omit or null to autoscale.
+  ylim: null
+
+  # deviation mode only: null = auto (symmetric, sized to the curves with a
+  # 10% floor). Set a number here to override after a --replot inspection.
+  ylim_percent: null

@@ -33,6 +33,16 @@ _NO_TSC_MSG = (
 
 from mask_utils import get_cutout_mask_3d
 
+# dtype of the dim='3D' field accumulators. float32 halves the footprint of the
+# cubic grids, which is what makes masked FLAMINGO maps tractable: at the 0.5
+# arcmin pixel size the L1_m9 box needs nPixels=3548, i.e. a 3548**3 grid that
+# is 357 GB in float64 but 179 GB in float32 (plus a 45 GB bool mask), fitting
+# a single 512 GB Perlmutter CPU node. Accumulation is safe because mean cell
+# occupancy is far below one particle. 2D fields are unaffected (they come from
+# binned_statistic_2d, which always returns float64), as are the existing
+# float64 3D caches on disk, which still load as float64.
+FIELD_3D_DTYPE = np.float32
+
 import time
 
 # def compute_cosmological_parameters(header, z, cosmology=Planck18):
@@ -496,7 +506,7 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     
     Lbox = stacker.header['BoxSize'] # kpc/h
     minMax = [0, Lbox]
-    field_total = np.zeros(gridSize)
+    field_total = np.zeros(gridSize, dtype=FIELD_3D_DTYPE if dim == '3D' else np.float64)
     
     t0 = time.time()
     for i, snap in enumerate(snaps):
@@ -655,7 +665,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     
     Lbox = stacker.header['BoxSize'] # kpc/h
     minMax = [0, Lbox]
-    field_total = np.zeros(gridSize)
+    field_total = np.zeros(gridSize, dtype=FIELD_3D_DTYPE if dim == '3D' else np.float64)
     
     t0 = time.time()
     for i, snap in enumerate(snaps):
@@ -774,7 +784,7 @@ def make_combined_field(stacker, pType, nPixels=None, projection='xy', dim='2D',
         gridSize = [nPixels, nPixels, nPixels]
     else:
         raise ValueError("dim must be either '2D' or '3D': " + dim)
-    total_field = np.zeros(gridSize)
+    total_field = np.zeros(gridSize, dtype=FIELD_3D_DTYPE if dim == '3D' else np.float64)
 
     for pt in particle_types:
         print("Processing particle type:", pt)
@@ -856,18 +866,25 @@ def create_masked_field(stacker, pType, nPixels, halo_cat, projection='xy',
     GroupPos_masked = np.round(GroupPos / kpcPerPixel).astype(int)
     GroupRad_masked = GroupRad / kpcPerPixel
     cutout_mask = get_cutout_mask_3d(field_3D, GroupPos_masked, GroupRad_masked)
-    field_3D_masked = field_3D * cutout_mask
+    # In place: at FLAMINGO resolution an out-of-place product would be a second
+    # 179 GB array on top of the field and the 45 GB bool mask. field_3D is not
+    # reused after this point (it is saved above, if requested).
+    field_3D *= cutout_mask
+    del cutout_mask
+    field_3D_masked = field_3D
     
     if dim == '3D':
         return field_3D_masked
     # Project to 2D
     
+    # Accumulate in float64 so the projected map keeps the same precision as
+    # the unmasked 2D path (binned_statistic_2d), independent of FIELD_3D_DTYPE.
     if projection == 'xy':
-        field_2D_masked = np.sum(field_3D_masked, axis=2)
+        field_2D_masked = np.sum(field_3D_masked, axis=2, dtype=np.float64)
     elif projection == 'xz':
-        field_2D_masked = np.sum(field_3D_masked, axis=1)
+        field_2D_masked = np.sum(field_3D_masked, axis=1, dtype=np.float64)
     elif projection == 'yz':
-        field_2D_masked = np.sum(field_3D_masked, axis=0)
+        field_2D_masked = np.sum(field_3D_masked, axis=0, dtype=np.float64)
     else:
         raise NotImplementedError('Projection type not implemented: ' + projection)
     # Finalize the 2D masked field

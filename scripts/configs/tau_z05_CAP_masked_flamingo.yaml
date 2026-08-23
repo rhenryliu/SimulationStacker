@@ -1,3 +1,6 @@
+# Same as tau_z05_CAP_masked.yaml, plus the FLAMINGO suite as a third row.
+# Kept separate because tau_z05_CAP_masked.yaml is also consumed by
+# simulated_SZ_masked.py (via stack_SZ.sh), which only handles two sim types.
 stack:
   redshift: 0.5
   filter_type: 'CAP' # Options: 'CAP', 'cumulative', 'DSigma
@@ -5,22 +8,22 @@ stack:
   load_field: true
   save_field: true
   rad_distance: 1.0 # in arcmin
-  particle_type: 'tSZ'
-  projection: 'xz' # 'xy', 'xz', 'yz'
+  particle_type: 'tau'
+  projection: 'xy' # 'xy', 'xz', 'yz'
   mask_haloes: false
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
+  use_subhalos: true # Whether to use subhalos for selection (SHAM) instead of halos (mass cut)
 
 plot:
   plot_data: true
   # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
-  data_path: '../data/tSZ/fig4.csv'
-  data_label: 'Liu 2025 pz1 (ACT DR6 Fiducial)'
+  data_path: '../data/Fig2_sim.npz'
+  data_label: 'Hadzhiyska 2024'
   fig_path: '../figures/'
-  fig_name: 'profiles_xz_masked'
+  fig_name: 'profiles_xy_masked_flamingo'
   fig_type: 'pdf'
   plot_error_bars: true
-  yscale: 'linear'
 
 
 
@@ -30,18 +33,18 @@ simulations:
       # - name: 'm50n512'
       #   snapshot: 125
       #   feedback: 's50'
-      # - name: 'm50n512'
-      #   snapshot: 125
-      #   feedback: 's50noagn'
-      # - name: 'm50n512'
-      #   snapshot: 125
-      #   feedback: 's50nox'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50noagn'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nox'
       # - name: 'm50n512'
       #   snapshot: 125
       #   feedback: 's50nojet'
-      # - name: 'm50n512'
-      #   snapshot: 125
-      #   feedback: 's50nofb'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nofb'
       - name: 'm100n1024'
         snapshot: 125
         feedback: 's50'
@@ -52,7 +55,7 @@ simulations:
       - name: 'TNG300-1'
         snapshot: 67
       # - name: 'TNG300-2'
-        # snapshot: 67
+      #   snapshot: 67
       - name: 'Illustris-1'
         snapshot: 103
       # - name: 'Illustris-2'

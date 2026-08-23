@@ -35,7 +35,7 @@ srun python -u make_baryonFraction.py -p ./configs/stackArea_z05.yaml
 # Figure 6
 srun python -u make_fgas_profiles.py -p ./configs/fgas_profiles_z05.yaml
 # Figure 7
-srun python -u simulated_kSZ_masked.py -p ./configs/tau_z05_CAP_masked.yaml
+srun python -u simulated_kSZ_masked.py -p ./configs/tau_z05_CAP_masked_flamingo.yaml
 # Figure 8
 # TODO: find figure 8 script and add it here
 # Figure 9

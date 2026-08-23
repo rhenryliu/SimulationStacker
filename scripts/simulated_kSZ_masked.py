@@ -52,6 +52,15 @@ matplotlib.rcParams.update({
 })
 # --- END NEW ---
 
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# Kept in sync with compare_data_ratio.py / beam_compensated_ratio_v2.py so the
+# same simulation is the same colour across every figure in the paper.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
 # # Set matplotlib to use Computer Modern font
 # plt.rcParams['font.family'] = 'serif'
 # plt.rcParams['font.serif'] = ['Computer Modern Roman']
@@ -101,10 +110,14 @@ def main(path2config, verbose=True):
     figType = plot_config.get('fig_type', 'pdf')
 
     colourmaps = ['hot', 'cool']
-    colourmaps = ['hsv', 'twilight']
+    colourmaps = ['hsv', 'twilight', 'plasma']
 
-    # Create (2, 4) subplots: top row for TNG, bottom row for SIMBA
-    fig, axes = plt.subplots(2, 4, figsize=(18, 9), sharex=True, sharey=True)
+    # One row per simulation suite in the config, in config order, four mask
+    # columns. Deriving nRows from the config (rather than hardcoding it) keeps
+    # the script working when a suite is commented out of the YAML.
+    nRows = len(config['simulations'])
+    fig, axes = plt.subplots(nRows, 4, figsize=(18, 4.5 * nRows), sharex=True, sharey=True)
+    axes = np.atleast_2d(axes)
     
     # Define mask configurations: [maskRadii=1, 2, 3, False]
     mask_configs = [
@@ -140,6 +153,11 @@ def main(path2config, verbose=True):
             elif sim_type_name == 'SIMBA':
                 SIMBA_sims = sim_type['sims']
                 colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+            elif sim_type_name == 'FLAMINGO':
+                FLAMINGO_sims = sim_type['sims']
+                fallback = colourmap(np.linspace(0.2, 0.85, len(FLAMINGO_sims)))
+                colours = [_FLAMINGO_COLOURS.get(s['feedback'], fallback[k])
+                           for k, s in enumerate(FLAMINGO_sims)]
             else:
                 raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
@@ -186,6 +204,21 @@ def main(path2config, verbose=True):
                     
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     sim_name = sim_name_show
+
+                elif sim_type_name == 'FLAMINGO':
+                    # feedback holds the FLAMINGO variant directory name
+                    # ('L1_m9' is the fiducial run, i.e. name == feedback).
+                    feedback = sim['feedback']
+                    if verbose:
+                        print(f"Processing feedback model: {feedback}")
+
+                    stacker = SimulationStacker(sim_name, snapshot, z=redshift,
+                                                simType=sim_type_name,
+                                                feedback=feedback)
+
+                    OmegaBaryon = stacker.header['OmegaBaryon']
+                    # '-' instead of '_' so the label renders under usetex
+                    sim_name = f"FLAMINGO {feedback}".replace('_', '-')
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
@@ -217,8 +250,8 @@ def main(path2config, verbose=True):
             profile_data = data['signal']
             profile_err = data['noise']
                     
-            # Plot data on both rows of the last column
-            for row_idx in range(2):
+            # Plot data on every row of the last column
+            for row_idx in range(nRows):
                 axes[row_idx, col_idx].errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', 
                                                  label=plot_config['data_label'], markersize=5, zorder=10)
 
@@ -233,7 +266,7 @@ def main(path2config, verbose=True):
         return comoving_to_arcmin(comoving, redshift, cosmo)
     
     
-    for row_idx in range(2):
+    for row_idx in range(nRows):
         for col_idx in range(4):
             ax = axes[row_idx, col_idx]
             
@@ -242,7 +275,7 @@ def main(path2config, verbose=True):
                 ax.axvline(R200C_arcmin * (col_idx + 1), color='k', linestyle='--', lw=1)
 
             # Set x-label only on bottom row
-            if row_idx == 1:
+            if row_idx == nRows - 1:
                 ax.set_xlabel('R [arcmin]')
             
             # Set y-label only on leftmost column
@@ -278,12 +311,15 @@ def main(path2config, verbose=True):
                 else:
                     ax.set_title('No Masking')
     
-    # Set row labels
-    fig.text(0.02, 0.25, 'IllustrisTNG', fontsize=20, va='center', rotation=90, ha='center')
-    fig.text(0.02, 0.75, 'SIMBA', fontsize=20, va='center', rotation=90, ha='center')
-
     fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
     fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title
+
+    # Row labels, taken from the config so they cannot desync from the row
+    # order, and centred on each row after tight_layout has fixed the layout.
+    for row_idx, sim_type in enumerate(config['simulations']):
+        bbox = axes[row_idx, 0].get_position()
+        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), sim_type['sim_type'],
+                 fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     

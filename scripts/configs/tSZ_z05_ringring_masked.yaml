@@ -1,0 +1,86 @@
+# tSZ masked-profile grid using the CAP_ringring filter (filters.CAP_ringring),
+# with the Fig.15 ringring measurements overplotted. Companion to
+# tSZ_z05_CAP_masked.yaml, which is the same figure with the plain CAP filter
+# and the Fig.4 data.
+stack:
+  redshift: 0.5
+  # 'ringring' selects filters.CAP_ringring: same as CAP but the inner disk is
+  # replaced by an annulus from r0 to r. r0 is fixed at 1.0 arcmin inside the
+  # filter and is NOT settable from here, so min_radius must stay above it --
+  # at min_radius == r0 the inner annulus is empty and the filter returns 0.
+  filter_type: 'ringring' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon', 'ringring'
+  load_field: true
+  save_field: true
+  rad_distance: 1.0 # in arcmin
+  # Matches the fig15.csv radial grid exactly: linspace(2, 6, 9).
+  min_radius: 2.0 # in arcmin
+  max_radius: 6.0 # in arcmin
+  num_radii: 9 # Number of radial bins between min_radius and max_radius
+  particle_type: 'tSZ'
+  # 'xz' as in tSZ_z05_CAP_masked.yaml, so this reuses the existing map cache
+  # (the filter is applied at stack time, so no new precompute is needed).
+  projection: 'xz' # 'xy', 'xz', 'yz'
+  mask_haloes: false
+  mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
+  pixel_size: 0.5 # in arcmin
+
+plot:
+  plot_data: true
+  data_path: '../data/tSZ/fig15.csv'
+  rad_key: 'radii'
+  data_key: 'DESI_pz1_act_dr5_f90_ringring2'
+  data_label: 'Liu 2025 Fig.15 f90'
+  fig_path: '../figures/'
+  fig_name: 'profiles_xz_ringring_masked'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  yscale: 'linear'
+
+
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50noagn'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nox'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nojet'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nofb'
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67
+      - name: 'TNG300-1'
+        snapshot: 67
+      # - name: 'TNG300-2'
+        # snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+      # - name: 'Illustris-2'
+      #   snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      # Snapshot 67 is z=0.5, matching stack.redshift above.
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

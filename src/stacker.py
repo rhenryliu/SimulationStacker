@@ -674,7 +674,14 @@ class SimulationStacker(object):
 
         # Set up radial bins and cutout size
         radii = np.linspace(minRadius, maxRadius, numRadii)
-        if filterType == 'CAP':
+        if filterType in ('CAP', 'ringring'):
+            # Both CAP and CAP_ringring compare against an outer ring reaching
+            # r*sqrt(2), so the cutout must extend that far. Without this,
+            # 'ringring' got n_vir = maxRadius + 1 and the outer ring was clipped
+            # by the square cutout for r > n_vir/sqrt(2) -- surviving only near
+            # the diagonals, i.e. sampled anisotropically rather than as a full
+            # annulus. The renormalisation inside the filter hides it, so the
+            # symptom was a quietly biased profile at the largest radii.
             n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
         else:
             n_vir = int(radii.max() + 1)  # number of virial radii to cutout

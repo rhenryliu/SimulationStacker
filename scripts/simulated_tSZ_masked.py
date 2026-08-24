@@ -92,6 +92,13 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
+    # Radial grid. Defaults reproduce the values previously hardcoded below, so
+    # configs without these keys are unaffected. The 'ringring' filter needs
+    # min_radius > CAP_ringring's r0 (1.0 arcmin): at min_radius == r0 the inner
+    # annulus is empty and the filter silently returns 0.
+    minRadius = stack_config.get('min_radius', 1.0)
+    maxRadius = stack_config.get('max_radius', 6.0)
+    nRadii = stack_config.get('num_radii', 11)
 
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
@@ -177,7 +184,8 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                 simType=sim_type_name)
 
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
@@ -206,7 +214,8 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name, 
                                                 feedback=feedback)
                     
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii)
                     
@@ -224,7 +233,8 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name,
                                                 feedback=feedback)
 
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
@@ -253,10 +263,14 @@ def main(path2config, verbose=True):
         if col_idx == 3 and plot_config['plot_data']:
             data_path = plot_config['data_path']
 
+            rad_key = plot_config.get('rad_key', 'RApArcmin')
+            data_key = plot_config.get('data_key', 'pz1_act_dr6_fiducial')
+            data_err_key = data_key + '_err'
+
             data = pd.read_csv(data_path)
-            r_data = data['RApArcmin']
-            profile_data = data['pz1_act_dr6_fiducial']
-            profile_err = data['pz1_act_dr6_fiducial_err']
+            r_data = data[rad_key]
+            profile_data = data[data_key]
+            profile_err = data[data_err_key]
                     
             # Plot data on every row of the last column
             for row_idx in range(nRows):

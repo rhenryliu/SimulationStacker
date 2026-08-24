@@ -18,7 +18,8 @@ and the two selection methods are:
 
   SHAM     : subhaloes selected by abundance matching via
              select_abundance_subhalos (target number density
-             5×10^-4 (cMpc/h)^-3, the stack_on_array default)
+             halo_abundance_target from the config,
+             default 5×10^-4 (cMpc/h)^-3)
 
 Four stackMap calls are made per simulation (two particle types ×
 two selection methods).  Each particle field (ionized_gas and total)
@@ -96,6 +97,16 @@ _PANEL_LABELS = ['(a)']
 # Default OmegaBaryon fallbacks (not stored in all simulation headers).
 _OMEGA_BARYON_ILLUSTRIS_DEFAULT = 0.0456
 _OMEGA_BARYON_SIMBA_DEFAULT     = 0.048
+_OMEGA_BARYON_FLAMINGO_DEFAULT  = 0.0486  # header provides it; fallback should never trigger
+
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# Keep in sync with compare_data_ratio.py / beam_compensated_ratio_v2.py /
+# abundance_variation_ratio.py.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
 
 
 # ===========================================================================
@@ -111,10 +122,10 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
     ----------
     sim : dict
         Single simulation entry from the YAML ``simulations`` block.
-        Must contain ``name`` and ``snapshot``; SIMBA entries also need
-        ``feedback``.
+        Must contain ``name`` and ``snapshot``; SIMBA and FLAMINGO entries
+        also need ``feedback``.
     sim_type_name : str
-        ``'IllustrisTNG'`` or ``'SIMBA'``.
+        ``'IllustrisTNG'``, ``'SIMBA'`` or ``'FLAMINGO'``.
     redshift : float
         Target redshift for angular distance calculations.
 
@@ -144,6 +155,19 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
                                     feedback=feedback)
         OmegaBaryon = _OMEGA_BARYON_SIMBA_DEFAULT
         sim_label = f"{sim_name}_{feedback}"
+
+    elif sim_type_name == 'FLAMINGO':
+        feedback = sim['feedback']
+        stacker = SimulationStacker(sim_name, snapshot, z=redshift,
+                                    simType=sim_type_name,
+                                    feedback=feedback)
+        try:
+            OmegaBaryon = stacker.header['OmegaBaryon']
+        except KeyError:
+            OmegaBaryon = _OMEGA_BARYON_FLAMINGO_DEFAULT
+        # '-' instead of '_' so labels render under usetex (matches
+        # abundance_variation_ratio.py / beam_compensated_ratio_v2.py).
+        sim_label = f"FLAMINGO {feedback}".replace('_', '-')
 
     else:
         raise ValueError(f"Unknown simulation type: {sim_type_name!r}")
@@ -236,8 +260,9 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
 
     Note on SHAM abundance target
     ------------------------------
-    stackMap does not expose halo_abundance_target, so the SHAM calls
-    always use the stack_on_array default of 5e-4 (cMpc/h)^-3.
+    The SHAM calls pass halo_abundance_target and halo_mass_upper from the
+    config, so both selection methods stay tied to the same YAML values
+    (halo_mass_upper doubles as the SHAM parent-mass pre-filter).
 
     Parameters
     ----------
@@ -281,9 +306,12 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
             "error between the mass-cut and SHAM calls for each map."
         )
 
-    # Mass-cut selection parameters (passed directly into stackMap).
-    halo_mass_avg   = params['halo_mass_avg']
-    halo_mass_upper = params['halo_mass_upper']
+    # Halo selection parameters (passed directly into stackMap).
+    # halo_mass_upper bounds both the mass-cut sample and the SHAM
+    # parent-mass pre-filter, so the two methods stay consistent.
+    halo_mass_avg         = params['halo_mass_avg']
+    halo_mass_upper       = params['halo_mass_upper']
+    halo_abundance_target = params['halo_abundance_target']
 
     # Shared keyword arguments for all four stackMap calls.
     _common = dict(
@@ -317,11 +345,12 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
     # ------------------------------------------------------------------
     # Call 3: ionized_gas, SHAM
     # Reuses the cached ionized_gas map; stacks with abundance-matched subhalos.
-    # SHAM abundance target: 5e-4 (cMpc/h)^-3 (stack_on_array default).
     # ------------------------------------------------------------------
     radii_3, profiles_ig_sham = stacker.stackMap(
         pType, filterType=fType,
         use_subhalos=True,
+        halo_abundance_target=halo_abundance_target,
+        halo_mass_upper=halo_mass_upper,
         **_common,
     )
 
@@ -332,6 +361,8 @@ def compute_fgas_hod_ratio(stacker: SimulationStacker, params: dict,
     radii_4, profiles_tot_sham = stacker.stackMap(
         pType2, filterType=fType2,
         use_subhalos=True,
+        halo_abundance_target=halo_abundance_target,
+        halo_mass_upper=halo_mass_upper,
         **_common,
     )
 
@@ -412,8 +443,9 @@ def main(path2config: str, verbose: bool = True):
         # Mass-cut parameters: passed through to stackMap → stack_on_array.
         'halo_mass_avg':   stack_cfg.get('halo_mass_avg',   10 ** 13.22),
         'halo_mass_upper': stack_cfg.get('halo_mass_upper', 5e14),
-        # SHAM target: stackMap does not expose halo_abundance_target so the
-        # stack_on_array default of 5e-4 (cMpc/h)^-3 is always used.
+        # SHAM target number density in (cMpc/h)^-3, passed to the SHAM
+        # stackMap calls (halo_mass_upper doubles as the parent pre-filter).
+        'halo_abundance_target': stack_cfg.get('halo_abundance_target', 5e-4),
     }
 
     redshift = params['redshift']
@@ -438,6 +470,8 @@ def main(path2config: str, verbose: bool = True):
     #   SIMBA (1 sim) → 'hsv' at position 0.85 (last of 6, matching the
     #                   tSZ reference scripts); multiple sims spread over
     #                   [0.2, 0.85] as usual.
+    #   FLAMINGO      → fixed per-variant colours from _FLAMINGO_COLOURS,
+    #                   shared with the other paper figures.
     # ------------------------------------------------------------------
     # Build a flat list of (sim_type, sim_dict) preserving config order.
     all_sims_flat = []
@@ -473,10 +507,20 @@ def main(path2config: str, verbose: bool = True):
             label = f"{sim['name']}_{sim['feedback']}"
             sim_colours[label] = _simba_clrs[_simba_idx]
             _simba_idx += 1
+        elif stype == 'FLAMINGO':
+            feedback = sim['feedback']
+            if feedback not in _FLAMINGO_COLOURS:
+                raise ValueError(
+                    f"FLAMINGO feedback {feedback!r} is not in "
+                    f"_FLAMINGO_COLOURS. Add it there to maintain "
+                    f"consistent colours."
+                )
+            label = f"FLAMINGO {feedback}".replace('_', '-')
+            sim_colours[label] = _FLAMINGO_COLOURS[feedback]
         else:
             raise ValueError(
                 f"No colormap defined for sim_type {stype!r}. "
-                f"Known types: {list(_COLOURMAPS)}"
+                f"Known types: {list(_COLOURMAPS) + ['FLAMINGO']}"
             )
 
     # ------------------------------------------------------------------
@@ -502,7 +546,7 @@ def main(path2config: str, verbose: bool = True):
             sim_name = sim['name']
             if verbose:
                 fb_str = (f"  feedback={sim.get('feedback')}"
-                          if sim_type_name == 'SIMBA' else '')
+                          if sim_type_name in ('SIMBA', 'FLAMINGO') else '')
                 print(f"\n{'='*55}")
                 print(f"  {sim_name}{fb_str}  ({sim_type_name})")
                 print(f"{'='*55}")

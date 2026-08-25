@@ -1,0 +1,25 @@
+# mask_visual_z05.yaml
+# Figure 8 of the unbound gas paper: 2x2 visualization of the projected gas
+# field in TNG100-1 at z = 0.5, unmasked and after masking spheres of 1, 2
+# and 3 R_200m around every halo more massive than mass_min.
+#
+# Run from the scripts/ directory:
+#   python unbound_gas/mask_haloes_visual.py -p configs/unbound_gas/mask_visual_z05.yaml
+
+stack:
+  redshift: 0.5
+  particle_type: 'gas'
+  n_pixels: 1000
+  projection: 'yz'
+  mass_min: 1.0e11        # M_sun (no h); converted to M_sun/h internally
+  mask_radii: [1, 2, 3]   # in units of R_200m (Group_R_Mean200)
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'mask_visual_z05'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67

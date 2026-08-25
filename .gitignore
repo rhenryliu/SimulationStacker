@@ -9,14 +9,15 @@ Outputs_Perlmutter/
 figures/
 .vscode/
 external/
-data/
-old/
-scripts/clean_mass_bin_stack.py
-scripts/get_AP_sz_marvin.py
 .ipynb_checkpoints/
 
-# Ignore shell scripts
-*.sh
-# except for the ones below:
-!scripts/make_unboundGas_plots.sh
-!scripts/make_lensing_plots.sh
+# Deliberately untracked archived material (external/exploratory scripts)
+scripts/archive/clean_mass_bin_stack.py
+scripts/archive/get_AP_sz_marvin.py
+scripts/archive/mass_fraction_sims.py
+scripts/archive/mass_profiles_sims.py
+scripts/archive/simulated_maps_test.py
+scripts/configs/archive/field_z00.yaml
+scripts/configs/archive/field_z05.yaml
+scripts/configs/archive/map_z05_CAP.yaml
+scripts/configs/archive/map_z05_CAP_test.yaml

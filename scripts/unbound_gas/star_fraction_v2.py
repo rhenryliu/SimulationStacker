@@ -21,7 +21,7 @@ virial_quantities.r200 for SIMBA).
 
 Usage
 -----
-    python star_fraction_v2.py -p ./configs/star_fraction_v2.yaml
+    python unbound_gas/star_fraction_v2.py -p ./configs/unbound_gas/star_fraction_v2.yaml
 """
 
 import sys
@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process config.')
     parser.add_argument('-p', '--path2config', type=str,
-                        default='./configs/star_fraction_v2.yaml',
+                        default='./configs/unbound_gas/star_fraction_v2.yaml',
                         help='Path to the configuration file.')
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")

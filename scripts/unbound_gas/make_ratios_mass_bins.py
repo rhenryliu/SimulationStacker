@@ -20,7 +20,7 @@ Simulations plotted on every panel as separate coloured lines:
 
 Usage
 -----
-    python make_ratios_mass_bins.py -p configs/ratios_mass_bins_z05.yaml
+    python unbound_gas/make_ratios_mass_bins.py -p configs/unbound_gas/ratios_mass_bins_z05.yaml
 """
 
 import sys
@@ -734,7 +734,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/ratios_mass_bins_z05.yaml',
+        default='./configs/unbound_gas/ratios_mass_bins_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     parser.add_argument(

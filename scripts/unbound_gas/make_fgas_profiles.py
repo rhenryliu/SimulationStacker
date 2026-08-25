@@ -32,7 +32,7 @@ stacking; the 3D path always accumulates all pixels within a sphere
 
 Usage
 -----
-    python make_fgas_profiles.py -p configs/fgas_profiles_z05.yaml
+    python unbound_gas/make_fgas_profiles.py -p configs/unbound_gas/fgas_profiles_z05.yaml
 """
 
 import sys
@@ -860,7 +860,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/fgas_profiles_z05.yaml',
+        default='./configs/unbound_gas/fgas_profiles_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     args = vars(parser.parse_args())

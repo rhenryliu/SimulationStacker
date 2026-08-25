@@ -16,9 +16,9 @@ Redshifts are distinguished by linestyle (solid = z=0.5, dashed = z=0.26).
 
 Usage
 -----
-    python plot_beam_factors.py
-    python plot_beam_factors.py --config-z05 configs/mass_ratio_beamTest_z05.yaml \\
-                                --config-z026 configs/mass_ratio_beamTest_z026.yaml
+    python lensing/plot_beam_factors.py
+    python lensing/plot_beam_factors.py --config-z05 configs/lensing/mass_ratio_beamTest_z05.yaml \\
+                                --config-z026 configs/lensing/mass_ratio_beamTest_z026.yaml
 """
 
 import sys
@@ -312,13 +312,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--config-z05',
         type=str,
-        default='./configs/mass_ratio_beamTest_z05.yaml',
+        default='./configs/lensing/mass_ratio_beamTest_z05.yaml',
         help='Path to the beamTest config for z=0.5.',
     )
     parser.add_argument(
         '--config-z026',
         type=str,
-        default='./configs/mass_ratio_beamTest_z026.yaml',
+        default='./configs/lensing/mass_ratio_beamTest_z026.yaml',
         help='Path to the beamTest config for z=0.26.',
     )
     args = vars(parser.parse_args())

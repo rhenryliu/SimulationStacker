@@ -54,9 +54,9 @@ noise.
 
 Usage
 -----
-    python abundance_variation_ratio.py -p configs/abundance_variation_z05.yaml
-    python abundance_variation_ratio.py -p configs/abundance_variation_z026.yaml
-    python abundance_variation_ratio.py -p configs/abundance_variation_z05.yaml --replot
+    python lensing/abundance_variation_ratio.py -p configs/lensing/abundance_variation_z05.yaml
+    python lensing/abundance_variation_ratio.py -p configs/lensing/abundance_variation_z026.yaml
+    python lensing/abundance_variation_ratio.py -p configs/lensing/abundance_variation_z05.yaml --replot
 """
 
 import sys
@@ -857,7 +857,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/abundance_variation_z05.yaml',
+        default='./configs/lensing/abundance_variation_z05.yaml',
         help='Path to the master YAML configuration file.',
     )
     parser.add_argument(

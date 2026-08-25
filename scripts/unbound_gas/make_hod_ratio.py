@@ -33,7 +33,7 @@ halo selection).
 
 Usage
 -----
-    python make_hod_ratio.py -p configs/hod_ratio_z05.yaml
+    python unbound_gas/make_hod_ratio.py -p configs/unbound_gas/hod_ratio_z05.yaml
 """
 
 import sys
@@ -586,7 +586,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/hod_ratio_z05.yaml',
+        default='./configs/unbound_gas/hod_ratio_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     args = vars(parser.parse_args())

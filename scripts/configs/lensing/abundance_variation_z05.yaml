@@ -6,7 +6,7 @@
 # figure can never drift from the main-text figure it accompanies.
 #
 # Run with:
-#   python abundance_variation_ratio.py -p configs/abundance_variation_z05.yaml
+#   python abundance_variation_ratio.py -p configs/lensing/abundance_variation_z05.yaml
 
 no_beam_config: mass_ratio_noBeam_z05.yaml
 

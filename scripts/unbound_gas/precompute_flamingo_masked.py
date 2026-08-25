@@ -27,7 +27,7 @@ resubmitting.
 
 Usage
 -----
-    python precompute_flamingo_masked.py --ptype tSZ --projection xz \
+    python unbound_gas/precompute_flamingo_masked.py --ptype tSZ --projection xz \
         --feedback L1_m9
 
 The companion runCPU_flamingo_masked.sh submits all six pairs as a job array.

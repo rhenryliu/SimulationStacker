@@ -22,7 +22,7 @@ unchanged from beam_compensated_ratio.py.
 
 Usage
 -----
-    python beam_compensated_ratio_v2.py -p configs/beam_compensated_z05.yaml
+    python lensing/beam_compensated_ratio_v2.py -p configs/lensing/beam_compensated_z05.yaml
 """
 
 import sys
@@ -586,7 +586,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/beam_compensated_z05.yaml',
+        default='./configs/lensing/beam_compensated_z05.yaml',
         help='Path to the master YAML configuration file.',
     )
     args = vars(parser.parse_args())

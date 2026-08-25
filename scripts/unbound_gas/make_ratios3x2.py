@@ -13,7 +13,7 @@ Columns: col 0 = 3D spherical profiles  (radius in comoving kpc/h)
 
 Usage
 -----
-    python make_ratios3x2.py -p configs/ratios_3x2_z05.yaml
+    python unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml
 """
 
 import sys
@@ -711,7 +711,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/ratios_3x2_z05.yaml',
+        default='./configs/unbound_gas/ratios_3x2_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     parser.add_argument(

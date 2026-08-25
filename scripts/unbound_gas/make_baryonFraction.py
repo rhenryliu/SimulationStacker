@@ -17,11 +17,11 @@ integrate to 1 and no Omega_b / Omega_m normalisation is applied.
 
 Usage
 -----
-    python make_baryonFraction.py -p ./configs/stackArea_z05.yaml
+    python unbound_gas/make_baryonFraction.py -p ./configs/unbound_gas/stackArea_z05.yaml
 
 Config file format
 ------------------
-Same format as make_stackArea.py / configs/stackArea_z05.yaml.
+Same format as make_stackArea.py / configs/unbound_gas/stackArea_z05.yaml.
 ``particle_type_2`` is ignored; the denominator is derived internally.
 
 Dependencies
@@ -632,7 +632,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/stackArea_z05.yaml',
+        default='./configs/unbound_gas/stackArea_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     parser.add_argument(

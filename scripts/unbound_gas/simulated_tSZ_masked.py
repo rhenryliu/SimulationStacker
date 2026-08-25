@@ -15,7 +15,7 @@ import matplotlib.cm as cm
 # from abacusnbody.analysis.tsc import tsc_parallel
 import time
 
-from astropy.cosmology import FlatLambdaCDM, Planck18
+from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 
 # Import packages
@@ -92,7 +92,13 @@ def main(path2config, verbose=True):
     radDistance = stack_config.get('rad_distance', 1.0)
     pType = stack_config.get('particle_type', 'tau')
     projection = stack_config.get('projection', 'xy')
-    use_subhalos = stack_config.get('use_subhalos', False)
+    # Radial grid. Defaults reproduce the values previously hardcoded below, so
+    # configs without these keys are unaffected. The 'ringring' filter needs
+    # min_radius > CAP_ringring's r0 (1.0 arcmin): at min_radius == r0 the inner
+    # annulus is empty and the filter silently returns 0.
+    minRadius = stack_config.get('min_radius', 1.0)
+    maxRadius = stack_config.get('max_radius', 6.0)
+    nRadii = stack_config.get('num_radii', 11)
 
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
@@ -152,7 +158,10 @@ def main(path2config, verbose=True):
                 colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
             elif sim_type_name == 'SIMBA':
                 SIMBA_sims = sim_type['sims']
-                colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+                if len(SIMBA_sims) > 1:
+                    colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
+                else:
+                    colours = colourmap(np.linspace(0.2, 0.85, 6))[-1:] # Use the last color if only one SIMBA sim, otherwise generate a range of colors
             elif sim_type_name == 'FLAMINGO':
                 FLAMINGO_sims = sim_type['sims']
                 fallback = colourmap(np.linspace(0.2, 0.85, len(FLAMINGO_sims)))
@@ -175,6 +184,10 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                 simType=sim_type_name)
 
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
+                                                         save=saveField, load=loadField, radDistance=radDistance,
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                     try:
                         OmegaBaryon = stacker.header['OmegaBaryon']
@@ -201,6 +214,10 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name, 
                                                 feedback=feedback)
                     
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
+                                                         save=saveField, load=loadField, radDistance=radDistance,
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
                     
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     sim_name = sim_name_show
@@ -216,16 +233,16 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name,
                                                 feedback=feedback)
 
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                         numRadii=nRadii, pixelSize=pixelSize,
+                                                         save=saveField, load=loadField, radDistance=radDistance,
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
+
                     OmegaBaryon = stacker.header['OmegaBaryon']
                     # '-' instead of '_' so the label renders under usetex
                     sim_name = f"FLAMINGO {feedback}".replace('_', '-')
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
-
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
-                                        save=saveField, load=loadField, radDistance=radDistance,
-                                        use_subhalos=use_subhalos,
-                                        projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                 # Plotting
                 T_CMB = 2.7255
@@ -245,10 +262,15 @@ def main(path2config, verbose=True):
         # Plot data only on the last column (col_idx == 3)
         if col_idx == 3 and plot_config['plot_data']:
             data_path = plot_config['data_path']
-            data = np.load(data_path)
-            r_data = data['theta_arcmins']
-            profile_data = data['signal']
-            profile_err = data['noise']
+
+            rad_key = plot_config.get('rad_key', 'RApArcmin')
+            data_key = plot_config.get('data_key', 'pz1_act_dr6_fiducial')
+            data_err_key = data_key + '_err'
+
+            data = pd.read_csv(data_path)
+            r_data = data[rad_key]
+            profile_data = data[data_key]
+            profile_err = data[data_err_key]
                     
             # Plot data on every row of the last column
             for row_idx in range(nRows):
@@ -259,12 +281,12 @@ def main(path2config, verbose=True):
     T_CMB = 2.7255
     v_c = 300000 / 299792458
     k = 1 / (T_CMB * v_c * 1e6)
-    
+
     def forward_arcmin(arcmin):
         return arcmin_to_comoving(arcmin, redshift, cosmo)
     def inverse_arcmin(comoving):
         return comoving_to_arcmin(comoving, redshift, cosmo)
-    
+
     
     for row_idx in range(nRows):
         for col_idx in range(4):
@@ -273,15 +295,16 @@ def main(path2config, verbose=True):
             if col_idx != 3:
                 R200C_arcmin = comoving_to_arcmin(R200C * u.kpc / u.h, redshift, cosmo)
                 ax.axvline(R200C_arcmin * (col_idx + 1), color='k', linestyle='--', lw=1)
-
+            
             # Set x-label only on bottom row
             if row_idx == nRows - 1:
                 ax.set_xlabel('R [arcmin]')
             
             # Set y-label only on leftmost column
             if col_idx == 0:
-                ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')
-            
+                ax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
+                # ax.set_ylabel(r'$T_{kSZ}$ [$\mu K \rm{arcmin}^2$]')
+
             # Set secondary x-axis on top row
             if row_idx == 0:
                 secax_x = ax.secondary_xaxis('top',
@@ -291,16 +314,16 @@ def main(path2config, verbose=True):
             
             # Set secondary y-axis only on rightmost column
             if col_idx == 3:
-                ax.legend(loc='lower right', fontsize=12)
+                ax.legend(loc='best', fontsize=12)
                 secax = ax.secondary_yaxis('right',
-                                           functions=(lambda y: y * k,
-                                                     lambda y: y / k))
+                                           functions=(lambda y: y ,
+                                                     lambda y: y))
                 if row_idx == 0:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
+                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
                 else:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
+                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
             
-            ax.set_yscale('log')
+            ax.set_yscale(plot_config.get('yscale', 'log'))
             ax.set_xlim(0.0, 6.5)
             ax.grid(True)
             
@@ -311,8 +334,8 @@ def main(path2config, verbose=True):
                 else:
                     ax.set_title('No Masking')
     
-    fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
-    fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title
+    fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
+    fig.tight_layout(rect=(0.03, 0, 1, 1))  # Leave space on left for row labels and top for title
 
     # Row labels, taken from the config so they cannot desync from the row
     # order, and centred on each row after tight_layout has fixed the layout.
@@ -320,7 +343,7 @@ def main(path2config, verbose=True):
         bbox = axes[row_idx, 0].get_position()
         fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), sim_type['sim_type'],
                  fontsize=20, va='center', rotation=90, ha='center')
-    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
     
     print('Done!!! time taken = ', time.time() - t0, ' seconds')
@@ -328,7 +351,7 @@ def main(path2config, verbose=True):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/tau_z05_CAP_masked.yaml', help='Path to the configuration file.')
+    parser.add_argument('-p', '--path2config', type=str, default='./configs/unbound_gas/tSZ_z05_CAP_masked.yaml', help='Path to the configuration file.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

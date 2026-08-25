@@ -21,15 +21,26 @@ Both lines are required. The virtualenv (`cosmodesi_dr1`) holds any extra packag
 
 ## Running Scripts
 
-Scripts are run from the `scripts/` directory with a YAML config file:
+`scripts/` is organized by paper: `lensing/` (lensing+kSZ paper), `unbound_gas/`
+(unbound gas paper), `archive/` (superseded scripts), with `configs/` mirroring
+the same split (`configs/lensing/`, `configs/unbound_gas/`, `configs/archive/`).
+`demo_stack.py`, `make_pk_suppression.py` and `powerspectra/` stay at the
+`scripts/` root. Each paper folder holds its figure scripts, its SLURM runners
+(`runCPU*.sh`, `runINT*.sh`) and a master `make_*_plots.sh` mapping draft figure
+numbers to scripts.
+
+**Everything is run and submitted from the `scripts/` directory** — all paths
+(`sys.path.append('../src/')`, config `fig_path`/`data_path`, SLURM `-o` log
+paths) are CWD-relative and assume it:
 ```bash
 cd scripts/
-python make_ratios3x2.py -p configs/ratios_3x2_z05.yaml
+python unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml
 ```
 
-SLURM batch submission:
+SLURM batch submission (also from `scripts/`; submitting from inside a paper
+folder breaks the relative paths):
 ```bash
-sbatch scripts/runCPU.sh
+sbatch unbound_gas/runCPU.sh
 ```
 
 ## Testing

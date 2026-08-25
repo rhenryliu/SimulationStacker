@@ -14,8 +14,8 @@ simulation, used as a proxy for the dark-matter-only reference.
 
 Usage
 -----
-    python make_pk_suppression.py -p configs/mass_ratio_data_z05.yaml
-    python make_pk_suppression.py -p configs/mass_ratio_data_z05.yaml --grid 256 --threads 32
+    python make_pk_suppression.py -p configs/lensing/mass_ratio_data_z05.yaml
+    python make_pk_suppression.py -p configs/lensing/mass_ratio_data_z05.yaml --grid 256 --threads 32
 
 Config keys consumed
 --------------------
@@ -339,8 +339,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '-p', '--path2config', 
         type=str,
-        default='./configs/mass_ratio_data_z05.yaml',
-        help='Path to YAML config file (e.g. configs/mass_ratio_data_z05.yaml)',
+        default='./configs/lensing/mass_ratio_data_z05.yaml',
+        help='Path to YAML config file (e.g. configs/lensing/mass_ratio_data_z05.yaml)',
     )
     parser.add_argument(
         '--grid', type=int, default=512,

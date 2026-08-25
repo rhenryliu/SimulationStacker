@@ -17,11 +17,11 @@ A horizontal dashed line at y=1 indicates a perfectly baryon-traced total field.
 
 Usage
 -----
-    python make_stackArea.py -p ./configs/stackArea_z05.yaml
+    python unbound_gas/make_stackArea.py -p ./configs/unbound_gas/stackArea_z05.yaml
 
 Config file format
 ------------------
-See configs/stackArea_z05.yaml for a fully annotated example.  The top-level keys
+See configs/unbound_gas/stackArea_z05.yaml for a fully annotated example.  The top-level keys
 are ``stack``, ``plot``, and ``simulations``.  The ``simulations`` list must contain
 exactly three entries in the order: TNG300-1, Illustris-1, SIMBA.
 
@@ -557,7 +557,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '-p', '--path2config',
         type=str,
-        default='./configs/stackArea_z05.yaml',
+        default='./configs/unbound_gas/stackArea_z05.yaml',
         help='Path to the YAML configuration file.',
     )
     parser.add_argument(

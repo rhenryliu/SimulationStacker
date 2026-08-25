@@ -8,7 +8,7 @@
 # snapshot exists at z=0.26); _resolve_stacker honours it.
 #
 # Run with:
-#   python abundance_variation_ratio.py -p configs/abundance_variation_z026.yaml
+#   python abundance_variation_ratio.py -p configs/lensing/abundance_variation_z026.yaml
 
 no_beam_config: mass_ratio_noBeam_z026.yaml
 

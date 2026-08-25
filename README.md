@@ -23,7 +23,10 @@ src/            core library (imported by scripts via ../src on sys.path)
   utils.py, field_utils.py, mask_utils.py, snr.py   cosmology, masking, SNR helpers
 scripts/        analysis + figure scripts, each driven by a YAML config in configs/
   demo_stack.py   >>> the minimal, documented example — start here <<<
-  configs/        YAML configs for every script
+  lensing/        figure scripts + SLURM runners for the lensing+kSZ paper
+  unbound_gas/    figure scripts + SLURM runners for the unbound gas paper
+  archive/        superseded scripts kept for reference
+  configs/        YAML configs, mirroring the split (lensing/, unbound_gas/, archive/)
 tests/          pytest suite (FLAMINGO I/O + SZ) plus interactive notebooks
 ```
 
@@ -204,11 +207,11 @@ but be aware of the following when handing it off:
 
 - **Data root** — set `SIMSTACK_DATA_ROOT` (or pass `sim_root=`). The old
   hardcoded `/pscratch/...` path remains only as the fallback default.
-- **Gitignored files do not travel with a clone.** `.gitignore` excludes `data/`,
-  `figures/`, `external/`, `Outputs_Perlmutter/`, and `*.sh` (except two lensing
-  plot scripts). So the SLURM submit scripts (`scripts/runCPU*.sh`), the
-  `data/*.npz` referenced by some configs via `../data/...`, and `external/`
-  helpers are **not** in the repo — copy them over separately if you need them.
+- **Gitignored files do not travel with a clone.** `.gitignore` excludes
+  `figures/`, `external/`, `Outputs_Perlmutter/`, and a handful of untracked
+  archived scripts. The SLURM runners and the observational `data/` inputs are
+  tracked; `external/` helpers are **not** — copy them over separately if you
+  need them.
 - **SLURM scripts** hardcode NERSC specifics: `#SBATCH -A desi/-C cpu`, a personal
   `--mail-user`, and the two `source ...cosmodesi...` lines. Templatize these for
   your scheduler/account. The demo needs no SLURM — it runs interactively.

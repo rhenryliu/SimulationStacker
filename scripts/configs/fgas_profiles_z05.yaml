@@ -10,7 +10,8 @@
 #   Right panel : SHAM / abundance-matching subhalo selection
 #
 # Simulations: TNG300-1 (snap 67), Illustris-1 (snap 103),
-#              SIMBA m100n1024 s50 (snap 125)
+#              SIMBA m100n1024 s50 (snap 125),
+#              FLAMINGO L1_m9 / fgas-8sigma / Jet_fgas-4sigma (snap 67)
 
 stack:
   # YAML flag controlling the stacking dimension.
@@ -48,6 +49,10 @@ stack:
 
   # ------------------------------------------------------------------
   # 3D field parameters  (used when dim: '3D')
+  # WARNING: n_pixels is a single global value. For FLAMINGO (681 cMpc/h
+  # box) 1000 pixels gives 681 ckpc/h per cell — larger than the innermost
+  # radial bins — so FLAMINGO 3D profiles are unresolved at small radii.
+  # Raise n_pixels (or drop FLAMINGO) before trusting a 3D run.
   # ------------------------------------------------------------------
   n_pixels:      1000         # grid resolution for 3D field
   min_radius_3d: 200.0        # innermost radial bin (comoving kpc/h)
@@ -64,10 +69,10 @@ stack:
 
   # ------------------------------------------------------------------
   # SHAM / abundance-matching selection  (use_subhalos=True)
-  #   Routes to select_abundance_subhalos(SubhaloMass, target_number, Lbox).
-  #   For 3D stacking this value is read directly by the script.
-  #   For 2D stacking, stackMap does not expose this parameter and the
-  #   stack_on_array default (5e-4) is always used instead.
+  #   Subhalos are ranked by stellar mass (SubhaloMStar) after a
+  #   parent-mass pre-filter at halo_mass_upper, then the top
+  #   N = halo_abundance_target * V_box are kept.  Read by both the
+  #   2D and 3D stacking paths.
   # ------------------------------------------------------------------
   halo_abundance_target: 5.0e-4   # target number density (cMpc/h)^-3
 
@@ -94,3 +99,17 @@ simulations:
       - name: 'm100n1024'
         snapshot: 125
         feedback: 's50'
+
+  # FLAMINGO sims — fixed per-variant colours (see _FLAMINGO_COLOURS)
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

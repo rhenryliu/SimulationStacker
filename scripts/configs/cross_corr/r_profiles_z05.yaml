@@ -1,0 +1,81 @@
+# Task 1 r-profiles, LRG-like sample at z ~ 0.5.
+#
+# Computes r_gb, r_bm, r_ge, r_em and the ratio r_bm/r_gb for the filters
+# {Sigma, DSigma, Upsilon(R0=1')} over nine linear aperture bins in 1'-6'.
+# See docs/cross_correlation_notes.md (Task 1) and
+# docs/r_profiles_task1_spec.md.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/make_r_profiles.py -p configs/cross_corr/r_profiles_z05.yaml
+#
+# n_pixels is per simulation because each box already has a cached projected
+# field at its own grid; every entry below works out to ~0.2 arcmin/pixel, so
+# the 1 arcmin aperture is resolved by ~5 pixels in every run.  These grids are
+# finer than the spec's minimum (>= 2048 for the small boxes, ~5000 for
+# FLAMINGO) and cost nothing extra because the fields are already on disk.
+
+stack:
+  redshift: 0.5
+
+  # Only 'yz' is currently cached for every suite.  'xy' and 'xz' would each
+  # require a full particle sweep per field type per simulation.
+  projections: ['yz']
+
+  min_radius: 1.0        # arcmin
+  max_radius: 6.0        # arcmin
+  num_radii: 9           # nine linear bins, matching the existing pipeline
+  dr_arcmin: 0.75        # annulus width of the compensated filter
+  r0_arcmin: 1.0         # Upsilon reference radius
+
+  n_jk_side: 4           # 4x4 = 16 leave-one-out spatial jackknife patches
+
+  load_field: true
+  save_field: false      # everything needed is already cached
+
+  particle_type_e: 'ionized_gas'   # free electrons
+  particle_type_b: 'baryon'        # gas + stars + BH
+
+  # SHAM galaxy sample: top-N subhalos by stellar mass matching this number
+  # density, after restricting to parent FoF haloes below parent_mass_upper.
+  # Both settings reproduce the f_gas paper's sample exactly (the pre-filter is
+  # stackMap's default, applied by the existing use_subhalos=True path).
+  halo_abundance_target: 5.0e-4    # (cMpc/h)^-3, DESI LRG bin 1
+  parent_mass_upper: 5.0e14        # Msun/h; set to null to disable
+
+plot:
+  npz_path: '../data/r_profiles/'
+  fig_path: '../figures/'
+  fig_name: 'r_profiles_z05'
+  fig_type: 'pdf'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67          # z = 0.5030
+        n_pixels: 2674
+      - name: 'Illustris-1'
+        snapshot: 103         # z = 0.5030
+        n_pixels: 966
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125         # z = 0.4904
+        feedback: 's50'
+        n_pixels: 1301
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67          # z = 0.5000
+        feedback: 'L1_m9'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 8869

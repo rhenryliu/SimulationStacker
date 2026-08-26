@@ -1,0 +1,77 @@
+# Task 1 r-profiles, BGS-like sample at z ~ 0.26 (FLAMINGO at z = 0.30).
+#
+# Companion to r_profiles_z05.yaml; identical filter and jackknife settings,
+# a denser SHAM sample, and the lower-redshift snapshot of each suite.  The
+# redshift split (BGS at z = 0.26, FLAMINGO at z = 0.30) follows
+# docs/cross_correlation_notes.md Sec. 6.
+#
+# Note docs/r_profiles_task1_spec.md states that FLAMINGO snapshot 71 is not
+# downloaded and that this sweep is therefore out of scope.  That is no longer
+# true: snapshot 71 (z = 0.3000) is present for all three variants, with SOAP
+# catalogues and cached projected fields, so FLAMINGO is included here.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/make_r_profiles.py -p configs/cross_corr/r_profiles_z026.yaml
+
+stack:
+  redshift: 0.26
+
+  projections: ['yz']
+
+  min_radius: 1.0
+  max_radius: 6.0
+  num_radii: 9
+  dr_arcmin: 0.75
+  r0_arcmin: 1.0
+
+  n_jk_side: 4
+
+  load_field: true
+  save_field: false
+
+  particle_type_e: 'ionized_gas'
+  particle_type_b: 'baryon'
+
+  # Denser than the LRG sample, matching the BGS-like target of the spec.
+  halo_abundance_target: 1.0e-3    # (cMpc/h)^-3
+  parent_mass_upper: 5.0e14        # Msun/h
+
+plot:
+  npz_path: '../data/r_profiles/'
+  fig_path: '../figures/'
+  fig_name: 'r_profiles_z026'
+  fig_type: 'pdf'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80          # z = 0.2613
+        n_pixels: 4822
+      - name: 'Illustris-1'
+        snapshot: 116         # z = 0.2613
+        n_pixels: 1752
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 136         # z = 0.2668
+        feedback: 's50'
+        n_pixels: 2349
+  - sim_type: 'FLAMINGO'
+    sims:
+      # Snapshot 71 is z = 0.3000, the BGS-matched FLAMINGO snapshot of the
+      # theory note.  Per-sim redshift is read from the snapshot header, so no
+      # override is needed here.
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 14015

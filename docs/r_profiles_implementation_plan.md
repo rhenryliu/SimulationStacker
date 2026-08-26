@@ -666,3 +666,83 @@ chosen silently:
    are then not matched to DESI across suites.
 3. Restrict the galaxy-crossed part of Gate A to the boxes that support it,
    and use the small boxes only for r_bm.
+
+---
+
+## Results (job 57626842, 12 simulation-samples, yz, 17 min wall-clock)
+
+All twelve runs completed; per-run sanity checks passed (derived CDM mass
+fraction matches the box cosmology to 1e-15 for TNG/Illustris/SIMBA and 1e-7
+for FLAMINGO, the expected massive-neutrino offset; SHAM number densities
+reproduce the target to <0.5 per cent).
+
+### R1. r_bm is measured cleanly everywhere; r_gb is not near unity
+
+`r_bm` is a field-field coefficient and is measured at very high
+signal-to-noise in every box: 0.89-1.00 with jackknife errors <= 0.008, and
+1.001/1.009/1.001 at R = 1/3.5/6 arcmin for the Sigma filter on FLAMINGO. The
+"expectation of near-unity" of the theory note (Sec. 3) holds well for r_bm.
+
+`r_gb` does **not** sit near unity. On FLAMINGO (157,910 galaxies, so
+statistically solid) it is 1.34 -> 1.06 -> 1.00 across 1'-6' for Sigma, but
+1.71 -> 1.45 -> 1.29 for DSigma. Values above 1 are permitted here: these are
+filtered amplitudes `Y = sum_k Whard(k) P(k)` and the compensated kernel
+changes sign, so no Cauchy-Schwarz bound applies.
+
+Consequently `r_bm/r_gb` is **0.5-0.85 for DSigma/Upsilon and 0.78-1.0 for
+Sigma**, not ~1. For the estimator this is not fatal -- Eq. (4) uses the ratio
+as a calibrated transfer, so what matters is its cross-code stability, not its
+proximity to 1 -- but it does mean the transfer is a large correction rather
+than a small one.
+
+### R2. The filter morphology reproduces Singh et al. (2020) Fig. 1
+
+The Sigma-based coefficient deviates from unity only at small R and returns to
+1.000 by 6 arcmin; the compensated DSigma and Upsilon carry the deviation out
+to the largest aperture. This is exactly the trade-off the theory note
+predicts (Sec. 6, Task 1), now measured for the gas field, which had no clean
+precedent. **Sigma is the best-behaved filter on every metric here** -- it has
+the smallest cross-code scatter and the ratio closest to unity -- which sits in
+direct tension with Task 2's observation that an uncompensated disk mean is
+the one filter that is *not* cleanly measurable on the kSZ side.
+
+### R3. Gate A: inconclusive, not failed -- the small boxes are shot-noise limited
+
+The naive four-code scatter of `r_bm/r_gb` is 3-55 per cent and would read as
+a Gate A failure. It is not a physics result. The per-run jackknife errors on
+the ratio are *as large as or larger than* the scatter itself: at z~0.5 for
+DSigma the four-code scatter is 0.185 while the median statistical error on a
+single run is 0.546. Illustris-1 (210 galaxies) and SIMBA m100n1024 (500
+galaxies) simply cannot measure `Y_gg` at these apertures.
+
+Restricting to the two boxes that can (FLAMINGO L1_m9 fiducial with 157,910
+galaxies and TNG300-1 with 4,307), the cross-code scatter collapses to
+
+| filter | z ~ 0.5 | z ~ 0.26/0.30 |
+|---|---|---|
+| Sigma | 0.008 - 0.074 | 0.013 - 0.083 |
+| DSigma | 0.003 - 0.081 | 0.007 - 0.112 |
+| Upsilon | 0.020 - 0.089 | 0.006 - 0.132 |
+
+i.e. mostly under 10 per cent, which is the Gate A fixed-transfer criterion.
+The three FLAMINGO feedback variants agree with each other at the ~4 per cent
+level on the ratio, so feedback sensitivity is mild.
+
+**Two codes is not a cross-code validation.** Singh et al.'s Appendix A lesson
+is precisely that priors calibrated on one family bias another. The honest
+status is therefore: the estimator looks viable on the evidence available, but
+Gate A cannot be declared passed until Illustris and SIMBA contribute a
+galaxy sample large enough to measure `Y_gg`. That is a sample-size problem,
+not a pipeline problem, and the options are in A12.
+
+### R4. The self-pair subtraction dominates Y_gg at small R
+
+On FLAMINGO the analytic shot-noise term removed from `Y_gg` is 6.9x the
+retained signal at R=1', 2.8x at 3.5' and 1.9x at 6'. The subtraction is exact
+for a point process (each object contributes exactly one self-pair, so the
+term is exactly `K(0)/nbar_pix` regardless of clustering), and the pytest
+suite verifies it nulls an unclustered Poisson sample. But it means `r_gb` at
+small apertures is a difference of two comparable numbers, so any error in the
+shot-noise model propagates straight into it. This mirrors, on the simulation
+side, exactly the caveat the theory note raises for the data measurement of
+`Y_gg` (Sec. 5.1, "Self-pairs" and "Fibre incompleteness").

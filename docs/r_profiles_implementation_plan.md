@@ -918,3 +918,132 @@ per cent of the raw `Y_gg` at that aperture, so the residual is a difference
 of comparable numbers. All reported statistics are therefore split into the
 data range and the diagnostic extension, and the Gate A verdict uses the data
 range only.
+
+---
+
+## Task 4 (job 57638497, four simulations, 3 min)
+
+Scope set by the 2026-08-26 decisions: `P_mm^hydro-CDM / P_mm^DMO = 1` adopted
+rather than measured (no DMO run on disk; downloading one would take over a
+day); the full box depth used for simulation validation and the `Pi_max`
+cylinder reserved for the data chain; the RSD/`Pi_max` recheck for `Y_gg`
+deferred to Phase 4 with a simulation-side proxy in its place; Gate B closed.
+The Phase 0 specification that all of this belongs in is now written, at
+`docs/filter_specification.md`.
+
+### T6. Two bugs the decomposition caught
+
+Splitting the comparison into A (transfer chain, no cosmological model), B
+(CDM versus total matter) and C (halofit) was what made the errors findable.
+The first run gave C = +129 per cent, a factor 2.3 -- far too large to be
+halofit error, and since A was small the fault had to be in the theory branch.
+
+1. **CAMB returns its redshift axis in increasing order**, whatever order the
+   redshifts were requested in, so `pk[0]` was the z = 0 spectrum rather than
+   z = 0.503. At these redshifts that overstates the power by ~2.3x. The slice
+   is now selected by matching the requested value.
+2. Requesting z = 0 made the internal redshift list `[0.0, 0.0]`, and CAMB's
+   ODE integrator fails on duplicates with an opaque "Error in dverk". The
+   list is now de-duplicated.
+
+A code review found two more, both sub-per-cent but both real:
+
+3. **sigma8 was applied after halofit rather than before.** halofit's mapping
+   is not homogeneous in the input amplitude, so rescaling its output by
+   `(sigma8_target/sigma8_actual)^2` is exact only in the linear regime; for
+   TNG300-1's 0.8 per cent amplitude mismatch that biased P(k) by up to 0.9
+   per cent near k ~ 1 h/Mpc. The primordial amplitude is now solved for
+   before the non-linear step. The original test could not have caught this,
+   since both of its calls shared one underlying amplitude and the ratio held
+   by construction; it is replaced by an independent integral of the linear
+   spectrum against the 8 Mpc/h top hat.
+4. **CAMB's log-spaced k under-samples the oscillating kernel.** The aperture
+   kernels oscillate on a fixed period `2 pi / R` in k, so log spacing thins
+   out exactly where it should not; the amplitude at the largest apertures
+   drifted by ~0.3 per cent with the number of CAMB samples. Spectra are now
+   resampled onto a kernel-resolving linear grid, with a convergence test.
+
+All four are pinned by regression tests in `tests/test_kernels.py`.
+
+### T7. The theory chain validates at the few-per-cent level
+
+Worst fractional difference against the measured CDM amplitude, over the full
+aperture range:
+
+| run | filter | A transfer | B tot/CDM | C halofit |
+|---|---|---|---|---|
+| TNG300-1 | DSigma | 1.7e-2 | 8.9e-2 | 4.6e-2 |
+| TNG300-1 | Upsilon | 1.8e-2 | 3.0e-2 | 6.4e-2 |
+| L1_m9 fiducial | DSigma | 2.1e-2 | 1.34e-1 | 5.6e-2 |
+| L1_m9 fiducial | Upsilon | 2.2e-2 | 8.4e-2 | 6.7e-2 |
+| L1_m9 fgas-8sigma | DSigma | 2.0e-2 | 1.69e-1 | 4.8e-2 |
+| L1_m9 fgas-8sigma | Upsilon | 2.2e-2 | 1.44e-1 | 5.5e-2 |
+| L1_m9 Jet_fgas-4sigma | DSigma | 2.1e-2 | 1.67e-1 | 4.6e-2 |
+| L1_m9 Jet_fgas-4sigma | Upsilon | 2.2e-2 | 1.32e-1 | 5.4e-2 |
+
+**A, the transfer chain, is 1.7-2.2 per cent everywhere** and mostly far
+better than that away from the innermost aperture. This is the accuracy with
+which the harmonic-space route of Sec. 5.3 reproduces the real-space filtering
+the pipeline performs, with no cosmological model involved. It is limited by
+the pixelization of the aperture, and specifically by the 0.75 arcmin annulus,
+which spans only 3.75 pixels at the production resolution (see
+`tests/test_kernels.py::TestAnalyticMatchesPixelized`).
+
+**C, halofit, is 4.6-6.7 per cent** and does not vary much between suites,
+which is the expected accuracy of the non-linear model at these scales.
+
+### T8. The dominant theory-side systematic is CDM versus total matter
+
+**B is the largest term in the table, at 3 to 17 per cent, and it is
+feedback-dependent.** halofit returns the *total* matter power spectrum while
+the estimator defines `m` as CDM. Ordered by feedback strength:
+
+| run | B (DSigma) |
+|---|---|
+| TNG300-1 | 8.9 per cent |
+| L1_m9 fiducial | 13.4 per cent |
+| L1_m9 Jet_fgas-4sigma | 16.7 per cent |
+| L1_m9 fgas-8sigma | 16.9 per cent |
+
+That ordering is physical: stronger feedback ejects more gas, so the total
+matter field departs further from the CDM field. The consequence for the
+programme is that this is **not a fixed transfer** -- it is a
+feedback-dependent one, and it is an order of magnitude larger than the 1-2
+per cent hydro-CDM versus DMO back-reaction we chose to set to unity. Booking
+the back-reaction while ignoring this would be the wrong priority.
+
+Two ways out, neither chosen here: predict the CDM-only spectrum rather than
+the total (CAMB can do the linear CDM spectrum, but halofit's non-linear
+correction is formulated for total matter), or redefine `m` as total matter
+throughout, which changes the estimator's meaning and would have to be agreed
+with the theory note.
+
+### T9. The coefficients are insensitive to projection depth
+
+`check_projection_depth.py` slices the TNG300-1 3D fields into slabs of 26,
+51, 102 and 205 cMpc/h and reprojects. The amplitudes behave exactly as the
+`P_2D = P_3D/L` scaling predicts: going from the full box to one eighth of it
+raises `Y_mm` by a factor 7.4 to 7.8, against the 8 that exact inverse-depth
+scaling would give.
+
+The coefficients do not move at all:
+
+| filter | worst \|r(26 cMpc/h) / r(205 cMpc/h) - 1\| |
+|---|---|
+| DSigma | 3.8e-4 |
+| Upsilon | 1.6e-3 |
+
+**Over a factor of eight in projection depth the coefficient shifts by less
+than 0.2 per cent.** This is the result that licenses the whole calibration
+strategy: the amplitudes are convention-dependent and do not port between a
+simulation box and a `Pi_max` cylinder, but `r_bm/r_gb` -- the only thing the
+simulations are asked to deliver -- is essentially independent of the
+projection. The mismatch between the kSZ's full-line-of-sight integration and
+the clustering's 100 h^-1 Mpc cylinder therefore threatens the amplitudes in
+Eq. (4), which must be made consistent by construction, but not the calibrated
+transfer.
+
+Caveat: this used the 1000^3 cached 3D grid, whose 0.53 arcmin cells
+under-resolve the smallest apertures, so the study covers R >= 2.25 arcmin
+only. FLAMINGO has no cached 3D CDM or ionized-gas field, so the study is
+TNG300-1 only.

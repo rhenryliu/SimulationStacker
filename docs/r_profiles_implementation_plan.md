@@ -701,10 +701,16 @@ The Sigma-based coefficient deviates from unity only at small R and returns to
 1.000 by 6 arcmin; the compensated DSigma and Upsilon carry the deviation out
 to the largest aperture. This is exactly the trade-off the theory note
 predicts (Sec. 6, Task 1), now measured for the gas field, which had no clean
-precedent. **Sigma is the best-behaved filter on every metric here** -- it has
-the smallest cross-code scatter and the ratio closest to unity -- which sits in
-direct tension with Task 2's observation that an uncompensated disk mean is
-the one filter that is *not* cleanly measurable on the kSZ side.
+precedent.
+
+> **Correction (superseded by Task 2, section T2 below).** This section
+> originally concluded that "Sigma is the best-behaved filter on every metric
+> here". That conclusion was wrong. The annulus-mean kernel is uncompensated,
+> so `Y_Sigma` integrates power down to the box fundamental mode, which
+> differs between the 205 cMpc/h TNG300-1 box and the 681 cMpc/h FLAMINGO box;
+> Sigma is therefore not the same quantity in the two simulations and its
+> apparent superiority is contaminated by that difference. The compensated
+> filters are immune. Gate A rests on DSigma and Upsilon alone. See T2.
 
 ### R3. Gate A: inconclusive, not failed -- the small boxes are shot-noise limited
 
@@ -746,3 +752,169 @@ small apertures is a difference of two comparable numbers, so any error in the
 shot-noise model propagates straight into it. This mirrors, on the simulation
 side, exactly the caveat the theory note raises for the data measurement of
 `Y_gg` (Sec. 5.1, "Self-pairs" and "Fibre incompleteness").
+
+---
+
+## Tasks 2 and 3 (job 57633393, four retained simulations, 27 min)
+
+Scope set by the 2026-08-26 decisions: SIMBA and Illustris-1 dropped, xy/xz
+not run, apertures extended above 6 arcmin but not below 1 arcmin, R0 kept at
+1 arcmin, per-radius jackknife errors only (no covariance), CMB noise out of
+scope. ANTILLES and CAMELS deferred; CAMELS is ill-suited anyway because of
+its halo-mass limit.
+
+### T2. The filter set: the compensation argument, measured
+
+The annulus-mean ("Sigma") kernel is uncompensated. From the theory note's
+Sec. 5.3, `W_ann(k; R1, R2) = 2[R2 J1(kR2) - R1 J1(kR1)] / (k(R2^2 - R1^2))`,
+and since `J1(x) -> x/2`, `W_ann(k -> 0) -> 1`. So `Y_Sigma` integrates power
+down to the box fundamental, which differs between the 205 cMpc/h TNG300-1 box
+and the 681 cMpc/h FLAMINGO box. `W_DSigma(k -> 0) -> 0` by compensation.
+
+`check_filter_compensation.py` removes every mode longer than 205 cMpc/h --
+the modes TNG300-1 cannot represent -- and remeasures. At z ~ 0.5:
+
+Worst fractional shift, as amplitude Y / coefficient r / the Gate A ratio
+`r_bm/r_gb`:
+
+| run | Sigma | DSigma | Upsilon |
+|---|---|---|---|
+| TNG300-1 | 5.6e-16 / 6.7e-16 / 6.7e-16 | 6.7e-16 / 1.8e-15 / 1.8e-15 | 6.7e-16 / 1.1e-15 / 1.1e-15 |
+| L1_m9 fiducial | 8.7e-2 / 6.1e-3 / 4.9e-3 | 1.4e-4 / 2.1e-5 / 2.0e-5 | 1.4e-4 / 2.5e-5 / 2.0e-5 |
+| L1_m9 fgas-8sigma | 8.6e-2 / 6.6e-3 / 5.1e-3 | 1.5e-4 / 2.1e-5 / 1.9e-5 | 1.5e-4 / 2.7e-5 / 2.0e-5 |
+| L1_m9 Jet_fgas-4sigma | 8.6e-2 / 5.8e-3 / 4.6e-3 | 1.5e-4 / 1.9e-5 / 1.7e-5 | 1.6e-4 / 2.2e-5 / 1.6e-5 |
+
+TNG300-1 shifting by machine precision is the sanity check: at its own box
+scale there is nothing to remove.
+
+**The mechanism is confirmed at the amplitude level and is large.** `Y_Sigma`
+moves by 8.7 per cent, against 0.014 per cent for the compensated filters -- a
+factor of 600. Any cross-box use of Sigma *amplitudes* is invalid at the
+per-cent level, which matters for the Task 4 theory transfer of `Y_mm`.
+
+**It largely cancels in the coefficients.** `r_Sigma` moves by 0.6 per cent
+and the Gate A ratio by 0.5 per cent, against 2e-5 for the compensated
+filters. The cancellation happens because the removed large-scale modes have
+`r(k) ~ 1` and so contribute almost equally to the cross and to both autos.
+The compensated filters remain roughly 250 times less sensitive even here.
+
+**And it does not explain any of the cross-code disagreement.** Cutting both
+simulations at the same physical scale leaves the FLAMINGO-versus-TNG300-1
+difference essentially untouched, on every filter and on both the clean
+field-field coefficient and the metric Gate A actually uses:
+
+| quantity | filter | before cut | after cut |
+|---|---|---|---|
+| `r_em` | Sigma | 1.489e-2 | 1.561e-2 |
+| `r_em` | DSigma | 7.363e-2 | 7.363e-2 |
+| `r_em` | Upsilon | 1.575e-2 | 1.575e-2 |
+| `r_bm/r_gb` | Sigma | 1.140e-1 | 1.145e-1 |
+| `r_bm/r_gb` | DSigma | 3.546e-1 | 3.545e-1 |
+| `r_bm/r_gb` | Upsilon | 4.417e-1 | 4.417e-1 |
+
+(The `r_bm/r_gb` values are maxima over all fifteen apertures and are
+dominated by the unreliable 9.75 arcmin bin discussed in T5; the point here is
+the before/after comparison, which is null.) **The box difference does not
+explain the cross-code disagreement seen in Task 1, for any filter.**
+
+So the filter freeze to {DSigma, Upsilon} stands, but the justification is not
+the one that motivated it. It rests on two things:
+
+1. **Sigma amplitudes do not port between boxes** (8.7 per cent), which is
+   disqualifying for anything that compares or calibrates `Y_Sigma` across
+   simulations or against a theory prediction -- the Task 4 transfer of
+   `Y_mm` in particular.
+2. **The measurement-side argument of the note**: an uncompensated disk mean
+   is not measured on the lensing side, and on the kSZ side it reintroduces
+   large-scale CMB noise.
+
+It does *not* rest on Sigma's coefficients being contaminated. They largely
+are not, and the cross-code disagreement that made Sigma look best in Task 1
+survives the cut intact -- so that disagreement is astrophysical or
+statistical in origin, not geometric.
+
+A practical corollary for any future use of the compensated filters: their
+insensitivity holds only while the removed scale sits well above the aperture.
+Measured on synthetic fields, the Sigma-to-DSigma separation is 135x when the
+cut is 16x the aperture, 27x at 8x, and 5x at 4x. Production sits at 55x
+(TNG300-1's 535 arcmin box against a 9.75 arcmin largest aperture).
+
+The point-mass completion of Task 2(b) was **not** implemented and remains on
+the list: Singh et al.'s claim that Sigma-based coefficients localize better
+is therefore still untested here, and is the open "discussion item with Uros".
+
+### T3. Electrons versus all baryons
+
+`b` = gas + stars + BH, `e` = ionized gas. Neutral gas is not separated from
+stars, by decision; the split is the aggregate `b - e`.
+
+Correction factor `Y_gb / Y_ge(R)` at z ~ 0.5, at R = 1, 3.5 and 9.75 arcmin:
+
+| run | Sigma | DSigma | Upsilon |
+|---|---|---|---|
+| TNG300-1 | 1.003 / 1.011 / 1.023 | 1.206 / 1.047 / 1.023 | - / 1.002 / 1.000 |
+| L1_m9 fiducial | 1.024 / 1.028 / 1.040 | 1.611 / 1.111 / 1.057 | - / 1.015 / 1.021 |
+| L1_m9 fgas-8sigma | 1.056 / 1.023 / 1.039 | 2.268 / 1.205 / 1.069 | - / 1.058 / 1.027 |
+| L1_m9 Jet_fgas-4sigma | 1.041 / 1.024 / 1.030 | 1.748 / 1.149 / 1.062 | - / 1.041 / 1.027 |
+
+The electron field misses a large fraction of the baryon signal at small
+apertures under the compensated filter -- 21 per cent for TNG300-1 and 127 per
+cent for FLAMINGO fgas-8sigma at R = 1 arcmin -- and the correction is
+strongly scale-dependent, decaying to a few per cent by 9.75 arcmin. Crucially
+it is also strongly **feedback**-dependent: at R = 1 arcmin the DSigma
+correction spans 1.61 to 2.27 across the three FLAMINGO variants, a factor of
+1.4 within a single code.
+
+On cross-code stability of the ratio each framing would calibrate, the two are
+close. Worst over the data range: at z ~ 0.5 DSigma gives 0.081 for the baryon
+route against 0.094 for the electron route (14 per cent apart, nominally
+favouring baryons) and Upsilon 0.089 against 0.092 (2 per cent apart); at
+z ~ 0.26 all four agree within 8 per cent of each other. **None of these
+differences is meaningful**: each spread is itself taken over only two code
+families, so it is a single pairwise difference divided by sqrt(2) with no
+error bar, and comparing two such numbers cannot establish a preference.
+**The choice cannot be made on stability.**
+
+The deciding evidence is the correction factor itself. Targeting `P_bm/P_mm`
+requires carrying an electron-to-baryon transfer that is large and varies by
+~40 per cent between feedback variants of one code at the innermost aperture;
+targeting `P_em/P_mm` needs no such transfer, because the electron field is
+what the kSZ measures. **Recommendation: target `P_em/P_mm`**, and treat the
+stellar and neutral terms as a separate, externally constrained contribution
+in the suppression mapping, which is the first of the note's two framings.
+
+### T4. Gate A on the four retained simulations
+
+Over the observational range 1-6 arcmin, with the two code families:
+
+| filter | z ~ 0.5 | z ~ 0.26/0.30 |
+|---|---|---|
+| Sigma | 0.074 (PASS) | 0.083 (PASS) |
+| DSigma | 0.081 (PASS) | 0.112 (MARGINAL) |
+| Upsilon | 0.089 (PASS) | 0.132 (MARGINAL) |
+
+**These are sample standard deviations over two members, which for N = 2 is
+just the pairwise difference divided by sqrt(2).** The raw
+TNG300-1-versus-FLAMINGO differences are a factor sqrt(2) larger: 10.5, 11.4
+and 12.6 per cent at z ~ 0.5, and 11.7, 15.9 and 18.7 per cent at z ~ 0.26.
+The verdict therefore straddles the note's 10 per cent boundary depending on
+which statistic is quoted, and is consistently worse at the lower redshift.
+The honest reading is **borderline between the fixed-transfer and
+parametrized-r routes**, on an estimate from two code families that cannot
+support an error bar.
+
+### T5. What the aperture extension showed
+
+The ratio `r_bm/r_gb` rises monotonically with aperture -- 0.53 at 1 arcmin to
+about 0.85 by 9 arcmin for DSigma -- consistent with approaching unity on
+large scales as the theory note expects, and confirming that the departure
+from unity is a small-scale phenomenon.
+
+The largest bin is not trustworthy in the smaller box. TNG300-1's `Y_gg` falls
+anomalously at 9.75 arcmin (4.18 to 2.04, roughly halving, where FLAMINGO
+declines smoothly), which pushes its ratio from 0.83 to 0.63. The cause is
+sample size: with 4,307 galaxies the analytic self-pair subtraction removes 73
+per cent of the raw `Y_gg` at that aperture, so the residual is a difference
+of comparable numbers. All reported statistics are therefore split into the
+data range and the diagnostic extension, and the Gate A verdict uses the data
+range only.

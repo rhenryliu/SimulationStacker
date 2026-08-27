@@ -22,6 +22,8 @@ stack:
   min_radius: 1.0
   max_radius: 6.0
   num_radii: 9
+  # See r_profiles_z05.yaml for the rationale.
+  extend_max_radius: 10.0
   dr_arcmin: 0.75
   r0_arcmin: 1.0
 
@@ -43,26 +45,20 @@ plot:
   fig_name: 'r_profiles_z026'
   fig_type: 'pdf'
 
+# SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
+# 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number
+# densities, which is too few to measure Y_gg over 1'-6'. Their jackknife
+# errors on r_bm/r_gb exceeded the cross-code scatter itself, so they added
+# noise rather than a cross-code constraint. See docs/r_profiles_implementation_plan.md.
 simulations:
   - sim_type: 'IllustrisTNG'
     sims:
       - name: 'TNG300-1'
-        snapshot: 80          # z = 0.2613
+        snapshot: 80
         n_pixels: 4822
-      - name: 'Illustris-1'
-        snapshot: 116         # z = 0.2613
-        n_pixels: 1752
-  - sim_type: 'SIMBA'
-    sims:
-      - name: 'm100n1024'
-        snapshot: 136         # z = 0.2668
-        feedback: 's50'
-        n_pixels: 2349
   - sim_type: 'FLAMINGO'
     sims:
-      # Snapshot 71 is z = 0.3000, the BGS-matched FLAMINGO snapshot of the
-      # theory note.  Per-sim redshift is read from the snapshot header, so no
-      # override is needed here.
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
       - name: 'L1_m9'
         snapshot: 71
         feedback: 'L1_m9'

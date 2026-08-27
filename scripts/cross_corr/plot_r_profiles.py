@@ -250,12 +250,17 @@ def make_figure(runs, rows, out_path, title, show_errors=True):
     print(f'Figure saved to: {out_path}')
 
 
-def gate_a_metrics(runs, rows):
+def gate_a_metrics(runs, rows, data_max=None):
     """Compute the Task 1 deliverable metrics.
 
     Args:
         runs (list): Runs from :func:`load_runs`.
         rows (list): Row specification.
+        data_max (float, optional): Largest observationally accessible
+            aperture in arcmin.  Statistics are reported separately for
+            apertures at or below it and for the diagnostic extension above
+            it, and the Gate A verdict uses the data range only.  Defaults to
+            None, which treats every aperture as in range.
 
     Returns:
         dict: ``{'max_dev': {...}, 'scatter': {...}}`` where ``max_dev`` maps
@@ -308,11 +313,20 @@ def gate_a_metrics(runs, rows):
                                             message='Degrees of freedom <= 0')
                     mean = np.nanmean(stack, axis=0)
                     std = np.nanstd(stack, axis=0, ddof=1)
+                    frac = std / np.abs(mean)
+                    radii = subset[0]['radii']
+                    in_data = (np.ones(len(radii), dtype=bool) if data_max is
+                               None else radii <= data_max + 1e-9)
                     scatter[subset_name][filt] = {
-                        'radii': subset[0]['radii'],
+                        'radii': radii,
                         'mean': mean,
                         'std': std,
-                        'frac_std': std / np.abs(mean),
+                        'frac_std': frac,
+                        'in_data': in_data,
+                        'worst_data': (np.nanmax(frac[in_data])
+                                       if in_data.any() else np.nan),
+                        'worst_ext': (np.nanmax(frac[~in_data])
+                                      if (~in_data).any() else np.nan),
                         'members': [r['label'] for r in subset],
                     }
     return {'max_dev': max_dev, 'scatter': scatter}
@@ -379,12 +393,15 @@ def report_metrics(metrics, runs, rows, out_path):
             emit(f'  {filt}:')
             emit(f"    {'R [arcmin]':>11}  {'mean':>10}  {'std':>10}  "
                  f"{'frac. std':>10}")
-            for R, m, sd, fs in zip(s['radii'], s['mean'], s['std'],
-                                    s['frac_std']):
-                emit(f'    {R:11.3f}  {m:10.4f}  {sd:10.4f}  {fs:10.4f}')
-            with np.errstate(invalid='ignore'):
-                worst = np.nanmax(s['frac_std'])
-            emit(f'    worst fractional scatter: {worst:.4f}')
+            for R, m, sd, fs, ind in zip(s['radii'], s['mean'], s['std'],
+                                         s['frac_std'], s['in_data']):
+                tag = '' if ind else '   (extension)'
+                emit(f'    {R:11.3f}  {m:10.4f}  {sd:10.4f}  {fs:10.4f}{tag}')
+            worst = s['worst_data']
+            emit(f'    worst fractional scatter, data range: {worst:.4f}')
+            if np.isfinite(s['worst_ext']):
+                emit(f'    worst fractional scatter, extension: '
+                     f"{s['worst_ext']:.4f}")
             if np.isfinite(worst) and subset_name == 'cross-code':
                 if worst <= 0.10:
                     verdict = 'PASS  (<= 10%: fixed-transfer route)'
@@ -392,9 +409,12 @@ def report_metrics(metrics, runs, rows, out_path):
                     verdict = 'MARGINAL  (10-20%: parametrized-r route)'
                 else:
                     verdict = 'FAIL  (> 20%: revisit the estimator)'
-                emit(f'    Gate A on this filter: {verdict}')
+                emit(f'    Gate A on this filter (data range): {verdict}')
             emit()
 
+    emit('Note: apertures above the config max_radius are a diagnostic')
+    emit('extension, not observationally accessible, and the Gate A verdict')
+    emit('uses the data range only.')
     emit('Note: Upsilon is identically zero at R = R0 = 1 arcmin by')
     emit('construction, so its coefficient is undefined (NaN) in that bin and')
     emit('is excluded from both the curves and these metrics.')
@@ -448,12 +468,13 @@ def main(path2config, verbose=True):
                 '(e = ionized gas)')
 
     print()
-    metrics = gate_a_metrics(runs, BARYON_ROWS)
+    data_max = config.get('stack', {}).get('max_radius')
+    metrics = gate_a_metrics(runs, BARYON_ROWS, data_max=data_max)
     report_metrics(metrics, runs, BARYON_ROWS,
                    fig_dir / f'{fig_name}_metrics.txt')
 
     print()
-    metrics_e = gate_a_metrics(runs, ELECTRON_ROWS)
+    metrics_e = gate_a_metrics(runs, ELECTRON_ROWS, data_max=data_max)
     report_metrics(metrics_e, runs, ELECTRON_ROWS,
                    fig_dir / f'{fig_name}_metrics_electron.txt')
 

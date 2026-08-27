@@ -547,6 +547,98 @@ class TestLatticeBoundaryDegeneracy:
         )
 
 
+class TestFilterCompensation:
+    """Compensated filters must be insensitive to the largest modes.
+
+    The annulus-mean ('Sigma') kernel is uncompensated: its transform
+    W_ann(k; R1, R2) = 2[R2 J1(kR2) - R1 J1(kR1)] / (k(R2^2 - R1^2)) tends to 1
+    as k tends to 0, so the filtered amplitude integrates power down to the box
+    fundamental and is not comparable between boxes of different size.  The
+    DSigma and Upsilon kernels are compensated, with transforms vanishing at
+    k = 0.  This is the reason the production filter set is {DSigma, Upsilon}.
+    """
+
+    def test_kernel_transforms_have_the_expected_k_to_zero_limit(self):
+        """W_Sigma(k->0) -> 1/pixArea-normalized constant; W_DSigma(k->0) -> 0."""
+        pix = 0.25
+        for R in (1.0, 3.0):
+            for filt, expected_zero in (('Sigma', False), ('DSigma', True)):
+                kern = rp.build_aperture_kernel(N_PIX, pix, R, filt)
+                # The k=0 element of the transform is just the kernel sum.
+                total = kern.sum()
+                if expected_zero:
+                    assert abs(total) < 1e-12 * np.abs(kern).sum(), (
+                        f'{filt} at R={R} should be compensated, sum={total:.3e}')
+                else:
+                    assert total == pytest.approx(1.0 / pix ** 2, rel=1e-12), (
+                        f'{filt} at R={R} should integrate a uniform field to '
+                        f'1/pixArea, got {total:.6e}')
+
+    def test_highpass_leaves_compensated_amplitudes_alone(self):
+        """Removing the longest modes must barely move DSigma/Upsilon.
+
+        Sigma, by contrast, should shift substantially -- which is exactly why
+        it cannot be compared between simulation boxes of different size.
+        """
+        rng = np.random.default_rng(2718)
+        # Correlation length well below the cut, so there is genuine power on
+        # both sides of it.
+        d1 = smooth_gaussian_field(N_PIX, 8.0, rng)
+        d2 = 0.85 * d1 + 0.35 * smooth_gaussian_field(N_PIX, 8.0, rng)
+        pix = 0.25
+        radii = np.array([2.0, 4.0])
+        # Cut at half the map, i.e. 16x the largest aperture.  The compensated
+        # filters are only insensitive when the cut sits well above the
+        # aperture scale, since their transforms vanish at k=0 but only
+        # polynomially: measured separation between Sigma and DSigma is 135x at
+        # this ratio, 27x at 8x, and 5x at 4x.  Production is safer still --
+        # TNG300-1's 205 cMpc/h box is 535 arcmin against a largest aperture of
+        # 9.75 arcmin, a ratio of 55.
+        cut = 0.5 * N_PIX * pix
+
+        full = rp.compute_Y_matrix({'a': d1, 'b': d2}, pix, radii=radii)
+        cut_mat = rp.compute_Y_matrix(
+            {'a': rp.highpass_field(d1, pix, cut),
+             'b': rp.highpass_field(d2, pix, cut)}, pix, radii=radii)
+
+        shifts = {}
+        for filt in rp.FILTERS:
+            mask = defined_mask(filt, radii)
+            a = rp.get_Y(full, filt, 'a', 'b')[mask]
+            b = rp.get_Y(cut_mat, filt, 'a', 'b')[mask]
+            shifts[filt] = float(np.max(np.abs(b / a - 1.0)))
+
+        assert shifts['DSigma'] < 1e-3, (
+            f"DSigma is compensated and should be insensitive to the low-k "
+            f"cut, got {shifts['DSigma']:.3e}")
+        assert shifts['Upsilon'] < 1e-3, (
+            f"Upsilon is compensated and should be insensitive to the low-k "
+            f"cut, got {shifts['Upsilon']:.3e}")
+        assert shifts['Sigma'] > 30 * shifts['DSigma'], (
+            f"Sigma is uncompensated and should be far more sensitive than "
+            f"DSigma, got Sigma={shifts['Sigma']:.3e} vs "
+            f"DSigma={shifts['DSigma']:.3e}")
+
+    def test_highpass_preserves_zero_mean_and_removes_the_modes(self):
+        rng = np.random.default_rng(11)
+        d = smooth_gaussian_field(256, 8.0, rng)
+        pix = 0.25
+        cut = 0.25 * 256 * pix
+        out = rp.highpass_field(d, pix, cut)
+        assert abs(out.mean()) < 1e-12
+        spec = np.abs(np.fft.rfft2(out))
+        kx = 2 * np.pi * np.fft.fftfreq(256, d=pix)
+        ky = 2 * np.pi * np.fft.rfftfreq(256, d=pix)
+        k2 = kx[:, None] ** 2 + ky[None, :] ** 2
+        assert spec[k2 < (2 * np.pi / cut) ** 2].max() < 1e-10
+
+    def test_highpass_rejects_a_cut_larger_than_the_map(self):
+        rng = np.random.default_rng(12)
+        d = smooth_gaussian_field(64, 4.0, rng)
+        with pytest.raises(ValueError, match='exceeds the map size'):
+            rp.highpass_field(d, 0.25, 1e4)
+
+
 class TestSupportingBehaviour:
 
     def test_jackknife_blocks_tile_the_map(self):

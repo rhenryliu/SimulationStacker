@@ -294,6 +294,63 @@ def build_aperture_kernel(n_pixels: int, pixel_arcmin: float, R: float,
     return kernel
 
 
+def highpass_field(delta: np.ndarray, pixel_arcmin: float,
+                   cut_arcmin: float) -> np.ndarray:
+    """Zero every Fourier mode with a wavelength longer than ``cut_arcmin``.
+
+    Used to test how much of a filtered amplitude comes from modes that a
+    smaller simulation box cannot represent.  The annulus-mean (``'Sigma'``)
+    kernel is uncompensated -- its transform tends to 1 as k tends to 0, since
+    ``W_ann(k; R1, R2) = 2[R2 J1(kR2) - R1 J1(kR1)] / (k(R2^2 - R1^2))`` and
+    ``J1(x) -> x/2`` -- so ``Y_Sigma`` integrates power down to the box
+    fundamental and is not comparable between boxes of different size.  The
+    compensated ``'DSigma'`` and ``'Upsilon'`` kernels have transforms that
+    vanish at k = 0 and should be insensitive to this cut.
+
+    The k = 0 mode is left at zero, so the output keeps zero mean.
+
+    Args:
+        delta (np.ndarray): 2D overdensity map on a square periodic grid.
+        pixel_arcmin (float): Angular pixel size in arcmin.
+        cut_arcmin (float): Wavelength cut in arcmin.  Modes with
+            ``|k| < 2*pi/cut_arcmin`` are removed.
+
+    Returns:
+        np.ndarray: High-pass filtered map, same shape, dtype float64.
+
+    Raises:
+        ValueError: If ``delta`` is not a square 2D map, if ``cut_arcmin`` is
+            not positive, or if it exceeds the map size, in which case it
+            falls below the fundamental mode and would remove no power.
+    """
+    if not cut_arcmin > 0:
+        raise ValueError(f"cut_arcmin must be positive, got {cut_arcmin!r}.")
+    if delta.ndim != 2 or delta.shape[0] != delta.shape[1]:
+        raise ValueError(f"delta must be a square 2D map, got shape "
+                         f"{delta.shape}.")
+    n = delta.shape[0]
+    box_arcmin = n * pixel_arcmin
+    if cut_arcmin > box_arcmin:
+        # A cut longer than the box sits below the fundamental mode, so it
+        # would remove nothing but the (already zero) k=0 bin.  That is
+        # always a configuration error rather than a meaningful request.
+        raise ValueError(
+            f"cut_arcmin={cut_arcmin:.3f}' exceeds the map size "
+            f"{box_arcmin:.3f}', so it lies below the fundamental mode and "
+            f"would remove no power."
+        )
+
+    k_cut = 2.0 * np.pi / cut_arcmin
+    kx = 2.0 * np.pi * np.fft.fftfreq(n, d=pixel_arcmin)
+    ky = 2.0 * np.pi * np.fft.rfftfreq(n, d=pixel_arcmin)
+    k2 = kx[:, None] ** 2 + ky[None, :] ** 2
+
+    spec = scipy.fft.rfft2(np.asarray(delta, dtype=np.float64),
+                           workers=_FFT_WORKERS)
+    spec[k2 < k_cut ** 2] = 0.0
+    return scipy.fft.irfft2(spec, s=(n, n), workers=_FFT_WORKERS)
+
+
 def lattice_boundary_margin(edge_arcmin: float, pixel_arcmin: float
                             ) -> Tuple[float, float]:
     """Return how close an aperture edge sits to a realizable lattice shell.

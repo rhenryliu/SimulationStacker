@@ -31,6 +31,7 @@ Usage
 import argparse
 import sys
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +63,42 @@ def sim_label(sim_type, name, feedback):
     if sim_type == 'FLAMINGO' and feedback == name:
         return f'{name}_fiducial'
     return f'{name}_{feedback}'
+
+
+def aperture_radii(cfg):
+    """Build the aperture grid: the data-matched bins plus any extension.
+
+    The bins over ``[min_radius, max_radius]`` are the observationally
+    accessible range and are held fixed, so results there never shift when the
+    extension changes.  ``extend_max_radius`` appends further bins above
+    ``max_radius`` at the same spacing, as a diagnostic of the large-aperture
+    behaviour of the coefficients (simulations carry no beam, so nothing stops
+    us going above the data range; going *below* 1 arcmin is not useful
+    because the data are hard-limited by resolution there).
+
+    Args:
+        cfg (dict): The ``stack`` config block.  Uses ``min_radius``,
+            ``max_radius``, ``num_radii`` and the optional
+            ``extend_max_radius``.
+
+    Returns:
+        np.ndarray: Aperture radii in arcmin, strictly increasing.
+    """
+    base = np.linspace(float(cfg.get('min_radius', 1.0)),
+                       float(cfg.get('max_radius', 6.0)),
+                       int(cfg.get('num_radii', 9)))
+    extend_to = cfg.get('extend_max_radius')
+    if extend_to is None:
+        return base
+    if float(extend_to) <= base[-1]:
+        warnings.warn(
+            f"extend_max_radius={extend_to} is not above max_radius="
+            f"{base[-1]}; no extension bins will be added.", stacklevel=2)
+        return base
+    step = base[1] - base[0]
+    # Half-step tolerance so the endpoint is included when it lands on a bin.
+    extension = np.arange(base[-1] + step, float(extend_to) + 0.5 * step, step)
+    return np.concatenate([base, extension])
 
 
 def load_component_fields(stacker, n_pixels, projection, cfg, verbose=True):
@@ -180,9 +217,7 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
     theta_arcmin = comoving_to_arcmin(lbox, z_true, cosmo=stacker.cosmo)
     pixel_arcmin = theta_arcmin / n_pixels
 
-    radii = np.linspace(float(cfg.get('min_radius', 1.0)),
-                        float(cfg.get('max_radius', 6.0)),
-                        int(cfg.get('num_radii', 9)))
+    radii = aperture_radii(cfg)
     dr = float(cfg.get('dr_arcmin', rp.DR_ARCMIN))
     r0 = float(cfg.get('r0_arcmin', rp.R0_ARCMIN))
     n_jk_side = int(cfg.get('n_jk_side', rp.N_JK_SIDE))

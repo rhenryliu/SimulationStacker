@@ -843,8 +843,15 @@ class SimulationStacker(object):
         """Load the FoF halo catalogue for the current simulation and snapshot.
 
         Returns:
-            dict: Halo catalogue with keys 'GroupMass' (M_sun/h), 'GroupPos'
-                (kpc/h, shape (nHalos, 3)), and 'GroupRad' (kpc/h).
+            dict: Halo catalogue with keys 'GroupMass' (FoF total mass in
+                M_sun/h, the quantity halo selection runs on), 'GroupPos'
+                (kpc/h, shape (nHalos, 3)), 'GroupRad' (R200m in kpc/h), and
+                the spherical-overdensity diagnostics 'GroupMass_m200m',
+                'GroupMass_m200c' and 'GroupMass_TopHat' (M_sun/h, NaN where
+                the catalogue did not compute them, and None for the
+                definitions SIMBA does not record). See
+                :func:`loadIO.load_halos` for the definitions, the per-suite
+                sources and the measured missing fractions.
         """
         return load_halos(self.simPath, self.snapshot, self.simType, 
                          sim_name=self.sim, header=self.header)

@@ -910,7 +910,8 @@ def project_positions(positions: np.ndarray, projection: str) -> np.ndarray:
 
 def select_sham_subhalos(stacker, target_number: float,
                          parent_mass_upper: Optional[float] = 5e14,
-                         subhalos: Optional[dict] = None) -> np.ndarray:
+                         subhalos: Optional[dict] = None,
+                         parents: Optional[dict] = None) -> np.ndarray:
     """Select a SHAM galaxy sample, matching the existing stacking pipeline.
 
     Replicates the ``use_subhalos=True`` branch of
@@ -932,6 +933,9 @@ def select_sham_subhalos(stacker, target_number: float,
             to 5e14.
         subhalos (dict, optional): Pre-loaded subhalo catalogue, to avoid a
             second expensive read.  Defaults to None (loaded internally).
+        parents (dict, optional): Pre-loaded halo catalogue, likewise.  Only
+            consulted when ``parent_mass_upper`` is not None.  Defaults to
+            None (loaded internally).
 
     Returns:
         np.ndarray: Integer indices into the subhalo catalogue, sorted by
@@ -942,7 +946,8 @@ def select_sham_subhalos(stacker, target_number: float,
     mstar = subhalos['SubhaloMStar']
 
     if parent_mass_upper is not None:
-        parents = stacker.loadHalos()
+        if parents is None:
+            parents = stacker.loadHalos()
         parent_mass = parents['GroupMass'][subhalos['SubhaloGrNr']]
         valid = np.where(parent_mass <= parent_mass_upper)[0]
         local = select_halos(mstar[valid], 'abundance',

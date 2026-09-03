@@ -330,7 +330,7 @@ def main(path2config, verbose=True):
             # Set column titles on top row
             if row_idx == 0:
                 if col_idx < 3:
-                    ax.set_title(f'Masked ($R_{{mask}} = {mask_configs[col_idx]["maskRadii"]:.0f} R_{{200c}}$)')
+                    ax.set_title(f'Masked ($R_{{mask}} = {mask_configs[col_idx]["maskRadii"]:.0f} R_{{200m}}$)')
                 else:
                     ax.set_title('No Masking')
     

@@ -136,8 +136,87 @@ def load_flamingo_header(snap_file):
     return header
 
 
+def _nan_where_zero(arr):
+    """Replace exact zeros with NaN, preserving the input dtype.
+
+    All three halo catalogues write 0.0 into a mass field that was not
+    computed for that halo (see :func:`load_halos` for the measured missing
+    fractions). Returning NaN instead makes an accidental ``np.mean`` produce
+    NaN rather than a silently low number; use ``np.nanmean`` with an explicit
+    valid count.
+
+    Args:
+        arr (np.ndarray): Float array of masses.
+
+    Returns:
+        np.ndarray: Copy of arr with zeros replaced by NaN.
+    """
+    return np.where(arr == 0.0, np.nan, arr)
+
+
 def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
     """Load halo data for the specified simulation type.
+
+    Halo mass definitions
+    ---------------------
+    ``GroupMass`` is the **FoF total mass** in all three suites: the sum over
+    every particle of every type linked into the friends-of-friends group
+    (linking length b=0.2 on the dark matter, baryons attached to their
+    nearest DM particle). It has no spherical-overdensity boundary, so it
+    extends beyond R200m and includes unbound material and, occasionally,
+    bridged neighbours. It is the quantity halo selection runs on
+    (:func:`halos.select_massive_halos`), so it must stay comparable between
+    suites.
+
+    The three ``GroupMass_*`` keys are spherical-overdensity (SO) masses,
+    provided for diagnostics and cross-suite comparison. An SO mass is the
+    total mass inside the radius enclosing a mean density of Delta times a
+    reference density:
+
+    - ``GroupMass_m200m``: Delta = 200 x the mean matter density. Matches
+      ``GroupRad``, which is the corresponding R200m in every suite.
+    - ``GroupMass_m200c``: Delta = 200 x the critical density. Denser
+      threshold than 200m, so M200c < M200m.
+    - ``GroupMass_TopHat``: Delta = Delta_c(z) x the critical density, with
+      Delta_c from the Bryan & Norman (1998) fit to spherical top-hat
+      collapse. The "200" in TNG's field name ``Group_M_TopHat200`` is a
+      misnomer: at z=0.5 with Omega_m=0.31, Delta_c ~ 139 rho_crit, versus
+      200 rho_mean ~ 120 rho_crit, which is why in practice
+      M200c < M_TopHat < M200m < GroupMass. FLAMINGO's ``SO/BN98`` is the
+      same definition; CAESAR records no top-hat mass, so it is None for
+      SIMBA.
+
+    Per-suite sources (IllustrisTNG/Illustris | SIMBA CAESAR | FLAMINGO SOAP-HBT):
+
+    - ``GroupMass``:        GroupMass | masses.total | InputHalos/FOF/Masses
+    - ``GroupRad``:         Group_R_Mean200 | virial_quantities.r200 |
+      SO/200_mean/SORadius
+    - ``GroupMass_m200m``:  Group_M_Mean200 | None | SO/200_mean/TotalMass
+    - ``GroupMass_m200c``:  Group_M_Crit200 | virial_quantities.m200c |
+      SO/200_crit/TotalMass
+    - ``GroupMass_TopHat``: Group_M_TopHat200 | None | SO/BN98/TotalMass
+
+    Missing values
+    --------------
+    Every catalogue stores 0.0 where a quantity was not computed. The three
+    ``GroupMass_*`` keys map those zeros to NaN via :func:`_nan_where_zero`;
+    ``GroupMass`` deliberately keeps its zeros. That asymmetry is load-bearing:
+    :func:`halos.select_massive_halos` ranks with ``np.argsort(m)[::-1]``, and
+    NaN sorts *last* in ascending order, so it would land *first* after the
+    reversal and be preferentially selected, with the cumulative average
+    poisoned to NaN. Zeros sort to the bottom and are harmless.
+
+    Measured missing fractions at the snapshots in use (z=0.5):
+
+    - TNG300-1 ``Group_M_TopHat200`` 31.2%, ``Group_M_Crit200`` 31.3%
+      (small groups with no SO radius); none within a 10^13.22 Msun/h sample.
+    - SIMBA m50n512 ``virial_quantities.m200c`` 35.8%; none within the sample.
+    - FLAMINGO ``SO/BN98/TotalMass`` 68.6% -- exactly the centrals with fewer
+      than 100 bound particles, a SOAP threshold that ``SO/200_mean`` and
+      ``SO/200_crit`` do not share (those are populated down to ~2 particles).
+    - FLAMINGO ``GroupMass`` (FoF) is 0.0 for the 8.0% of centrals that are
+      hostless (``InputHalos/HBTplus/HostFOFId < 0``), all of them below the
+      100-particle threshold. None reach a 10^13.22 Msun/h sample.
 
     Args:
         sim_path (str): Base path to the simulation.
@@ -147,15 +226,22 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         header (dict, optional): Simulation header (required for SIMBA).
 
     Returns:
-        dict: A dictionary containing halo properties (e.g., mass, position, radius).
+        dict: Halo catalogue with keys 'GroupPos' (ckpc/h, shape (nHalos, 3)),
+            'GroupRad' (R200m in ckpc/h), 'GroupMass' (FoF total in Msun/h),
+            and the SO masses 'GroupMass_m200m', 'GroupMass_m200c' and
+            'GroupMass_TopHat' (Msun/h, NaN where not computed, None for the
+            definitions SIMBA does not record).
     """
     if sim_type == 'IllustrisTNG':
         haloes = {}
         haloes_cat = _require_il().groupcat.loadHalos(sim_path, snapshot)
         haloes['GroupPos'] = haloes_cat['GroupPos']
-        haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # Convert to Msun/h
+        haloes['GroupMass'] = haloes_cat['GroupMass'] * 1e10  # FoF total, Msun/h
         # haloes['GroupRad'] = haloes_cat['Group_R_TopHat200']
         haloes['GroupRad'] = haloes_cat['Group_R_Mean200']
+        haloes['GroupMass_m200m'] = _nan_where_zero(haloes_cat['Group_M_Mean200'] * 1e10)
+        haloes['GroupMass_m200c'] = _nan_where_zero(haloes_cat['Group_M_Crit200'] * 1e10)
+        haloes['GroupMass_TopHat'] = _nan_where_zero(haloes_cat['Group_M_TopHat200'] * 1e10)
         del haloes_cat  # free memory
 
     elif sim_type == 'SIMBA':
@@ -167,9 +253,18 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         # Load entire halo catalog - this is doable since catalogs are small
         haloes_cat = load_as_dict(halo_path, 'halo_data')
         haloes['GroupPos'] = haloes_cat['pos'] * header['HubbleParam']  # kpc/h
+        # masses.total is CAESAR's FoF total; verified to equal
+        # masses.dm + masses.gas + masses.stellar to four significant figures.
         haloes['GroupMass'] = haloes_cat['dicts']['masses.total'] * header['HubbleParam']  # Msun/h
         # GroupRad here intentionally uses r200 (mean-overdensity radius) rather than r200c (critical-overdensity radius)
         haloes['GroupRad'] = haloes_cat['dicts']['virial_quantities.r200'] * header['HubbleParam']  # kpc/h
+        # CAESAR records m200c/m500c/m2500c but no mean-overdensity mass (there
+        # is an r200 radius with no matching m200) and no top-hat mass, so both
+        # are None rather than a recomputed approximation.
+        haloes['GroupMass_m200m'] = None
+        haloes['GroupMass_m200c'] = _nan_where_zero(
+            haloes_cat['dicts']['virial_quantities.m200c'] * header['HubbleParam'])  # Msun/h
+        haloes['GroupMass_TopHat'] = None
         del haloes_cat  # free memory
 
     elif sim_type == 'FLAMINGO':
@@ -183,14 +278,27 @@ def load_halos(sim_path, snapshot, sim_type, sim_name=None, header=None):
         # Only centrals are kept, matching the FoF-halo semantics of the TNG
         # group catalog (SOAP lists every subhalo, with spherical-overdensity
         # properties zeroed for satellites).
-        # GroupRad/GroupMass use SO/200_mean to match TNG's Group_R_Mean200 convention.
+        # GroupMass uses InputHalos/FOF/Masses, the SWIFT friends-of-friends
+        # host mass -- the same object as TNG's GroupMass and CAESAR's
+        # masses.total, and the reason this is not an SO mass like it used to
+        # be. Empirically FoF/M200m has median 0.986 and 16-84% spread
+        # 0.935-1.160 here, against 0.948 and 0.899-1.127 for TNG300-1's
+        # GroupMass/Group_M_Mean200: the same sub-unity median and the same
+        # long high tail from FoF bridging.
+        # GroupRad stays SO/200_mean/SORadius, matching TNG's Group_R_Mean200.
         with h5py.File(soap_path, 'r') as f:
             is_central = f['InputHalos/IsCentral'][:].astype(bool)
             haloes['GroupPos'] = f['InputHalos/HaloCentre'][:][is_central] * 1000.0 * h  # ckpc/h
-            haloes['GroupMass'] = (f['SO/200_mean/TotalMass'][:][is_central].astype(np.float64)
+            haloes['GroupMass'] = (f['InputHalos/FOF/Masses'][:][is_central].astype(np.float64)
                                    * 1e10 * h)  # Msun/h
             haloes['GroupRad'] = (f['SO/200_mean/SORadius'][:][is_central].astype(np.float64)
                                   * 1000.0 * h)  # ckpc/h
+            haloes['GroupMass_m200m'] = _nan_where_zero(
+                f['SO/200_mean/TotalMass'][:][is_central].astype(np.float64) * 1e10 * h)  # Msun/h
+            haloes['GroupMass_m200c'] = _nan_where_zero(
+                f['SO/200_crit/TotalMass'][:][is_central].astype(np.float64) * 1e10 * h)  # Msun/h
+            haloes['GroupMass_TopHat'] = _nan_where_zero(
+                f['SO/BN98/TotalMass'][:][is_central].astype(np.float64) * 1e10 * h)  # Msun/h
         del is_central
 
     return haloes

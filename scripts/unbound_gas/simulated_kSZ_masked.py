@@ -26,6 +26,9 @@ sys.path.append('../src/')
 from stacker import SimulationStacker
 from utils import arcmin_to_comoving, comoving_to_arcmin
 from halos import select_massive_halos
+# Sibling module in this directory (Python puts the running script's own
+# directory on sys.path); must come after the '../src/' append above.
+from halo_stats import sample_stats, format_stats, format_table, write_stats_file
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il # type: ignore
@@ -94,6 +97,13 @@ def main(path2config, verbose=True):
     projection = stack_config.get('projection', 'xy')
     use_subhalos = stack_config.get('use_subhalos', False)
 
+    # Halo-selection parameters. The defaults match stackMap's own defaults, so
+    # configs that set none of these keep their existing sample; reading them
+    # here lets the reported sample be the one that is actually stacked.
+    halo_abundance_target = stack_config.get('halo_abundance_target', 5e-4)
+    halo_mass_avg = stack_config.get('halo_mass_avg', 10 ** (13.22))
+    halo_mass_upper = stack_config.get('halo_mass_upper', 5 * 10 ** (14))
+
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
 
@@ -128,7 +138,14 @@ def main(path2config, verbose=True):
     ]
     
     t0 = time.time()
-    
+
+    # Halo selection does not depend on the masking radius, so it is computed
+    # once per simulation (on the first column) and reused for the rest. The
+    # stored index array is handed to stackMap so the reported sample and the
+    # stacked sample cannot drift apart.
+    halo_masks = {}
+    stats_rows = []
+
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
         maskHaloes = mask_config['maskHaloes']
@@ -222,9 +239,26 @@ def main(path2config, verbose=True):
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
+                # Select the sample (and report its halo masses) once per
+                # simulation, then reuse it for every masking column.
+                sim_key = (sim_type_name, sim['name'], sim.get('feedback'))
+                if sim_key not in halo_masks:
+                    halo_masks[sim_key], sim_stats = sample_stats(
+                        stacker, sim_name, use_subhalos=use_subhalos,
+                        halo_abundance_target=halo_abundance_target,
+                        halo_mass_avg=halo_mass_avg,
+                        halo_mass_upper=halo_mass_upper)
+                    stats_rows.append(sim_stats)
+                    if verbose:
+                        print(format_stats(sim_stats), flush=True)
+
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                         save=saveField, load=loadField, radDistance=radDistance,
                                         use_subhalos=use_subhalos,
+                                        halo_abundance_target=halo_abundance_target,
+                                        halo_mass_avg=halo_mass_avg,
+                                        halo_mass_upper=halo_mass_upper,
+                                        halo_mask=halo_masks[sim_key],
                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                 # Plotting
@@ -307,7 +341,7 @@ def main(path2config, verbose=True):
             # Set column titles on top row
             if row_idx == 0:
                 if col_idx < 3:
-                    ax.set_title(f'Masked ($R_{{mask}} = {mask_configs[col_idx]["maskRadii"]:.0f} R_{{200c}}$)')
+                    ax.set_title(f'Masked ($R_{{mask}} = {mask_configs[col_idx]["maskRadii"]:.0f} R_{{200m}}$)')
                 else:
                     ax.set_title('No Masking')
     
@@ -322,7 +356,26 @@ def main(path2config, verbose=True):
                  fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
-    
+
+    # Halo-sample summary: to stdout (so it lands in the SLURM .out) and to a
+    # text file alongside the figure.
+    selection = (f"SHAM on SubhaloMStar, target n = {halo_abundance_target} (cMpc/h)^-3, "
+                 f"parent-mass cap {halo_mass_upper:.3e} Msun/h"
+                 if use_subhalos else
+                 f"mass cut, target <M> = {halo_mass_avg:.4e} Msun/h, "
+                 f"upper bound {halo_mass_upper:.3e} Msun/h")
+    preamble = [
+        f'Halo samples for {figName}_{pType}_z{redshift}_masking_comparison.{figType}',
+        f'config          : {path2config}',
+        f'particle type   : {pType}    filter: {filterType}    projection: {projection}',
+        f'redshift        : {redshift}',
+        f'selection       : {selection}',
+    ]
+    table = format_table(stats_rows)
+    print('\n' + '\n'.join(preamble) + '\n\n' + table + '\n', flush=True)
+    write_stats_file(figPath / f'{figName}_{pType}_z{redshift}_halo_masses.txt',
+                     stats_rows, preamble=preamble)
+
     print('Done!!! time taken = ', time.time() - t0, ' seconds')
 
 if __name__ == "__main__":

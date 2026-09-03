@@ -25,7 +25,7 @@ stack:
   # See r_profiles_z05.yaml for the rationale.
   extend_max_radius: 10.0
   dr_arcmin: 0.75
-  r0_arcmin: 1.0
+  r0_arcmin: 2.0
 
   n_jk_side: 4
 
@@ -43,7 +43,7 @@ plot:
   npz_path: '../data/r_profiles/'
   fig_path: '../figures/'
   fig_name: 'r_profiles_z026'
-  fig_type: 'pdf'
+  fig_type: 'png'
 
 # SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
 # 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number

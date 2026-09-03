@@ -30,7 +30,7 @@ stack:
   # Not extended below 1', where the data are resolution-limited.
   extend_max_radius: 10.0
   dr_arcmin: 0.75        # annulus width of the compensated filter
-  r0_arcmin: 1.0         # Upsilon reference radius
+  r0_arcmin: 2.0         # Upsilon reference radius
 
   n_jk_side: 4           # 4x4 = 16 leave-one-out spatial jackknife patches
 
@@ -51,7 +51,7 @@ plot:
   npz_path: '../data/r_profiles/'
   fig_path: '../figures/'
   fig_name: 'r_profiles_z05'
-  fig_type: 'pdf'
+  fig_type: 'png'
 
 # SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
 # 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number

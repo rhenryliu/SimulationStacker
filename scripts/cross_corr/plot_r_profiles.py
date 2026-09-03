@@ -463,8 +463,8 @@ def main(path2config, verbose=True):
                 'Baryon-matter cross-correlation coefficients '
                 '(b = gas + stars + BH)')
     make_figure(runs, ELECTRON_ROWS,
-                fig_dir / f'{fig_name}_electron.{fig_type}',
-                'Electron-matter cross-correlation coefficients '
+                fig_dir / f'{fig_name}_tau.{fig_type}',
+                'Tau-matter cross-correlation coefficients '
                 '(e = ionized gas)')
 
     print()

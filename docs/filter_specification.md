@@ -37,16 +37,31 @@ field the kSZ actually measures avoids carrying it.
 With Σ̄(<R) the disk mean and Σ̄(R, R+δR) the annulus mean:
 
     ΔΣ(R)      = Σ̄(<R) − Σ̄(R, R + δR),        δR = 0.75 arcmin
-    Υ(R; R₀)   = ΔΣ(R) − (R₀/R)² ΔΣ(R₀),      R₀ = 1 arcmin
+    Υ(R; R₀)   = ΔΣ(R) − (R₀/R)² ΔΣ(R₀),      R₀ per config (see below)
     Σ(R)       = Σ̄(R, R + δR)                  [diagnostic only]
 
 The annulus mean, not the local value Σ(R), is the second term of ΔΣ. This
 matches the existing kSZ pipeline; Singh et al.'s formulas use the local value
 and are the template, not the specification.
 
-Υ is identically zero at R = R₀, so its coefficient is undefined (0/0) in that
-bin. That bin is excluded from all curves and metrics rather than special-cased
-in the library.
+**Υ carries information only above R₀.** That is the point of the filter — it
+nulls everything below its reference radius — and it makes every bin with
+R ≤ R₀ unusable, in two distinct ways:
+
+- at R = R₀ the amplitude is identically zero, so the coefficient is a genuine
+  0/0;
+- below R₀ the factor (R₀/R)² exceeds one and the reference term
+  over-subtracts. The amplitude is finite and the coefficient is defined, but
+  it is not the estimator's quantity. In the production runs it simply flips
+  sign: at R₀ = 2′ both `r_gb` and `r_bm` come out near −1 at R = 1′ and 1.625′.
+
+`rprofiles.compute_Y_matrix` returns the raw algebra and does not special-case
+either. `rprofiles.upsilon_defined_mask(radii, r0)` is the single definition of
+which bins survive, and `plot_r_profiles.series` applies it once so the curves
+and the Gate A metrics can never disagree about it.
+
+The reference radius is **not** a global constant: it is read from each run's
+`meta_r0_arcmin`. The configs moved it from 1′ to 2′ (commit 91e39d7).
 
 ## 3. Aperture grid
 
@@ -152,6 +167,25 @@ signal at R = 1′ and 1.9 times at 6′, so `Y_gg` at small apertures is a
 difference of comparable numbers and any error in the shot-noise model
 propagates directly into `r_gb`. The same caveat applies on the data side
 (theory note Sec. 5.1, self-pairs and fibre incompleteness).
+
+## 7a. The coefficients are not bounded by one
+
+`r = Y_XY / sqrt(Y_XX Y_YY)` looks like a correlation coefficient, and the
+measured `r_bm` sits slightly *above* unity — 1.006 to 1.013 across the
+apertures for TNG300-1, for Σ and Υ alike. That is not a bug and not noise.
+
+Cauchy-Schwarz bounds `|r| ≤ 1` only when the map
+`(X, Y) ↦ Y_XY` is a positive-semidefinite bilinear form, which requires
+`Ŵ(k) ≥ 0` for every k. None of the three kernels satisfies that: measured over
+k = 0 to 40 arcmin⁻¹ at R = 1′, `Ŵ` is negative over 51 per cent of the range
+for Σ, 45 per cent for ΔΣ and 50 per cent for Υ. All three oscillate, because
+they are built from `J₁`.
+
+So `r > 1` is permitted by the algebra and should not be read as a failure of
+the measurement. Singh et al. (2020) Fig. 1 shows the same thing on the lensing
+side, with `r_cc` reaching ≈ 1.3 for Υ. What the quantity remains is a
+well-defined, convention-free ratio of filtered amplitudes — which is all the
+estimator of Eq. (4) needs.
 
 ## 8. Errors
 

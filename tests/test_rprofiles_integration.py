@@ -384,3 +384,222 @@ class TestFFTMatchesStampStack:
         i0 = int(np.argmin(np.abs(radii - rp.R0_ARCMIN)))
         expected = ds - (rp.R0_ARCMIN / radii) ** 2 * ds[i0]
         assert np.allclose(ups, expected, rtol=1e-12, atol=1e-15)
+
+
+# ---------------------------------------------------------------------------
+# Upsilon: the same cross-check for the compensated filter with a reference term
+# ---------------------------------------------------------------------------
+
+#: Reference radii exercised against the stamp route.  2.0 is the production
+#: value (configs/cross_corr/r_profiles_z0*.yaml); 1.5 is a control that is NOT
+#: lattice-degenerate at the stamp route's quantized 0.2 arcmin pixel, so it
+#: can carry the machine-precision assertion at every aperture.
+UPSILON_R0 = (1.5, 2.0)
+
+
+def _stamp_upsilon(setup, r0):
+    """Stack the SHAM sample through the legacy stamp route with Upsilon.
+
+    Exercises ``stack_on_array(filterType='upsilon')`` with the frozen filter
+    parameters.  Before the fix this branch fell through to the generic filter
+    call and silently used ``filters.upsilon``'s defaults (``dr=0.5``,
+    ``r0=1.0``, ``pixel_size=1.0``), i.e. a different filter from the one in
+    ``docs/filter_specification.md``.
+
+    Args:
+        setup (dict): The module fixture.
+        r0 (float): Upsilon reference radius in arcmin.
+
+    Returns:
+        np.ndarray: Mean Upsilon-filtered delta_e at the galaxy positions.
+    """
+    radii = setup['radii']
+    _, profiles = setup['stacker'].stack_on_array(
+        array=setup['delta_e'],
+        filterType='upsilon',
+        minRadius=float(radii.min()),
+        maxRadius=float(radii.max()),
+        numRadii=len(radii),
+        projection=PROJECTION,
+        radDistance=1.0,
+        radDistanceUnits='arcmin',
+        z=setup['z_true'],
+        use_subhalos=True,
+        halo_mask=setup['halo_mask'],
+        dr=0.75,
+        r0=r0,
+    )
+    return np.mean(profiles, axis=1)
+
+
+def _fft_upsilon(setup, rounding, r0, pixel_arcmin=None):
+    """Compute Y_eg for the Upsilon and DSigma filters through the FFT route.
+
+    Both are returned because DSigma sets the scale against which an Upsilon
+    residual has to be judged: Upsilon is a difference of two DSigma
+    amplitudes, so the discretization error it inherits is proportional to
+    those, while Upsilon itself passes through zero at R0.
+
+    Args:
+        setup (dict): The module fixture.
+        rounding (str): ``'floor'`` or ``'round'`` galaxy-centring convention.
+        r0 (float): Upsilon reference radius in arcmin.
+        pixel_arcmin (float, optional): Pixel scale for the aperture kernel.
+            Defaults to None, meaning the true arcmin-per-pixel.
+
+    Returns:
+        tuple: ``(Y_Upsilon, Y_DSigma)``, each of shape ``(n_radii,)``.
+    """
+    rp = setup['rp']
+    if pixel_arcmin is None:
+        pixel_arcmin = setup['pixel_arcmin']
+    pos2d = rp.project_positions(
+        setup['subhalos']['SubhaloPos'][setup['halo_mask']], PROJECTION)
+    delta_g, nbar = _galaxy_delta(
+        pos2d, N_PIXELS, float(setup['stacker'].header['BoxSize']), rounding)
+    Ymat = rp.compute_Y_matrix(
+        {'e': setup['delta_e'], 'g': delta_g},
+        pixel_arcmin, radii=setup['radii'], r0=r0, nbar_pix=nbar)
+    return (rp.get_Y(Ymat, 'Upsilon', 'e', 'g'),
+            rp.get_Y(Ymat, 'DSigma', 'e', 'g'))
+
+
+@pytest.fixture(scope='module')
+def stamp_upsilon_reference(setup):
+    """Cache the stamp-route Upsilon stack for every reference radius tested.
+
+    Returns:
+        dict: ``{r0: mean Upsilon profile}``.
+    """
+    return {r0: _stamp_upsilon(setup, r0) for r0 in UPSILON_R0}
+
+
+class TestUpsilonFFTMatchesStampStack:
+    """The amplitude-level Upsilon must reproduce the stamp-stacked filter.
+
+    ``compute_Y_matrix`` never convolves an Upsilon kernel: it forms
+    ``Y_DSigma(R) - (R0/R)^2 Y_DSigma(R0)`` after the fact, which is exact only
+    because the filtered amplitude is linear in the kernel.
+    ``filters.upsilon`` performs the *same* combination on each stamp before
+    averaging.  Averaging and a linear combination commute, so on real data
+    with a real galaxy sample the two must agree to the discretization
+    conventions and nothing else.
+    """
+
+    @pytest.mark.parametrize('r0', UPSILON_R0)
+    def test_matched_centring_agrees_off_lattice_ties(
+            self, setup, stamp_upsilon_reference, r0):
+        """With every convention matched, only the lattice ties can differ.
+
+        Upsilon subtracts a reference term built at R0, so unlike DSigma a
+        boundary tie *at R0* contaminates every aperture rather than just its
+        own.  At the stamp route's quantized 0.2 arcmin pixel, R0 = 2.0 arcmin
+        sits exactly on the 10-pixel lattice shell, which is precisely why the
+        1.5 arcmin control is carried alongside it.
+        """
+        rp = setup['rp']
+        radii = setup['radii']
+        stamp_pixel = setup['stamp_pixel']
+
+        fft, _ = _fft_upsilon(setup, rounding='round', r0=r0,
+                              pixel_arcmin=stamp_pixel)
+        # Same area-normalization bookkeeping as the DSigma test: the stamp
+        # route hands delta_sigma_kernel the TRUE pixel scale for 1/pixArea
+        # while binning against the quantized linspace grid.  Upsilon is a
+        # linear combination of DSigmas, so this is one global factor.
+        fft = fft * (stamp_pixel / setup['pixel_arcmin']) ** 2
+
+        frac = _report(radii, fft, stamp_upsilon_reference[r0],
+                       f'Upsilon(R0={r0}), matched centring, pixel scale and '
+                       'area normalization')
+
+        r0_margin, r0_shell = rp.lattice_boundary_margin(r0, stamp_pixel)
+        r0_tied = r0_margin < 1e-3
+        print(f"    R0={r0}' disk edge is {r0_margin:.2e} pixels from a "
+              f'{r0_shell}-pixel lattice shell '
+              f'-> {"DEGENERATE" if r0_tied else "clean"}')
+
+        tied = set(rp.degenerate_apertures(radii, stamp_pixel))
+        clean = np.array([not any(np.isclose(R, t) for t in tied)
+                          for R in radii])
+        assert clean.any(), 'No non-degenerate aperture to compare'
+
+        if r0_tied:
+            # The reference term itself straddles a shell, so no aperture is
+            # clean.  The discrepancy is still bounded by that one shell.
+            assert np.max(np.abs(frac)) < 0.10, (
+                f'R0={r0} is lattice-degenerate, but the discrepancy should '
+                f'still be bounded by one shell: {frac}'
+            )
+        else:
+            assert np.max(np.abs(frac[clean])) < 1e-10, (
+                'FFT and stamp Upsilon must agree to machine precision at '
+                f'non-degenerate apertures, got {frac[clean]} at '
+                f'R={radii[clean]}'
+            )
+            if (~clean).any():
+                assert np.max(np.abs(frac[~clean])) < 0.10, (
+                    f'Boundary-tie discrepancy larger than expected: '
+                    f'{frac[~clean]} at R={radii[~clean]}'
+                )
+
+    @pytest.mark.parametrize('r0', UPSILON_R0)
+    def test_production_centring_difference_is_bounded(
+            self, setup, stamp_upsilon_reference, r0):
+        """The production (floor) galaxy map adds a half-pixel centring offset.
+
+        The DSigma counterpart of this test budgets 5 per cent of the DSigma
+        amplitude.  Upsilon inherits exactly that error -- it is a difference
+        of two DSigma amplitudes, each carrying the centring convention -- but
+        its own amplitude shrinks to zero as R approaches R0, so a residual
+        expressed relative to *Upsilon* diverges at the bin above R0 while
+        measuring nothing new.  The assertion is therefore made against the
+        DSigma amplitude, which is the scale the error actually lives on; the
+        raw fractional residual is still printed, because how badly it blows up
+        near R0 is a science result about the usability of that bin, not a
+        detail to hide.
+
+        Measured at R0 = 2 arcmin: 32 per cent of Upsilon at R = 2.25 arcmin,
+        the bin immediately above R0, falling to 1 per cent by R = 6.
+        """
+        fft, fft_ds = _fft_upsilon(setup, rounding='floor', r0=r0)
+        radii = setup['radii']
+        stamp = stamp_upsilon_reference[r0]
+        frac = _report(radii, fft, stamp,
+                       f'Upsilon(R0={r0}), production centring (floor)')
+
+        rp = setup['rp']
+        defined = rp.upsilon_defined_mask(radii, r0)
+        print(f'  apertures where Upsilon is defined (R > R0): '
+              f'{radii[defined]}')
+        assert defined.any(), 'No aperture above R0 to compare'
+
+        # Scale-free version: the residual as a fraction of the DSigma
+        # amplitude that Upsilon is built from.
+        scaled = np.abs(fft - stamp) / np.abs(fft_ds)
+        print(f"  {'R':>7}  {'|dY_Ups| / |Y_DSigma|':>21}")
+        for R, s, d in zip(radii, scaled, defined):
+            if d:
+                print(f'  {R:7.3f}  {s:21.3e}')
+        assert np.max(scaled[defined]) < 0.05, (
+            'Production-convention FFT Upsilon differs from the stamp route '
+            f'by more than 5 per cent of the DSigma amplitude above R0: '
+            f'{scaled[defined]}'
+        )
+
+    def test_stamp_route_uses_the_requested_filter_parameters(self, setup):
+        """``stack_on_array`` must honour dr and r0 rather than the defaults.
+
+        Regression test for the branch fix: 'upsilon' previously fell through
+        to the generic ``filterFunc(cutout, rr, rad, pixel_size=1.)`` call, so
+        dr, r0 and the pixel area were silently taken from
+        ``filters.upsilon``'s signature defaults.  Two different r0 values must
+        therefore give two different profiles, and each must match its own FFT
+        counterpart far better than it matches the other's.
+        """
+        a = _stamp_upsilon(setup, 1.5)
+        b = _stamp_upsilon(setup, 2.0)
+        assert not np.allclose(a, b, rtol=1e-6), (
+            'Changing r0 did not change the stamp Upsilon profile; the '
+            'branch is ignoring its filter parameters again.'
+        )

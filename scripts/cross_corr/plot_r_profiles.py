@@ -7,7 +7,7 @@ Turn the ``.npz`` files written by ``make_r_profiles.py`` into the Singh et al.
 Figures (one per field definition, baryons and electrons):
 
     rows:    r_gb(R),  r_bm(R),  r_bm/r_gb(R)
-    columns: Sigma,    DSigma,   Upsilon(R0 = 1')
+    columns: Sigma,    DSigma,   Upsilon(R0, from the run's own metadata)
     curves:  one per simulation, with its within-projection jackknife band
 
 Metrics printed and written alongside the figure:
@@ -166,6 +166,11 @@ def load_runs(npz_dir, wanted=None):
             'redshift': float(data['meta_redshift']),
             'n_galaxies': int(data['meta_n_galaxies']),
             'radii': data['radii'],
+            # The Upsilon reference radius is per run, not a global constant:
+            # the configs moved it from 1 to 2 arcmin.  Read it rather than
+            # assuming, so a mixed directory cannot mislabel a curve.
+            'r0': (float(data['meta_r0_arcmin'])
+                   if 'meta_r0_arcmin' in data.files else rp.R0_ARCMIN),
             'data': data,
         })
     return sorted(runs, key=lambda r: (r['family'], r['label']))
@@ -182,13 +187,45 @@ def series(run, num, den, filt):
         filt (str): Filter name.
 
     Returns:
-        tuple: ``(values, errors)``, each of shape ``(n_radii,)``.
+        tuple: ``(values, errors)``, each of shape ``(n_radii,)``.  Upsilon
+        entries at ``R <= R0`` are NaN: the filter nulls everything below its
+        reference radius, so it carries no information there (see
+        :func:`rprofiles.upsilon_defined_mask`).  Every consumer here already
+        drops NaN, so masking once at the source keeps the figures and the
+        Gate A metrics consistent.
     """
     d = run['data']
     if den is None:
-        return d[f'r_{num[0]}{num[1]}_{filt}'], d[f'rerr_{num[0]}{num[1]}_{filt}']
-    tag = f'{num[0]}{num[1]}_over_{den[0]}{den[1]}'
-    return d[f'ratio_{tag}_{filt}'], d[f'ratioerr_{tag}_{filt}']
+        values = d[f'r_{num[0]}{num[1]}_{filt}']
+        errors = d[f'rerr_{num[0]}{num[1]}_{filt}']
+    else:
+        tag = f'{num[0]}{num[1]}_over_{den[0]}{den[1]}'
+        values = d[f'ratio_{tag}_{filt}']
+        errors = d[f'ratioerr_{tag}_{filt}']
+
+    if filt == 'Upsilon':
+        defined = rp.upsilon_defined_mask(run['radii'], run['r0'])
+        values = np.where(defined, values, np.nan)
+        errors = np.where(defined, errors, np.nan)
+    return values, errors
+
+
+def upsilon_label(runs):
+    """Build the Upsilon column title from the runs' own reference radius.
+
+    Args:
+        runs (list): Entries from :func:`load_runs`.
+
+    Returns:
+        str: A mathtext label such as ``$\\Upsilon(R_0=2')$``.  If the runs
+        disagree on R0 -- which would make the column incomparable across
+        curves -- the label says so rather than quietly picking one.
+    """
+    values = sorted({round(float(r['r0']), 6) for r in runs})
+    if len(values) != 1:
+        return r"$\Upsilon$ (MIXED $R_0$: " + ', '.join(
+            f"{v:g}'" for v in values) + ')'
+    return r"$\Upsilon(R_0=" + f"{values[0]:g}" + r"')$"
 
 
 def make_figure(runs, rows, out_path, title, show_errors=True):
@@ -216,9 +253,10 @@ def make_figure(runs, rows, out_path, title, show_errors=True):
             for k, run in enumerate(runs):
                 radii = run['radii']
                 values, errors = series(run, num, den, filt)
-                # Upsilon(R0; R0) is identically zero, so its coefficient at
-                # the reference radius is a genuine 0/0.  Drop it rather than
-                # plotting a gap-filled line through a meaningless point.
+                # Upsilon nulls everything below R0: it is identically zero at
+                # R0 (a genuine 0/0 in the coefficient) and over-subtracted
+                # below it.  `series` masks those bins to NaN; drop them rather
+                # than plotting a gap-filled line through meaningless points.
                 good = np.isfinite(values)
                 if not good.any():
                     continue
@@ -232,7 +270,7 @@ def make_figure(runs, rows, out_path, title, show_errors=True):
                                     color=colours[k], alpha=0.18, lw=0)
             if i == 0:
                 ax.set_title(filt if filt != 'Upsilon'
-                             else r"$\Upsilon(R_0=1')$")
+                             else upsilon_label(runs))
             if j == 0:
                 ax.set_ylabel(row_label)
             if i == n_rows - 1:
@@ -303,8 +341,8 @@ def gate_a_metrics(runs, rows, data_max=None):
             for filt in rp.FILTERS:
                 stack = np.vstack([series(run, num, den, filt)[0]
                                    for run in subset])
-                # The Upsilon reference-radius bin is all-NaN by construction,
-                # so nanmean/nanstd legitimately reduce an empty slice there.
+                # The Upsilon bins at R <= R0 are all-NaN by construction, so
+                # nanmean/nanstd legitimately reduce an empty slice there.
                 with np.errstate(invalid='ignore'), \
                         warnings.catch_warnings():
                     warnings.filterwarnings('ignore',
@@ -415,9 +453,16 @@ def report_metrics(metrics, runs, rows, out_path):
     emit('Note: apertures above the config max_radius are a diagnostic')
     emit('extension, not observationally accessible, and the Gate A verdict')
     emit('uses the data range only.')
-    emit('Note: Upsilon is identically zero at R = R0 = 1 arcmin by')
-    emit('construction, so its coefficient is undefined (NaN) in that bin and')
-    emit('is excluded from both the curves and these metrics.')
+    r0_values = sorted({round(float(r['r0']), 6) for r in runs})
+    r0_text = ', '.join(f'{v:g}' for v in r0_values)
+    emit(f'Note: Upsilon nulls everything below its reference radius R0 = '
+         f'{r0_text} arcmin.')
+    emit('It is identically zero at R = R0 (a genuine 0/0 in the coefficient)')
+    emit('and over-subtracted below it, so every bin with R <= R0 is masked to')
+    emit('NaN and excluded from both the curves and these metrics.')
+    if len(r0_values) != 1:
+        emit('WARNING: the runs do not share one R0, so the Upsilon column is')
+        emit('not comparable across curves.')
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text('\n'.join(lines) + '\n')

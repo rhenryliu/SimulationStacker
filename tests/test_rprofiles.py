@@ -41,6 +41,12 @@ N_PIX = 512
 PIXEL_ARCMIN = 0.25
 TEST_RADII = np.array([1.0, 3.5, 6.0])
 
+#: Aperture grid for the Upsilon checks, mirroring the production spacing so
+#: that for the frozen r0 = 2 arcmin it straddles the reference radius: 1.0 and
+#: 1.625 lie below it, 2.25 immediately above it (where Upsilon is a small
+#: difference of comparable DSigma amplitudes), and 3.5, 6.0 well above.
+UPSILON_TEST_RADII = np.array([1.0, 1.625, 2.25, 3.5, 6.0])
+
 
 def smooth_gaussian_field(n_pixels, correlation_pixels, rng):
     """Return a zero-mean smooth Gaussian random field of unit variance.
@@ -244,28 +250,40 @@ class TestCorrelationEqualsStampStack:
                 f'{stamp_mean:.12e}'
             )
 
-    def test_upsilon_matches_stamp_filter(self):
+    @pytest.mark.parametrize('r0', [1.0, 1.5, 2.0])
+    def test_upsilon_matches_stamp_filter(self, r0):
+        """The FFT Upsilon must equal ``filters.upsilon`` stacked on stamps.
+
+        Parametrized over the reference radius because the production config
+        moved R0 from 1 to 2 arcmin, and because the aperture grid deliberately
+        straddles R0: :data:`UPSILON_TEST_RADII` contains radii below R0, and
+        (for r0 = 2) one immediately above it, where Upsilon is a small
+        difference of two comparable DSigma amplitudes and any discrepancy
+        between the two routes would be amplified most.
+        """
         rng = np.random.default_rng(8)
         delta_x, delta_g, pix, nbar = self._setup(rng)
 
+        radii = UPSILON_TEST_RADII
         Ymat = rp.compute_Y_matrix({'x': delta_x, 'g': delta_g},
-                                   PIXEL_ARCMIN, radii=TEST_RADII,
-                                   nbar_pix=nbar)
+                                   PIXEL_ARCMIN, radii=radii,
+                                   r0=r0, nbar_pix=nbar)
 
-        half = int(np.ceil((TEST_RADII.max() + rp.DR_ARCMIN) / PIXEL_ARCMIN))
+        half = int(np.ceil((max(radii.max(), r0) + rp.DR_ARCMIN)
+                           / PIXEL_ARCMIN))
         r_grid = stamp_radius_grid(half, PIXEL_ARCMIN)
         cutouts = [stamp_cutout(delta_x, (cx, cy), half) for cx, cy in pix]
 
-        for ir, R in enumerate(TEST_RADII):
+        for ir, R in enumerate(radii):
             ref = np.mean([
-                upsilon(cut, r_grid, R, r0=rp.R0_ARCMIN, dr=rp.DR_ARCMIN,
+                upsilon(cut, r_grid, R, r0=r0, dr=rp.DR_ARCMIN,
                         pixel_size=PIXEL_ARCMIN)
                 for cut in cutouts
             ])
             got = rp.get_Y(Ymat, 'Upsilon', 'x', 'g')[ir]
             assert got == pytest.approx(ref, rel=0, abs=1e-12), (
-                f'R={R}: Upsilon map average {got:.12e} != stamp mean '
-                f'{ref:.12e}'
+                f'r0={r0}, R={R}: Upsilon map average {got:.12e} != stamp '
+                f'mean {ref:.12e}'
             )
 
 
@@ -711,3 +729,230 @@ class TestSupportingBehaviour:
                 {'a': smooth_gaussian_field(64, 4.0, rng),
                  'b': smooth_gaussian_field(32, 4.0, rng)},
                 PIXEL_ARCMIN, radii=np.array([2.0]))
+
+
+# ---------------------------------------------------------------------------
+# Upsilon: the amplitude-level combination against every alternative route
+# ---------------------------------------------------------------------------
+
+class TestUpsilonConstruction:
+    """Upsilon is built as a linear combination of DSigma *amplitudes*.
+
+    ``compute_Y_matrix`` never convolves an Upsilon kernel; it forms
+    ``Y_DSigma(R) - (R0/R)^2 Y_DSigma(R0)`` after the fact.  That is exact only
+    because the filtered amplitude is linear in the kernel, so the same answer
+    must come out of every other way of arranging the same algebra:
+
+    - convolving a single composite kernel
+      ``K_DSigma(R) - (R0/R)^2 K_DSigma(R0)`` once;
+    - summing the kernel against the field directly in real space, with no FFT
+      at all;
+    - integrating the analytic transform ``kernels.w_upsilon`` against the
+      measured 2D power spectrum.
+
+    The first two pin the algebra and the FFT round-off; the third pins the
+    pixelization of the aperture at the frozen reference radius.
+    """
+
+    @staticmethod
+    def _composite_upsilon_kernel(n_pixels, pixel_arcmin, R, r0, dr):
+        """Build a single real-space Upsilon kernel by combining two DSigmas.
+
+        Args:
+            n_pixels (int): Pixels per side.
+            pixel_arcmin (float): Angular pixel size in arcmin.
+            R (float): Aperture radius in arcmin.
+            r0 (float): Reference radius in arcmin.
+            dr (float): Annulus width in arcmin.
+
+        Returns:
+            np.ndarray: Kernel of shape ``(n_pixels, n_pixels)``.
+        """
+        k_r = rp.build_aperture_kernel(n_pixels, pixel_arcmin, R, 'DSigma', dr)
+        k_0 = rp.build_aperture_kernel(n_pixels, pixel_arcmin, r0, 'DSigma', dr)
+        return k_r - (r0 / R) ** 2 * k_0
+
+    @pytest.mark.parametrize('r0', [1.0, 2.0])
+    def test_composite_kernel_equals_amplitude_combination(self, r0):
+        """One convolution with the composite kernel == two combined amplitudes.
+
+        This is the step the amplitude-level shortcut could have got wrong, and
+        the only one: everything else in the Upsilon path is shared with
+        DSigma, which has its own stamp comparison above.
+        """
+        rng = np.random.default_rng(20)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        delta_y = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+
+        radii = UPSILON_TEST_RADII
+        Ymat = rp.compute_Y_matrix({'x': delta_x, 'y': delta_y},
+                                   PIXEL_ARCMIN, radii=radii, r0=r0)
+        got = rp.get_Y(Ymat, 'Upsilon', 'x', 'y')
+
+        worst = 0.0
+        for ir, R in enumerate(radii):
+            kern = self._composite_upsilon_kernel(N_PIX, PIXEL_ARCMIN, R, r0,
+                                                  rp.DR_ARCMIN)
+            fmap = rp.filtered_map(delta_x, rp.kernel_spectrum(kern),
+                                   delta_x.shape)
+            ref = float(np.mean(fmap * delta_y))
+            # Scale by the DSigma amplitude rather than by Upsilon itself: at
+            # R just above R0, Upsilon is a small difference of comparable
+            # numbers and a relative tolerance on it would be meaningless.
+            scale = abs(rp.get_Y(Ymat, 'DSigma', 'x', 'y')[ir])
+            worst = max(worst, abs(got[ir] - ref) / scale)
+
+        assert worst < 1e-12, (
+            f'r0={r0}: composite-kernel Upsilon differs from the '
+            f'amplitude-level combination by {worst:.3e} of the DSigma '
+            'amplitude'
+        )
+
+    @pytest.mark.parametrize('r0', [1.0, 2.0])
+    def test_fft_equals_direct_real_space_sum(self, r0):
+        """The FFT is only a fast exact convolution -- verify against the sum.
+
+        The filtered map is defined as ``F(x) = sum_l K(l) delta(x + l)``.
+        Evaluating that sum directly at a handful of centres removes the FFT
+        entirely and bounds its round-off, including the cancellation incurred
+        by Upsilon's reference subtraction near R0.
+        """
+        rng = np.random.default_rng(21)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        centres = rng.integers(0, N_PIX, size=(8, 2))
+
+        worst = 0.0
+        for R in UPSILON_TEST_RADII:
+            kern = self._composite_upsilon_kernel(N_PIX, PIXEL_ARCMIN, R, r0,
+                                                  rp.DR_ARCMIN)
+            fmap = rp.filtered_map(delta_x, rp.kernel_spectrum(kern),
+                                   delta_x.shape)
+
+            half = int(np.ceil((max(R, r0) + rp.DR_ARCMIN) / PIXEL_ARCMIN))
+            # The kernel is stored with fft wraparound; fold it back to a
+            # centred stamp so it can be dotted against a centred cutout.
+            idx = np.arange(-half, half + 1) % N_PIX
+            stamp_kernel = kern[np.ix_(idx, idx)]
+
+            for cx, cy in centres:
+                cut = stamp_cutout(delta_x, (cx, cy), half)
+                direct = float(np.sum(stamp_kernel * cut))
+                worst = max(worst, abs(fmap[cx, cy] - direct))
+
+        # Absolute, because the filtered map crosses zero: the amplitudes here
+        # are O(1), so this is a relative statement at the 1e-11 level.
+        assert worst < 1e-11, (
+            f'r0={r0}: FFT and direct real-space sum differ by {worst:.3e}'
+        )
+
+    @staticmethod
+    def _axis_transform(n, pixel, R, r0, dr):
+        """Return ``(k, pixArea * FFT(composite Upsilon kernel))`` on one axis.
+
+        Follows the convention of ``test_kernels.TestAnalyticMatchesPixelized``:
+        ``build_aperture_kernel`` weights pixels by ``1/(pixArea*N)``, so the
+        discrete transform carries an extra ``1/pixArea`` relative to the
+        normalized continuum kernel, and one axis of the 2D transform is taken
+        rather than an azimuthal average (the staircase aperture is not exactly
+        isotropic, and the axis slice is the unambiguous comparison).
+
+        Args:
+            n (int): Pixels per side.
+            pixel (float): Angular pixel size in arcmin.
+            R (float): Aperture radius in arcmin.
+            r0 (float): Reference radius in arcmin.
+            dr (float): Annulus width in arcmin.
+
+        Returns:
+            tuple: ``(k_axis, discrete_transform)``, both shape ``(n//2 + 1,)``.
+        """
+        kern = (rp.build_aperture_kernel(n, pixel, R, 'DSigma', dr)
+                - (r0 / R) ** 2
+                * rp.build_aperture_kernel(n, pixel, r0, 'DSigma', dr))
+        spec = np.fft.rfft2(kern).real * pixel ** 2
+        return 2.0 * np.pi * np.fft.rfftfreq(n, d=pixel), spec[0, :]
+
+    @pytest.mark.parametrize('r0', [1.0, 2.0])
+    @pytest.mark.parametrize('R', [3.5, 6.0])
+    def test_pixelized_kernel_matches_the_analytic_transform(self, r0, R):
+        """The pixelized Upsilon kernel must match ``kernels.w_upsilon``.
+
+        The Task 4 theory chain integrates the analytic transform while the
+        simulation chain convolves the pixelized kernel, so the two must agree
+        wherever the Limber integral has its support.  ``test_kernels.py``
+        pins this for Sigma and DSigma; Upsilon was never covered, and it is
+        the filter that inherits the reference-radius discretization at every
+        aperture.  The production configs have since moved R0 from 1 to 2
+        arcmin, which changes which kernel that reference term is.
+
+        Band and tolerance follow ``test_kernels.TestAnalyticMatchesPixelized``:
+        ``kR < 1``, where the transform peaks and carries the amplitude for any
+        realistic power spectrum.  The departure beyond that is the documented
+        pixelization floor, exercised by the convergence test below.
+        """
+        import kernels as kn
+
+        n, pixel = 512, 0.25
+        k, discrete = self._axis_transform(n, pixel, R, r0, rp.DR_ARCMIN)
+        analytic = kn.w_upsilon(k, R, rp.DR_ARCMIN, r0)
+
+        band = (k > 0) & (k * R < 1.0)
+        worst = float(np.max(np.abs(discrete[band] - analytic[band])))
+        assert worst < 1e-2, (
+            f'r0={r0}, R={R}: max |discrete - analytic| = {worst:.3e} for '
+            f'kR < 1'
+        )
+
+    @pytest.mark.parametrize('r0', [1.0, 2.0])
+    def test_upsilon_pixelization_error_converges(self, r0):
+        """Halving the pixel must halve the departure from the continuum kernel.
+
+        This is what identifies the residual as pixelization rather than an
+        error in the composite kernel: a genuine algebra mistake would not
+        shrink with resolution.  As for the other filters it is the 0.75 arcmin
+        annulus that limits it, not the disk.
+        """
+        import kernels as kn
+
+        R = 3.5
+        errs = []
+        for n, pixel in ((512, 0.25), (1024, 0.125), (2048, 0.0625)):
+            k, discrete = self._axis_transform(n, pixel, R, r0, rp.DR_ARCMIN)
+            analytic = kn.w_upsilon(k, R, rp.DR_ARCMIN, r0)
+            band = (k > 0) & (k * R < 3.0)
+            errs.append(float(np.max(np.abs(discrete[band]
+                                            - analytic[band]))))
+
+        assert all(a > b for a, b in zip(errs, errs[1:])), (
+            f'r0={r0}: pixelization error should fall with the pixel, got '
+            f'{errs}'
+        )
+        assert errs[-1] < 0.4 * errs[0], (
+            f'r0={r0}: four-fold refinement should shrink the error well '
+            f'below half, got {errs}'
+        )
+
+    def test_upsilon_is_zero_below_and_at_the_reference_radius_only_at_r0(self):
+        """Upsilon is exactly zero at R0 and finite (wrong-signed) below it.
+
+        Below R0 the ``(R0/R)^2`` reference term is larger than one and
+        over-subtracts, so Upsilon carries no meaningful information there.
+        This test pins the behaviour that
+        :func:`rprofiles.upsilon_defined_mask` exists to hide.
+        """
+        rng = np.random.default_rng(22)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        delta_y = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+
+        r0 = 2.0
+        radii = np.array([1.0, 1.625, 2.0, 2.25, 3.5])
+        Ymat = rp.compute_Y_matrix({'x': delta_x, 'y': delta_y},
+                                   PIXEL_ARCMIN, radii=radii, r0=r0)
+        y = rp.get_Y(Ymat, 'Upsilon', 'x', 'y')
+        ds = rp.get_Y(Ymat, 'DSigma', 'x', 'y')
+
+        assert y[2] == pytest.approx(0.0, abs=1e-15 * abs(ds[2]) + 1e-300)
+        assert np.all(np.abs(y[[0, 1]]) > 0.0)
+
+        mask = rp.upsilon_defined_mask(radii, r0)
+        assert list(mask) == [False, False, False, True, True]

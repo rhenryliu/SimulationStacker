@@ -429,6 +429,39 @@ def degenerate_apertures(radii: Sequence[float], pixel_arcmin: float,
     return out
 
 
+def upsilon_defined_mask(radii: Sequence[float], r0: float = R0_ARCMIN,
+                         atol: float = 1e-12) -> np.ndarray:
+    """Return the aperture bins where ``Upsilon`` carries information.
+
+    ``Upsilon(R; R0) = DSigma(R) - (R0/R)^2 DSigma(R0)`` is the Baldauf et al.
+    (2010) estimator, whose whole purpose is to null everything below ``R0``.
+    It is therefore meaningful only for ``R > R0``:
+
+    - at ``R = R0`` it vanishes identically, so the coefficient
+      ``Y_ab / sqrt(Y_aa Y_bb)`` is a genuine 0/0;
+    - below ``R0`` the factor ``(R0/R)^2`` exceeds one and the reference term
+      over-subtracts.  The amplitude is finite and the coefficient is defined,
+      but it is not the quantity the estimator is about -- in the production
+      runs it simply flips sign, giving ``r ~ -1``.
+
+    Neither case is special-cased inside :func:`compute_Y_matrix`, which
+    returns the raw algebra; this mask is what the figures, the Gate A metrics
+    and the diagnostics use to drop the bins.
+
+    Args:
+        radii (sequence): Aperture radii in arcmin.
+        r0 (float, optional): Upsilon reference radius in arcmin.  Defaults to
+            :data:`R0_ARCMIN`.
+        atol (float, optional): Absolute tolerance on the ``R == r0``
+            comparison, in arcmin.  Defaults to 1e-12.
+
+    Returns:
+        np.ndarray: Boolean mask over ``radii``, True where ``R > r0``.
+    """
+    r = np.asarray(radii, dtype=np.float64)
+    return r > float(r0) + atol
+
+
 def filtered_map(field: np.ndarray, kernel_spectrum: np.ndarray,
                  shape: Tuple[int, int]) -> np.ndarray:
     """Apply an aperture kernel to a field by periodic FFT correlation.

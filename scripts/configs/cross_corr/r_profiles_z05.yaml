@@ -1,7 +1,7 @@
 # Task 1 r-profiles, LRG-like sample at z ~ 0.5.
 #
 # Computes r_gb, r_bm, r_ge, r_em and the ratio r_bm/r_gb for the filters
-# {Sigma, DSigma, Upsilon(R0=1')} over nine linear aperture bins in 1'-6'.
+# {Sigma, DSigma, Upsilon(R0 = r0_arcmin below)} over nine linear aperture bins in 1'-6'.
 # See docs/cross_correlation_notes.md (Task 1) and
 # docs/r_profiles_task1_spec.md.
 #

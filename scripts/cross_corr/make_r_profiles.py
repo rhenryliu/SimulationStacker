@@ -1,7 +1,7 @@
 """make_r_profiles.py
 ====================
 Compute the Task 1 cross-correlation coefficients r_gb, r_bm, r_ge, r_em and
-the ratio r_bm/r_gb for the filters {Sigma, DSigma, Upsilon(R0=1')} over nine
+the ratio r_bm/r_gb for the filters {Sigma, DSigma, Upsilon(R0 = r0_arcmin)} over nine
 linear aperture bins in 1'-6', for every simulation listed in a YAML config.
 
 One ``.npz`` is written per (simulation, projection).  ``plot_r_profiles.py``

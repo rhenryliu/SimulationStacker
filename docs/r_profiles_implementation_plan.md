@@ -1047,3 +1047,251 @@ Caveat: this used the 1000^3 cached 3D grid, whose 0.53 arcmin cells
 under-resolve the smallest apertures, so the study covers R >= 2.25 arcmin
 only. FLAMINGO has no cached 3D CDM or ionized-gas field, so the study is
 TNG300-1 only.
+
+---
+
+## Upsilon verification (Gate B follow-up)
+
+The Task 1 machinery computes `Upsilon` by FFT correlation rather than by
+stamp-stacking `filters.upsilon`, and assembles it as a linear combination of
+`DSigma` *amplitudes* rather than by convolving an Upsilon kernel. This section
+records the verification of both shortcuts, plus what the move of R0 from 1 to
+2 arcmin (commit 91e39d7) actually did.
+
+### U1. The FFT route is not a different filter, and the shortcut is exact
+
+Two things are easy to conflate and worth separating.
+
+**The FFT is a fast exact convolution, not a harmonic-space approximation.**
+`rprofiles.build_aperture_kernel` builds the *same pixelized real-space kernel*
+as `filters.delta_sigma_kernel` -- `+1/(pixArea*N_disk)` on `r < R`,
+`-1/(pixArea*N_ann)` on `R <= r < R+dr`, membership by pixel-centre radius --
+and applies it with `scipy.fft`. On a periodic box that evaluates the same sum
+the stamp route evaluates. The analytic Fourier kernels in `src/kernels.py` are
+a different object, used only by the Task 4 theory chain.
+
+**The amplitude-level Upsilon is exact by linearity.** `Y` is linear in the
+kernel, so `Y_DSigma(R) - (R0/R)^2 Y_DSigma(R0)` equals what a single composite
+kernel would give, and equals the mean of `filters.upsilon` over stamps
+(averaging and a linear combination commute). Verified, not assumed, at four
+levels:
+
+| check | where | result |
+|---|---|---|
+| composite Upsilon kernel, one convolution, vs the amplitude combination | `test_rprofiles.py::TestUpsilonConstruction::test_composite_kernel_equals_amplitude_combination` | < 1e-12 of the DSigma amplitude, r0 = 1 and 2 |
+| FFT vs a direct real-space kernel sum (no FFT at all) | same class, `test_fft_equals_direct_real_space_sum` | < 1e-11 absolute |
+| pixelized kernel vs `kernels.w_upsilon` | same class, `test_pixelized_kernel_matches_the_analytic_transform` | < 1e-2 for kR < 1, converging with pixel size |
+| FFT vs `filters.upsilon` stacked on stamps, synthetic maps | `TestCorrelationEqualsStampStack::test_upsilon_matches_stamp_filter`, now parametrized over r0 = 1.0, 1.5, 2.0 | < 1e-12 |
+
+On real TNG300-1 data with the production SHAM sample, the FFT route and
+`stack_on_array(filterType='upsilon')` agree to **machine precision** once the
+centring, pixel-scale and area-normalization conventions are matched: at
+R0 = 1.5 arcmin the residual is ~1e-15 at seven of the nine apertures, the
+two exceptions being R = 1.0 and 2.25 arcmin (7.3e-3 and 1.4e-3), which are
+the already-documented lattice-tie radii (A9). This is the strongest form of the claim and it holds.
+
+### U2. `stack_on_array(filterType='upsilon')` was not the specified filter
+
+Establishing U1 required fixing the stamp route first. `'upsilon'` fell through
+to the generic branch of `stack_on_array`,
+
+```python
+filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)
+```
+
+so it silently used `filters.upsilon`'s signature defaults -- `dr = 0.5`,
+`r0 = 1.0`, `pixel_size = 1.0` -- instead of the frozen `dr = 0.75`, the
+configured R0, and the true arcmin-per-pixel that the `'DSigma'` branch three
+lines above passes correctly. It was therefore a *different filter*, and no
+comparison through it would have meant anything.
+
+`stack_on_array` now takes `dr` and `r0` and routes `'upsilon'` through the
+same branch as `'DSigma'`. The DSigma path is numerically unchanged (the
+annulus width is now resolved once before the halo loop instead of inside it,
+to the same value). Nothing
+else in the repository called the upsilon path (the f_gas paper does not use
+this filter), so the fix has no downstream effect.
+
+### U3. Upsilon carries information only above R0
+
+`Upsilon` nulls everything below its reference radius, so every bin with
+`R <= R0` is unusable: identically zero at `R = R0` (a 0/0 coefficient), and
+over-subtracted below it, where `(R0/R)^2 > 1`. With R0 = 2 arcmin against an
+aperture grid that starts at 1 arcmin, the R = 1.0 and 1.625 arcmin bins were
+being computed, plotted and fed to the Gate A statistics. They are not
+marginal -- they come out at `r ~ -1`:
+
+| R [arcmin] | r_gb (Upsilon) | r_bm (Upsilon) |
+|---|---|---|
+| 1.000 | -1.677 | -1.008 |
+| 1.625 | -2.594 +- 8.48 | -1.015 |
+| 2.250 | nan | +1.009 |
+
+`rprofiles.upsilon_defined_mask(radii, r0)` is now the single definition of
+which bins survive, applied once in `plot_r_profiles.series` so the curves and
+the metrics cannot disagree. The reference radius is read from each run's
+`meta_r0_arcmin` rather than hard-coded, which also fixes the figure column
+title and the metrics footnote, both of which still said `R0 = 1'`.
+
+### U4. The bin immediately above R0 is the fragile one
+
+`Upsilon` vanishes continuously as `R -> R0`, so the first surviving bin is a
+small difference of two comparable DSigma amplitudes and every convention
+difference is amplified there. Measured on TNG300-1 with the production
+(floor-centred) galaxy map, FFT against stamp route:
+
+| R0 | worst residual above R0, as a fraction of Upsilon | as a fraction of DSigma |
+|---|---|---|
+| 1.5 arcmin | 8.0e-2 (at R = 1.625) | 2.2e-2 |
+| 2.0 arcmin | 3.2e-1 (at R = 2.25) | 3.2e-2 |
+
+The absolute discrepancy is the ordinary half-pixel centring convention, at the
+few-per-cent level of the DSigma amplitude and no worse than DSigma's own; it
+is the division by a near-zero Upsilon that inflates it. The integration test
+therefore budgets the residual against the DSigma amplitude and *prints* the
+raw fractional number, because how badly it blows up near R0 is a statement
+about the usability of that bin rather than a tolerance to tune.
+
+At R0 = 2 arcmin the R = 2.25 bin is also where TNG300-1's `r_gb` is NaN
+outright (`Y_aa Y_bb <= 0`). Treat the first bin above R0 as diagnostic.
+
+### U5. The coefficients are not bounded by one
+
+Recorded in `filter_specification.md` Sec. 7a: `r_bm` sits at 1.006 to 1.013,
+and that is allowed. `|r| <= 1` requires the bilinear form `(X, Y) -> Y_XY` to
+be positive semi-definite, i.e. `W(k) >= 0` everywhere. Measured over
+k = 0 to 40 arcmin^-1 at R = 1 arcmin, `W` is negative over 51 per cent of the
+range for Sigma, 45 per cent for DSigma and 50 per cent for Upsilon -- all
+three are built from `J1` and oscillate. Singh et al. (2020) Fig. 1 shows the
+same behaviour, with `r_cc` reaching ~1.3 for Upsilon.
+
+### U6. The R0 scan: 2 arcmin is not an improvement on 1
+
+`scripts/cross_corr/check_upsilon_r0.py` (runner:
+`cross_corr/runINT_upsilon_r0.sh`) scans the reference radius on the cached
+fields. It is cheap because Upsilon needs no convolution of its own: the DSigma
+amplitudes are measured once on a radius grid containing every candidate R0 and
+each R0 is assembled arithmetically from them. That reassembly is checked
+bit-for-bit against `compute_Y_matrix`'s own Upsilon block on every run, at no
+FFT cost.
+
+Cross-code scatter of `r_bm/r_gb` (Upsilon) over the data range, one run per
+code family (TNG300-1 and FLAMINGO L1_m9 fiducial), `yz`:
+
+"worst" is over the data range; "trim" is the same statistic with the first
+surviving aperture excluded.
+
+| R0 [arcmin] | bins (z~0.5) | worst (z~0.5) | trim | bins (z~0.26) | worst (z~0.26) | trim |
+|---|---|---|---|---|---|---|
+| 1.00 | 8 | **0.090** PASS | 0.090 | 8 | 0.134 MARGINAL | 0.134 |
+| 1.25 | 8 | 0.166 MARGINAL | 0.131 | 8 | 0.132 MARGINAL | 0.132 |
+| 1.50 | 8 | 0.523 FAIL | 0.375 | 8 | 0.161 MARGINAL | 0.161 |
+| 1.75 | 6 | 0.104 MARGINAL | 0.104 | 7 | 0.188 MARGINAL | 0.188 |
+| 2.00 | 6 | 0.143 MARGINAL | 0.143 | 7 | 0.397 FAIL | 0.225 |
+| 2.50 | 6 | 0.274 FAIL | 0.228 | 6 | 0.199 MARGINAL | 0.199 |
+
+**The statistic is not monotonic in R0, and that is the diagnostic.** A scale
+cut that genuinely removed the feedback-sensitive modes would improve the
+scatter smoothly. The trim column shows why it does not: at four of the twelve
+(R0, redshift) combinations the worst value is set by the single aperture
+immediately above R0 -- the bin where Upsilon is a small difference of
+comparable DSigma amplitudes and any cross-code difference is divided by a
+near-zero. The two largest excursions are both of that kind:
+
+- z ~ 0.5, R0 = 1.5: the 0.523 is at R = 1.625 arcmin (TNG 0.6225 against
+  FLAMINGO fiducial 0.2863). The second bin, R = 2.25, is still 0.375; from
+  R = 2.875 outwards every aperture sits between 0.002 and 0.088. Here the cut
+  pollutes two bins, not one.
+- z ~ 0.26, R0 = 2.0: the 0.397 is entirely R = 2.25 arcmin (TNG 0.4612 against
+  FLAMINGO fiducial 0.8217). The next bin is 0.170 and the rest are 0.02-0.23.
+
+`check_upsilon_r0.py` therefore reports the worst scatter both with and without
+that first surviving bin, so an artefact of the cut cannot be mistaken for
+cross-code disagreement.
+
+**The amplitude near R0 is small but not noisy.** This was worth checking
+separately, and the expectation was wrong: `|Y_Upsilon| / sigma_jk` at the bin
+just above R0 is 8.3 for TNG300-1 and 41 for FLAMINGO at R0 = 2 arcmin -- the
+same as at every other aperture. The jackknife error shrinks with the
+amplitude, because both are dominated by the same difference of DSigma
+amplitudes. What degrades near R0 is not the statistical precision but the
+sensitivity to any *systematic* -- discretization, centring convention,
+genuine code differences -- all of which are divided by the same small number.
+
+**Conclusion.** R0 = 1 arcmin gives the smallest cross-code scatter (0.090,
+the only PASS) and the most usable bins (8 against 6) at z ~ 0.5. At z ~ 0.26
+it is not quite the lowest -- R0 = 1.25 arcmin edges it, 0.132 against 0.134 --
+but the two are indistinguishable at this sample size, where the statistic is a
+two-point spread. It is also the one R0 whose statistic survives the trim
+unchanged, i.e. it is not propped up by, nor hostage to, the bin next to the
+cut. The move to R0 = 2 arcmin costs two apertures and moves the z ~ 0.5
+verdict from PASS to MARGINAL; trimming does not rescue it (0.143 either way at
+z ~ 0.5), and at z ~ 0.26 it is the worst of the six even after trimming
+(0.225). Nothing in this scan supports it.
+The configs are left at 2 arcmin pending the decision, since the choice is a
+scientific one and the exploratory intent was to probe the small-scale
+sensitivity, but the measurement does not favour it.
+
+### U7. The committed FLAMINGO r-profiles were stale at HEAD
+
+Re-measuring the coefficients turned up a discrepancy against the committed
+`data/r_profiles/*.npz`, and chasing it found a real staleness rather than a
+numerical problem.
+
+The pattern was sharp: **TNG300-1 regenerated bit-for-bit identically**, while
+all three FLAMINGO variants moved. Within FLAMINGO the split was equally
+sharp — every quantity built only from the cached particle fields (`r_bm`,
+`r_em`, and their Sigma/DSigma/Upsilon variants) was identical **to zero**,
+and everything touching the galaxy field moved:
+
+| quantity | worst change, R <= 6 arcmin |
+|---|---|
+| `r_bm`, `r_em` (no galaxies) | 0 (exact) |
+| `Y_gg` (Upsilon) | 2.1e-2 |
+| `r_gb`, `r_ge` (Upsilon) | 7.9e-3 |
+| `ratio_bm_over_gb` (Upsilon) | 7.9e-3 |
+| jackknife errors on the above | 8e-2 to 1.4e-1 |
+| median over all central values | 7e-4 to 1.5e-3 |
+
+So the fields and the FFT machinery were untouched and only the SHAM sample
+had changed. `compute_Y_matrix` was separately confirmed bit-reproducible
+across repeated calls and independent of the requested radius grid, and
+`hist2d_numba_seq` is `parallel=False`, so nothing in the measurement itself
+is non-deterministic.
+
+The cause is commit `0fd4704` (HEAD), which landed at 22:04 — **after**
+`91e39d7` at 18:34 regenerated the npz. It moved FLAMINGO's `GroupMass` from
+`SO/200_mean/TotalMass` to `InputHalos/FOF/Masses`, and
+`rprofiles.select_sham_subhalos` pre-filters on exactly that field
+(`parent_mass = parents['GroupMass'][subhalos['SubhaloGrNr']]`,
+`valid = parent_mass <= parent_mass_upper`, default 5e14 Msun/h). The SHAM
+target fixes the *number* of galaxies, so N and nbar were unchanged at 157910
+and 2.0075e-3 per pixel while the membership shifted at the mass boundary.
+TNG300-1's `GroupMass` was already the FoF total, which is why it did not move.
+
+`0fd4704`'s message flags the cached FLAMINGO masked maps as stale for this
+reason; the r-profile npz were stale for the same reason and were not
+mentioned. All six FLAMINGO files (three per redshift) have been regenerated at
+HEAD; both TNG300-1 files regenerate bit-for-bit identically.
+
+The regeneration closes the loop cleanly. Before it, `plot_r_profiles`'s Gate A
+number for Upsilon disagreed with the independent `check_upsilon_r0` scan --
+0.1392 against 0.1429 at z ~ 0.5 -- because the two read different vintages of
+the galaxy sample. After it they agree exactly, at both redshifts (0.1429 and
+0.3973). That agreement is the cheapest available check that the committed npz
+and the current catalogues are in step.
+
+**The effect is small but not negligible where it matters.** The Gate A ratio
+moved by up to 0.8 per cent, against a 10 per cent threshold, so no Task 1
+conclusion changes. But the jackknife *errors* moved by up to 14 per cent, and
+`Y_gg` by 2 per cent — worth knowing, since `Y_gg` enters Eq. (4) directly on
+the data side and the small-aperture `Y_gg` is already a difference of
+comparable numbers after the self-pair subtraction (Sec. 7 of
+`filter_specification.md`).
+
+**Standing hazard.** Any change to `GroupMass`, `SubhaloMStar`, `SubhaloGrNr`
+or `parent_mass_upper` silently invalidates every committed r-profile, because
+the galaxy sample is rebuilt from the catalogues on every run while the
+particle fields come from cache. The `r_bm`/`r_em` versus `r_gb`/`r_ge` split
+used above is a cheap way to tell a catalogue change from a field change: only
+the latter moves the galaxy-free coefficients.

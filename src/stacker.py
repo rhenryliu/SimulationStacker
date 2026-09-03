@@ -556,7 +556,7 @@ class SimulationStacker(object):
     def stack_on_array(self, array, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                        projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', use_subhalos=False,
                        halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), halo_abundance_target=5e-4,
-                       z=None, pixelSize=0.5, halo_mask=None):
+                       z=None, pixelSize=0.5, halo_mask=None, dr=None, r0=1.0):
         """Abstract stacking function that works on any 2D array.
 
         Args:
@@ -576,6 +576,12 @@ class SimulationStacker(object):
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
                 catalogue. When provided, internal halo selection is skipped entirely.
                 Defaults to None.
+            dr (float, optional): Annulus width of the compensated ('DSigma',
+                'upsilon') filters, in the same units as ``radDistance``.
+                Defaults to None, meaning 0.75 arcmin for arcmin units and
+                3 pixels otherwise.
+            r0 (float, optional): Reference radius of the 'upsilon' filter, in
+                the same units as ``radDistance``. Defaults to 1.0.
 
         Returns:
             tuple: (radii, profiles) - 1D radii array and 2D profiles array.
@@ -686,6 +692,19 @@ class SimulationStacker(object):
         else:
             n_vir = int(radii.max() + 1)  # number of virial radii to cutout
 
+        # Annulus width of the compensated filters, resolved once rather than
+        # per halo. 0.75 arcmin is the f_gas paper convention: the DSigma
+        # filter needs a slightly wider annulus than 0.5 to be stable at the
+        # smallest radii.
+        if dr is None:
+            dr_filter = 0.75 if radDistanceUnits == 'arcmin' else 3 / RadPixel
+        else:
+            dr_filter = dr
+
+        # 'upsilon' takes a reference radius on top of the compensated kernel;
+        # 'DSigma' does not accept the keyword at all.
+        filter_extra = {'r0': r0} if filterType == 'upsilon' else {}
+
         # Do stacking
         profiles = []
         for j, haloID in enumerate(halo_mask):
@@ -717,22 +736,22 @@ class SimulationStacker(object):
                     raise ValueError('DSigma_mccarthy filter currently requires radDistanceUnits to be arcmin')
                 radii, profile, _ = delta_sigma_mccarthy(cutout, rr, pixel_scale_arcmin=pixelSize, z=z, # type: ignore
                                                          cosmo=cosmo, rmin_theta=minRadius, rmax_theta=maxRadius, n_rbins=numRadii)
-            elif filterType == 'DSigma':
+            elif filterType in ('DSigma', 'upsilon'):
                 # TODO: This does not work with stackField for some reason. (I think fixed?)
-                if radDistanceUnits == 'arcmin':
-                    # dr = 0.5 # 0.5 arcmin in pixels
-                    dr = 0.75 # 0.75 arcmin in pixels, since the DSigma filter needs a slightly larger dr to be stable at small radii. This is somewhat ad-hoc, but seems to work well in practice.
-                else:
-                    # dr = 0.2 # 0.2 kpc/h in pixels
-                    dr = 3 / RadPixel
-                
+                # 'upsilon' is the same compensated kernel plus the
+                # (r0/R)^2 * DSigma(r0) reference term, so it needs the same dr
+                # and the same physical pixel area. Routing it through the
+                # generic branch below would silently fall back to
+                # filters.upsilon's defaults (dr=0.5, r0=1.0, pixel_size=1.0),
+                # which is a different filter from the one specified in
+                # docs/filter_specification.md.
                 profile = []
                 for rad in radii:
                     # TODO: pixel_size unit conversions!! Important
                     # filt_result = filterFunc(cutout, rr, rad, pixel_size=1.)  # type: ignore
-                    filt_result = filterFunc(cutout, rr, rad, dr=dr, pixel_size=pixelSize_true)  # type: ignore
+                    filt_result = filterFunc(cutout, rr, rad, dr=dr_filter, pixel_size=pixelSize_true, **filter_extra)  # type: ignore
                     profile.append(filt_result)
-                
+
                 profile = np.array(profile)
             else:
                 

@@ -1,126 +1,145 @@
+"""Simulated Delta Sigma profiles against the HSC Y3 x DESI LRG lensing measurement.
+
+One panel per simulation suite (SIMBA, IllustrisTNG, FLAMINGO), each overlaid
+with the same observational profile.
+
+The radial sampling is taken from the measurement rather than from the config:
+the data file's ``rp`` column is a comoving, h-free length (Mpc), and each
+simulation is stacked at exactly those separations, converted into its own
+ckpc/h with its own Hubble parameter. Simulations and data therefore land on
+identical x values by construction, and no arcmin<->length conversion (and so
+no assumption about the effective lens redshift) enters the comparison.
+
+Both axes are quoted in the units of a single reference Hubble parameter,
+``plot.data_h`` -- the h of the cosmology the measurement was made with. Each
+simulation's ckpc/h radii and Msun*h/(ckpc/h)^2 surface densities are rescaled
+from its own h to that reference, so the three suites (h = 0.6774, 0.68, 0.704,
+0.681) are directly comparable on one set of axes.
+
+The halo sample is the same SHAM selection used by
+``unbound_gas/simulated_kSZ.py``, so a selection tuned here can be carried over
+to the kSZ comparison unchanged.
+
+Run from the scripts/ directory:
+    python lensing/simulated_dsigma_profiles.py -p configs/lensing/dsigma_profile_z05.yaml
+"""
+
 import sys
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import h5py
-
-# from scipy.stats import binned_statistic_2d
-# from scipy.ndimage import gaussian_filter
-from matplotlib.colors import LogNorm
-from matplotlib.colors import SymLogNorm
 import matplotlib
-import matplotlib.cm as cm
 
-# from abacusnbody.analysis.tsc import tsc_parallel
 import time
 
-from astropy.cosmology import FlatLambdaCDM, Planck18
-import astropy.constants as const
+from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 
 # Import packages
 
 sys.path.append('../src/')
-# from filter_utils import *
-from utils import ksz_from_delta_sigma, arcmin_to_comoving, comoving_to_arcmin
-from SZstacker import SZMapStacker # type: ignore
-from stacker import SimulationStacker
+from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
+from stacker import SimulationStacker  # type: ignore
+from rprofiles import select_sham_subhalos  # type: ignore
 
 sys.path.append('../../illustrisPython/')
-import illustris_python as il # type: ignore
+import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
 
 import yaml
 import argparse
 from pathlib import Path
 from datetime import datetime
 from astropy.table import Table
-from copy import deepcopy
 
 
-def mass_to_temp(mass_density, z, cosmology=Planck18):
-    """Convert mass profile units to kSZ temperature fluctuation units
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# Kept in sync with unbound_gas/simulated_kSZ.py and compare_data_ratio.py so
+# the same simulation is the same colour across every figure.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
+
+def read_lensing_data(data_path, data_h):
+    """Read the measured Delta Sigma profile and its radial binning.
 
     Args:
-        mass_density (ndarray): Mass density in Msun/area. Area does not change, so can be arcmin^2 or kpc^2.
-        z (float): Redshift.
-        delta_sigma_is_comoving (bool, optional): If True, delta_sigma is in comoving units. Defaults to True.
-        cosmology (FlatLambdaCDM, optional): Cosmology object. Required if delta_sigma_is_comoving is True.
+        data_path (str): Path to the dsigma output FITS table. ``rp`` is read
+            in comoving Mpc (h-free) and ``ds`` in Msun/pc^2 (h-free), which is
+            what ``dsigma.precompute`` writes when called with an astropy
+            cosmology (see the TUNIT keywords on the table).
+        data_h (float): Hubble parameter of the cosmology the measurement was
+            made with. Sets the reference h of both plot axes.
 
     Returns:
-        ndarray: kSZ temperature fluctuation in micro-Kelvin.
+        tuple: ``(rp_mpc, radii_kpch, profile, profile_err)`` with ``rp_mpc``
+        the comoving separations in Mpc, ``radii_kpch`` the same separations in
+        ckpc/h at the reference h, ``profile`` the excess surface density in
+        Msun*h/(ckpc/h)^2 and ``profile_err`` its standard error.
+
+    Raises:
+        ValueError: If the ``rp`` bins are not evenly spaced. The simulations
+            are stacked on a ``np.linspace`` between the first and last bin, so
+            an uneven binning would silently put the two on different radii.
     """
-    mu_e = 1.14  # Mean molecular weight per free electron, assuming primordial composition
-    T_CMB = 2.7255 * u.K
-    c = 299792458 * u.m / u.s
-    v_rms = 300000 * u.m / u.s  # Example velocity, adjust as needed
-    Omega_b = cosmology.Ob0
-    Omega_m = cosmology.Om0
-    
-    # Constant gas fraction
-    f_b = Omega_b / Omega_m
+    data = Table.read(data_path)  # type: ignore
+    rp_mpc = np.asarray(data['rp'], dtype=float)
 
-    # Electron column and optical depth
-    Sigma_gas = f_b * mass_density                               # kg/m^2
-    N_e = (Sigma_gas / (mu_e * const.m_p)).value #.to(1 / u.m**2)         # 1/m^2 # type: ignore
-    tau = (const.sigma_T * N_e).decompose().value                 # dimensionless # type: ignore
+    spacings = np.diff(rp_mpc)
+    if spacings.size == 0 or not np.allclose(spacings, spacings[0], rtol=1e-6):
+        raise ValueError(
+            "The data rp bins are not evenly spaced, so stack_on_array's "
+            "np.linspace sampling cannot reproduce them. Got rp = "
+            f"{rp_mpc}.")
 
-    factor = const.sigma_T.value / (mu_e * const.m_p)  # 1/kg # type: ignore
-    
-    # if delta_sigma_is_comoving:
-    #     if cosmology is None:
-    #         raise ValueError("Cosmology must be provided if delta_sigma_is_comoving is True.")
-    #     E_z = cosmology.efunc(z)
-    #     factor = (1 + z)**2 * E_z
-    # else:
-    #     factor = 1.0
-    print(factor)
-    print(mass_density)
-    # print(T_CMB * (v_rms / c) * mass_density * factor)
-    kSZ_temp = (T_CMB * (v_rms / c) * mass_density.to(u.kg) * factor).to(u.uK).value
-    #.to(u.microkelvin, equivalencies=u.temperature_energy())
-    return kSZ_temp
+    # Msun/pc^2 -> Msun/kpc^2 (x1e6), then physical -> h-units (Sigma_h =
+    # Sigma_phys / h, since masses gain a factor h and areas a factor h^2).
+    to_h_units = 1e6 / data_h
+    profile = np.asarray(data['ds'], dtype=float) * to_h_units
+    profile_err = np.sqrt(np.diag(np.asarray(data['cov'], dtype=float))) * to_h_units
+
+    radii_kpch = rp_mpc * 1000.0 * data_h
+
+    return rp_mpc, radii_kpch, profile, profile_err
+
 
 def main(path2config, verbose=True):
-    """Main function to process the simulation maps.
+    """Stack the simulated Delta Sigma profiles and save the comparison figure.
 
     Args:
         path2config (str): Path to the configuration file.
         verbose (bool, optional): If True, prints detailed information. Defaults to True.
 
     Raises:
-        ValueError: If the configuration file is invalid or missing required fields.
+        ValueError: If the configuration file names an unknown simulation type,
+            or if plotting the data is disabled (the data sets the radial bins).
     """
 
     with open(path2config) as f:
         config = yaml.safe_load(f)
-    
+
     stack_config = config.get('stack', {})
     plot_config = config.get('plot', {})
-    
+
     # Stacking parameters
     redshift = stack_config.get('redshift', 0.5)
-    filterType = stack_config.get('filter_type', 'CAP')
+    filterType = stack_config.get('filter_type', 'DSigma')
     loadField = stack_config.get('load_field', True)
-    saveField = stack_config.get('save_field', True)
-    radDistance = stack_config.get('rad_distance', 1.0)
-    # radDistance = 1000.0 # convert from Mpc to kpc
-    pType = stack_config.get('particle_type', 'tau')
-    projection = stack_config.get('projection', 'xy')
-    pixelSize = stack_config.get('pixel_size', 0.5)
-    beamSize = stack_config.get('beam_size', None)
+    saveField = stack_config.get('save_field', False)
+    pType = stack_config.get('particle_type', 'total')
+    projection = stack_config.get('projection', 'yz')
+    pixelSize = stack_config.get('pixel_size', 0.2)
+    dsigma_dr_arcmin = stack_config.get('dsigma_dr', None)
 
-    filterType2 = stack_config.get('filter_type_2', 'DSigma')
-    pType2 = stack_config.get('particle_type_2', 'total')
-
-    minRadius = stack_config.get('min_radius', 1.0)
-    maxRadius = stack_config.get('max_radius', 10.0)
-    nRadii = stack_config.get('num_radii', 11)
-
-    # fractionType = config['fraction_type']
+    # Halo-selection parameters, matching unbound_gas/simulated_kSZ.py.
+    use_subhalos = stack_config.get('use_subhalos', True)
+    halo_abundance_target = stack_config.get('halo_abundance_target', 5e-4)
+    halo_mass_avg = stack_config.get('halo_mass_avg', 10 ** (13.22))
+    halo_mass_upper = stack_config.get('halo_mass_upper', 5 * 10 ** (14))
 
     # Plotting parameters
-    # get the datetime for file naming
     now = datetime.now()
     yr_string = now.strftime("%Y-%m")
     dt_string = now.strftime("%m-%d")
@@ -129,254 +148,189 @@ def main(path2config, verbose=True):
     figPath.mkdir(parents=True, exist_ok=True)
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
-    figType = plot_config.get('fig_type', 'pdf')
+    figType = plot_config.get('fig_type', 'png')
+    data_h = plot_config.get('data_h', 0.6766)  # Planck18
 
-    colourmaps = ['hot', 'cool']
-    colourmaps = ['hsv', 'twilight']
+    # The measurement defines the radial bins, so it is not optional here.
+    if not plot_config.get('plot_data', False):
+        raise ValueError("plot_data must be true: the data file sets the radial bins.")
 
-    star_fraction_dict_path = '../figures/2026-01/01-26/star_fraction_z0.5_star_fraction.yaml'
-    load_path_obj = Path(star_fraction_dict_path)
-    with open(load_path_obj, 'r') as f:
-        star_fraction_dict = yaml.safe_load(f)
+    rp_mpc, radii_kpch, profile_data, profile_err = read_lensing_data(
+        plot_config['data_path'], data_h)
+    nRadii = len(rp_mpc)
+    if verbose:
+        print(f"Radial bins taken from {plot_config['data_path']}")
+        print(f"  rp [comoving Mpc] : {np.round(rp_mpc, 4)}")
+        print(f"  R  [ckpc/h, h={data_h}] : {np.round(radii_kpch, 1)}")
 
-    # fig, ax = plt.subplots(figsize=(10,8))
-    fig, (ax_tng, ax_simba) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    colourmaps = ['hsv', 'twilight', 'plasma']
+
+    # One panel per simulation suite in the config, in config order.
+    nPanels = len(config['simulations'])
+    fig, axes = plt.subplots(1, nPanels, figsize=(6.5 * nPanels, 6.0),
+                             sharex=True, sharey=True)
+    axes = np.atleast_1d(axes)
+
     t0 = time.time()
-    for i, sim_type in enumerate(config['simulations']):
+    for panel_idx, sim_type in enumerate(config['simulations']):
         sim_type_name = sim_type['sim_type']
-        
-        colourmap = matplotlib.colormaps[colourmaps[i]] # type: ignore
-        
-        if sim_type_name == 'IllustrisTNG':
-            TNG_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0.2, 0.85, len(TNG_sims)))
-            ax = ax_tng
-        if sim_type_name == 'SIMBA':
-            SIMBA_sims = sim_type['sims']
-            colours = colourmap(np.linspace(0.2, 0.85, len(SIMBA_sims)))
-            ax = ax_simba
+        ax = axes[panel_idx]
+
+        colourmap = matplotlib.colormaps[colourmaps[panel_idx % len(colourmaps)]]  # type: ignore
+
+        sims = sim_type['sims']
+        if sim_type_name == 'FLAMINGO':
+            fallback = colourmap(np.linspace(0.2, 0.85, len(sims)))
+            colours = [_FLAMINGO_COLOURS.get(s['feedback'], fallback[k])
+                       for k, s in enumerate(sims)]
+        elif sim_type_name in ('IllustrisTNG', 'SIMBA'):
+            colours = colourmap(np.linspace(0.2, 0.85, len(sims)))
+        else:
+            raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
         if verbose:
-            print(f"Processing simulations of type: {sim_type_name}")
-        
-        for j, sim in enumerate(sim_type['sims']):
+            print(f"\n=== Processing simulations of type: {sim_type_name} ===")
+
+        for j, sim in enumerate(sims):
             sim_name = sim['name']
             snapshot = sim['snapshot']
-            
+
             if verbose:
                 print(f"Processing simulation: {sim_name}")
-            
+
             if sim_type_name == 'IllustrisTNG':
-                sim_name_show = sim_name
-                
-                stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
+                stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                             simType=sim_type_name)
-                
-                try:
-                    OmegaBaryon = stacker.header['OmegaBaryon']
-                except KeyError:
-                    OmegaBaryon = 0.0456  # Default value for Illustris-1
-                
-                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)                    
-                h_tng = stacker.header['HubbleParam']
-                
-
-            elif sim_type_name == 'SIMBA':
-                # SIMBA simulations have different feedback models               
+                sim_label = sim_name
+            else:
+                # feedback holds the SIMBA model, or the FLAMINGO variant
+                # directory name ('L1_m9' is the fiducial run).
                 feedback = sim['feedback']
-                OmegaBaryon = 0.048  # Default value for SIMBA
-
-                sim_name_show = sim_name + '_' + feedback
                 if verbose:
                     print(f"Processing feedback model: {feedback}")
-                
+
                 stacker = SimulationStacker(sim_name, snapshot, z=redshift,
-                                            simType=sim_type_name, 
+                                            simType=sim_type_name,
                                             feedback=feedback)
-                cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'], Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K, Ob0=OmegaBaryon)
-                
-                
-                # if fractionType == 'gas':
-                #     fraction = profiles0 / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
-                # elif fractionType == 'baryon':
-                #     fraction = (profiles0 + profiles4 + profiles5) / (profiles0 + profiles1 + profiles4 + profiles5) / (OmegaBaryon / stacker.header['Omega0']) # OmegaBaryon = 0.048 from Planck 2015
+                if sim_type_name == 'SIMBA':
+                    sim_label = sim_name + '_' + feedback
+                else:
+                    sim_label = f"FLAMINGO {feedback}"
 
-                # fraction_plot = np.median(fraction, axis=1)
-                # ax.plot(radii0 * radDistance, fraction_plot, label=sim_name_show, color=colours[j], lw=2)
-                # # ax.plot(radii0 * radDistance, profiles0.mean(axis=1), label=sim_name_show, color=colours[j], lw=2)
-                # # ax.plot(radii0 * radDistance, profiles0, label=sim_name_show, color=colours[j], lw=2)
-                # if plotErrorBars:
-                #     fraction_err = np.std(fraction, axis=1) / np.sqrt(fraction.shape[1])
-                #     upper = np.percentile(fraction, 75, axis=1)
-                #     lower = np.percentile(fraction, 25, axis=1)
-                #     ax.fill_between(radii0 * radDistance, 
-                #                     lower, 
-                #                     upper, 
-                #                     color=colours[j], alpha=0.2)
-            else:
-                raise ValueError(f"Unknown simulation type: {sim_type_name}")
+            h_sim = stacker.header['HubbleParam']
+            cosmo = FlatLambdaCDM(H0=100 * h_sim, Om0=stacker.header['Omega0'],
+                                  Tcmb0=2.7255 * u.K)
 
-            # Now we do the stacking after configuring the stacker
-            # TEST!!! making a map without beam smoothing.
-            # map_ = stacker.makeMap(pType, projection=projection, save=False, load=False, beamsize=None) # type: ignore
-            # map_ = stacker.makeMap(pType, projection=projection, save=saveField, load=loadField) # type: ignore
-            # map_ = map_ / (1 - star_fraction_dict[sim_name_show])
-            # stacker.setMap(pType, map_, z=redshift)
-            
-            # radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, 
-            #                                      maxRadius=maxRadius, numRadii=nRadii, # type: ignore
-            #                                      save=saveField, load=loadField, radDistance=radDistance,
-            #                                      projection=projection)
-
-            # radii1, profiles1 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, 
-            #                                      maxRadius=maxRadius, numRadii=nRadii, 
-            #                                      pixelSize=pixelSize, beamSize=beamSize,
-            #                                      save=saveField, load=loadField, radDistance=radDistance,
-            #                                      projection=projection)
-            # profiles1 = mass_to_temp(profiles1 * u.Msun, z=redshift, cosmology=cosmo) # convert to kSZ
-                                                    
-            minRad_mpch = arcmin_to_comoving(minRadius, redshift, cosmo) / 1000.0
-            maxRad_mpch = arcmin_to_comoving(maxRadius, redshift, cosmo) / 1000.0
-            radDistance = 1000.0 # convert from Mpc to kpc
-            
+            # Field resolution: the same rule makeMap uses, so the cached
+            # fields under products/2D/ are hit rather than rebuilt.
             theta_arcmin = comoving_to_arcmin(stacker.header['BoxSize'], redshift, cosmo=cosmo)
-            # pixelSize = 0.2
             nPixels = np.ceil(theta_arcmin / pixelSize).astype(int)
-            print(f"theta_arcmin: {theta_arcmin}, nPixels: {nPixels}")
 
-            print(f"minRad_mpch: {minRad_mpch}, maxRad_mpch: {maxRad_mpch}")
-            radii1, profiles1 = stacker.stackField(pType, filterType=filterType, minRadius=minRad_mpch, 
-                                                   maxRadius=maxRad_mpch, numRadii=nRadii, # type: ignore
-                                                   save=saveField, load=loadField, radDistance=radDistance, nPixels=nPixels,
-                                                   projection=projection)
+            # Stack at exactly the measured separations. rp is a comoving,
+            # h-free length, so rp * h_sim is that same length in this
+            # simulation's Mpc/h, which is the unit of radDistance = 1000 kpc/h.
+            minRadius = rp_mpc[0] * h_sim
+            maxRadius = rp_mpc[-1] * h_sim
+            radDistance = 1000.0  # kpc/h per radial unit
 
-            h = stacker.header['HubbleParam']
-            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h**2, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h, redshift, delta_sigma_is_comoving=True, cosmology=cosmo) # convert to kSZ
-            # profiles1 = ksz_from_delta_sigma(profiles1 * u.Msun / u.kpc**2 * h, redshift, delta_sigma_is_comoving=False, cosmology=cosmo) # convert to kSZ
-            # profiles1 = -1.0 * profiles1 # negative sign since kSZ from delta_sigma has a negative sign. # type: ignore
-            # profiles1 = np.abs(profiles1) # take absolute value, since some profiles are negative.
+            # Annulus width of the compensated kernel, in the same Mpc/h units.
+            # Left at None the filter falls back to 3 pixels, which is a
+            # resolution-dependent angular scale rather than a fixed one.
+            if dsigma_dr_arcmin is None:
+                dr = None
+            else:
+                dr = arcmin_to_comoving(dsigma_dr_arcmin, redshift, cosmo) / 1000.0
 
-            
-            # Now for Plotting
-            
-            
-            T_CMB = 2.7255
-            # speed of light:
-            # v_c = 0.0007
-            v_c = 300000 / 299792458 # velocity over speed of light.
-            # v_c = 1.06e-3
-            # The conversion from tau to micro-Kelvin for kSZ is T_CMB * (v/c) * 1e6
-            # This is already done in the SZstacker.py file when loading the tau field.
-            # So here we do not need to do it again.
-            # profiles0 = profiles0 * T_CMB * 1e6 * v_c # Convert to micro-Kelvin
-            
-            if sim_type_name == 'SIMBA':
-                # SIMBA simulations have different feedback models               
-                sim_name = sim_name + '_' + sim['feedback'] 
-            
-            # If we want area-averaged CAP profile:
-            # profiles0 = profiles0 / (np.pi*radii0**2)[:, np.newaxis]
-            # profiles1 = profiles1 * (np.pi*radii1**2)[:, np.newaxis]
-            # plot_term = profiles0 / profiles1 # TODO
-            # plot_term = profiles1
+            if verbose:
+                print(f"  theta_arcmin: {theta_arcmin:.1f}, nPixels: {nPixels}, h: {h_sim}")
+                print(f"  minRadius: {minRadius:.4f} Mpc/h, maxRadius: {maxRadius:.4f} Mpc/h, "
+                      f"dr: {dr if dr is None else round(dr, 4)} Mpc/h")
 
-            # profiles_plot = np.mean(plot_term, axis=1)
-            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1) / (OmegaBaryon / stacker.header['Omega0'])
-            # profiles_plot = np.mean(profiles0, axis=1) / np.mean(profiles1, axis=1)
-            profiles_plot = np.mean(profiles1, axis=1)
-            # profiles_plot = np.median(plot_term, axis=1)
-            ax.plot(radii1 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+            # Select the sample once and hand the exact index array to
+            # stackField, so the sample reported is the sample stacked.
+            if use_subhalos:
+                # Read both catalogues once and hand them in: left to itself
+                # select_sham_subhalos reads them again, which for FLAMINGO is
+                # a second full pass over the SOAP-HBT files.
+                subhalos = stacker.loadSubHalos()
+                parents = stacker.loadHalos()
+                halo_mask = select_sham_subhalos(stacker, halo_abundance_target,
+                                                 parent_mass_upper=halo_mass_upper,
+                                                 subhalos=subhalos, parents=parents)
+                parent_grnr = subhalos['SubhaloGrNr'][halo_mask]
+                mean_mass = np.mean(parents['GroupMass'][parent_grnr])
+                if verbose:
+                    print(f"  SHAM sample: {halo_mask.size} subhaloes, "
+                          f"<M_parent> = {mean_mass:.3e} Msun/h")
+            else:
+                halo_mask = None
+
+            radii, profiles = stacker.stackField(
+                pType, filterType=filterType,
+                minRadius=minRadius, maxRadius=maxRadius, numRadii=nRadii,  # type: ignore
+                save=saveField, load=loadField, radDistance=radDistance,
+                nPixels=nPixels, projection=projection,
+                use_subhalos=use_subhalos,
+                halo_abundance_target=halo_abundance_target,
+                halo_mass_avg=halo_mass_avg,
+                halo_mass_upper=halo_mass_upper,
+                halo_mask=halo_mask, dr=dr)
+
+            # radii comes back in this simulation's Mpc/h at exactly rp_mpc *
+            # h_sim; plot everything on the shared reference-h axis instead.
+            radii_plot = radii / h_sim * 1000.0 * data_h
+            if not np.allclose(radii_plot, radii_kpch, rtol=1e-6):
+                raise ValueError(
+                    "Simulated radii do not coincide with the measured rp "
+                    f"bins: {radii_plot} vs {radii_kpch}")
+
+            # Sigma is in Msun*h_sim/(ckpc/h_sim)^2; rescale to the reference h
+            # (Sigma_phys = Sigma_sim * h_sim, Sigma_ref = Sigma_phys / data_h).
+            profiles = profiles * h_sim / data_h
+
+            profiles_plot = np.mean(profiles, axis=1)
+            ax.plot(radii_plot, profiles_plot, label=sim_label,
+                    color=colours[j], lw=2, marker='o')
             if plotErrorBars:
-                # err0 = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                err1 = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                # profiles_err = np.abs(profiles_plot) * np.sqrt( (err0 / np.mean(profiles0, axis=1))**2 + (err1 / np.mean(profiles1, axis=1))**2 )
-                profiles_err = err1
-                
-                
-                # profiles_err = np.std(plot_term, axis=1) / np.sqrt(plot_term.shape[1])
-                # upper = np.percentile(plot_term, 75, axis=1)
-                # lower = np.percentile(plot_term, 25, axis=1)
-                upper = profiles_plot + profiles_err
-                lower = profiles_plot - profiles_err
-                ax.fill_between(radii1 * radDistance, 
-                                lower, 
-                                upper, 
+                profiles_sem = np.std(profiles, axis=1) / np.sqrt(profiles.shape[1])
+                ax.fill_between(radii_plot,
+                                profiles_plot - profiles_sem,
+                                profiles_plot + profiles_sem,
                                 color=colours[j], alpha=0.2)
 
-    T_CMB = 2.7255
-    v_c = 300000 / 299792458 # velocity over speed of light.
+    # Observational data, overlaid on every panel.
+    for panel_idx, sim_type in enumerate(config['simulations']):
+        ax = axes[panel_idx]
+        ax.errorbar(radii_kpch, profile_data, yerr=profile_err, fmt='s', color='k',
+                    label=plot_config['data_label'], markersize=5, zorder=10)
 
-    if plot_config['plot_data']:
-        # TODO: Check that the distance conversion here (without h) is valid!
-        data_path = plot_config['data_path']
+        ax.set_xlabel(f'R [ckpc/h], h = {data_h}', fontsize=16)
+        if panel_idx == 0:
+            ax.set_ylabel(rf'$\Delta \Sigma$({pType})  [M$_\odot h$ / (ckpc/h)$^2$]',
+                          fontsize=16)
+        ax.legend(loc='upper right', fontsize=11)
+        ax.grid(True)
+        ax.set_title(sim_type['sim_type'], fontsize=16)
 
-        data = Table.read(data_path) # type: ignore
-        # r_data = data['theta_arcmins']
-        # profile_data = data['prof']
-        # profile_err = data['prof_err']
-        r_data = data['rp'] * radDistance * h_tng # / 0.6774 # in kpc
-        profile_data = deepcopy(data['ds']) * u.Msun / u.pc**2 * (radDistance)**2 / h_tng # in Msun / pc^2
-        ds_measurement_cov = data['cov'] * (u.Msun / u.pc**2 * (radDistance)**2 / h_tng)**2 # in Msun^2 / pc^4
-        profile_err = np.sqrt(np.diag(ds_measurement_cov))# * (radDistance)**2
-        print(r_data)
-        print(profile_data)
-        # data = np.load(data_path)
-        # r_data = data['theta_arcmins']
-        # profile_data = data['prof']
-        # profile_err = np.sqrt(np.diag(data['cov']))
-        ax_tng.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=5)
-        ax_simba.errorbar(r_data, profile_data, yerr=profile_err, fmt='s', color='k', label=plot_config['data_label'], markersize=5)
-
-    # ax.set_xlabel('Radius (arcmin)')
-    # ax.set_ylabel('f')
-    ax_tng.set_xlabel('R [kpc/h]', fontsize=18)
-    ax_simba.set_xlabel('R [kpc/h]', fontsize=18)
-    # ax_tng.set_ylabel(r'$\frac{T_{kSZ} / \pi R^2}{\Delta \Sigma}$', fontsize=18)
-    ax_tng.set_ylabel(rf'$\Delta \Sigma$({pType})', fontsize=18)
-    # ax.set_xscale('log')
-    # ax.set_yscale('log')
-    # --- Secondary Y axis examples ---
-
-    # 1) Multiplicative (recommended for log scale): y2 = k * y1
-    # k = 1/ (T_CMB * v_c * 1e6)  # constant factor between axes
-    # secax = ax.secondary_yaxis('right',
-    #                            functions=(lambda y: y * k,      # forward
-    #                                       lambda y: y / k))     # inverse
-    # secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$', fontsize=18)
-
-    # 2) If you really need an additive offset (ensure y+C > 0 on log scale):
-    # C = 5.0  # additive offset in the same units
-    # secax = ax.secondary_yaxis('right',
-    #                          functions=(lambda y: y + C,      # forward
-    #                                     lambda y: y - C))     # inverse
-    # secax.set_ylabel(r'$T_{kSZ}$ + C [$\mu K \rm{arcmin}^2$]')
-
-    # ax_tng.set_xlim(0.0, maxRadius * radDistance + 0.5)
-    # ax_simba.set_xlim(0.0, maxRadius * radDistance + 0.5)
-    # ax.set_ylim(0, 1.2)
-    # ax.axhline(1.0, color='k', ls='--', lw=2)
-    ax_tng.legend(loc='upper right', fontsize=12)
-    ax_simba.legend(loc='upper right', fontsize=12)
-    ax_tng.grid(True)
-    ax_simba.grid(True)
-    fig.suptitle(f'Ratio at z={redshift}', fontsize=18)
-    
-    fig.tight_layout()
-    # fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_ratio.{figType}', dpi=300) # type: ignore
-    fig.savefig(figPath / f'{pType}_{pType2}_{figName}_z{redshift}_{filterType}_{filterType2}_ratio2.{figType}', dpi=300) # type: ignore
+    selection = (f"SHAM on SubhaloMStar, target n = {halo_abundance_target} (cMpc/h)$^{{-3}}$"
+                 if use_subhalos else
+                 f"mass cut, target $<M>$ = {halo_mass_avg:.3e} Msun/h")
+    fig.suptitle(rf'$\Delta \Sigma$ profiles, {filterType} filter, z={redshift} -- {selection}',
+                 fontsize=18)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}', dpi=300)  # type: ignore
     plt.close(fig)
-    
+
+    print(f"\nSaved: {figPath / f'{figName}_{pType}_z{redshift}_{filterType}.{figType}'}")
     print('Done!!! Time taken: ', time.time() - t0)
 
+
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser(description='Process config.')
-    parser.add_argument('-p', '--path2config', type=str, default='./configs/lensing/dsigma_profile_z05.yaml', help='Path to the configuration file.')
-    # parser.add_argument("--set", nargs=2, action="append",
-    #                     metavar=("KEY", "VALUE"),
-    #                     help="Override with dotted.key  value")
+    parser.add_argument('-p', '--path2config', type=str,
+                        default='./configs/lensing/dsigma_profile_z05.yaml',
+                        help='Path to the configuration file.')
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")
 

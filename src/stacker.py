@@ -465,7 +465,7 @@ class SimulationStacker(object):
                    mask=False, maskRad=3.0, subtract_mean=False,
                    use_subhalos=False, halo_abundance_target=5e-4,
                    halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
-                   halo_mask=None):
+                   halo_mask=None, dr=None):
         """Do stacking on the computed field.
 
         Args:
@@ -491,6 +491,12 @@ class SimulationStacker(object):
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
                 catalogue. When provided, internal halo selection is skipped entirely.
                 Defaults to None.
+            dr (float, optional): Annulus width of the compensated ('DSigma',
+                'upsilon') filters, in the same units as ``radDistance``.
+                Defaults to None, meaning ``stack_on_array``'s own fallback of
+                3 pixels. The fallback is a fixed pixel count, so it scales with
+                the field resolution; pass ``dr`` explicitly when the annulus
+                width has to be a fixed physical (or angular) scale.
         Raises:
             NotImplementedError: If pType is not one of the ones listed above.
 
@@ -537,6 +543,7 @@ class SimulationStacker(object):
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
             halo_mask=halo_mask,
+            dr=dr,
         )
         
         # restore the mean if subtracted

@@ -1,0 +1,128 @@
+# Fit the SHAM number density on the lensing Delta Sigma profile, then predict
+# the kSZ signal from the SAME haloes and compare to the kSZ measurement.
+#
+# Figure: 3 columns (one per simulation suite) x 2 rows (top = Delta Sigma fit,
+# bottom = kSZ prediction for the fitted sample).
+#
+# Run from the scripts/ directory:
+#   python lensing/fit_dsigma_ksz.py -p configs/lensing/fit_dsigma_ksz_z05.yaml
+#   python lensing/fit_dsigma_ksz.py -p configs/lensing/fit_dsigma_ksz_z05.yaml --replot
+
+stack:
+  redshift: 0.5
+  load_field: true
+  save_field: false
+  projection: 'yz' # same projection for both rows, for internal consistency
+
+  # --- Lensing (top row): Delta Sigma on the unconvolved field ---
+  particle_type: 'total'
+  filter_type: 'DSigma'
+  pixel_size: 0.2 # arcmin; every 'total' field is cached at this resolution
+  dsigma_dr: 0.3  # arcmin; annulus width of the compensated DSigma kernel
+
+  # --- kSZ (bottom row): tau on the beam-convolved map ---
+  # Matches unbound_gas/simulated_kSZ.py, except num_radii is 9 rather than the
+  # stackMap default of 11, so the simulated points land on the measured
+  # theta bins instead of interleaving with them.
+  ksz_particle_type: 'tau'
+  ksz_filter_type: 'CAP'
+  ksz_pixel_size: 0.5 # arcmin; every 'tau' map is cached at this resolution
+  ksz_beam_size: 1.6  # arcmin
+  ksz_min_radius: 1.0 # arcmin
+  ksz_max_radius: 6.0 # arcmin
+  ksz_num_radii: 9
+
+  # --- Halo selection: SHAM on subhalo stellar mass ---
+  use_subhalos: true
+  halo_mass_upper: 5.0e+14 # parent FoF mass cap in Msun/h (needs the signed exponent)
+
+  # Target number densities in (cMpc/h)^-3 swept for the fit. select_sham_subhalos
+  # takes the top-N stellar-mass-ranked subhaloes, so these samples are exactly
+  # nested and the sweep traces a systematic shift in the halo mass mix.
+  abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3]
+
+fit:
+  # Inner radial cut for the chi-squared. The compensated-kernel DSigma
+  # estimator is biased high at small radii (it compares the disk mean against
+  # an annulus of finite width, so it overestimates for a steep profile), and
+  # that bias lives on the theory side where the data covariance cannot absorb
+  # it. On an analytic cored profile the bias is ~+34% at 1 arcmin, ~+6% at
+  # 1.625 and ~+3% at 2.25, against measurement errors of 4.4 / 2.9 / 5.4 per
+  # cent -- so the two innermost bins are excluded and the rest are kept.
+  # Excluded bins are still stacked and still plotted, just not fitted.
+  r_min_arcmin: 2.25
+
+  # Jackknife fields behind the lensing covariance; sets the Hartlap factor.
+  # The correction is recomputed for the number of bins actually fitted rather
+  # than reusing the stored 9-bin ds_uK_cov_h.
+  n_jk_lens: 100
+
+  # Optional evidence for r_min_arcmin: restack one simulation with a much
+  # narrower annulus and report the ratio, which measures the estimator bias on
+  # a real profile rather than on the analytic toy model above. Costs one extra
+  # stack of a single simulation; off by default.
+  calibrate_dr_bias: false
+  calibration_dr: 0.2         # arcmin; must be at least one pixel wide
+  calibration_sim: 'TNG300-1' # which simulation to calibrate on
+
+plot:
+  # Lensing + kSZ measurements for the same DESI LRG bin-1 lens sample.
+  # ds_uK is Delta Sigma pushed through utils.ksz_from_delta_sigma into uK; the
+  # conversion is a pure scale factor, so it is inverted exactly at runtime by
+  # calibrating on 1 Msun/pc^2. Verified to reproduce
+  # dsigma_tomo_noboost_hscy3_bin0_LRG_bin1.fits to 4e-16.
+  ds_data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz'
+  ds_data_key: 'source_bin_0'
+  ds_data_label: 'HSCY3 Bin0 x LRG bin1 Lensing'
+  # Effective lens redshift of DESI LRG bin 1, from
+  # DESIxHSC-Lensing/scripts/plot_scripts/configs/ksz_self_LRG.yaml (z_lens[0]).
+  # Sets both the uK -> Msun/pc^2 scale factor and the theta -> rp mapping.
+  data_z_lens: 0.5098837242116946
+  # Hubble parameter of the measurement cosmology (Planck18), used only to move
+  # each simulation's ckpc/h radii onto a common reference h.
+  data_h: 0.6766
+
+  # kSZ measurement, as used by unbound_gas/simulated_kSZ.py. Diagonal errors
+  # only, so the bottom row is a prediction overlay and carries no fit.
+  ksz_data_path: '../data/Fig2_sim.npz'
+  ksz_data_label: 'Hadzhiyska 2024'
+
+  # Canonical cache on a stable (non date-stamped) path so --replot finds it.
+  npz_path: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+
+  fig_path: '../figures/'
+  fig_name: 'fit_dsigma_ksz_z05'
+  fig_type: 'png'
+
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      # The m50n512 boxes are dropped: at these number densities a 50 cMpc/h box
+      # yields only tens of subhaloes, too few to fit.
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67
+      - name: 'TNG300-1'
+        snapshot: 67
+        # The shared grid's chi-squared was still falling at its 4.0e-3 ceiling
+        # (1603 -> 558 -> 141 -> 21.8 -> 19.2), so this box needs a higher one.
+        # A per-simulation grid keeps the other six resumable from the cache.
+        abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3, 8.0e-3, 1.6e-2]
+      - name: 'Illustris-1'
+        snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'

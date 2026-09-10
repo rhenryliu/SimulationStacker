@@ -1,0 +1,91 @@
+# Addendum Tasks 7, 8 and 10: the calibration factor C at z ~ 0.5 (LRG-like).
+#
+# Computes C = Y_Xm Y_gm / (Y_mm Y_gX) for X in {b, e}, in both matter
+# conventions (m = CDM and m -> t = total), for the filter set
+# {Sigma, DSigma, Upsilon(R0), Y-transform(Rmax)}, with jackknife errors
+# formed per realization.  See docs/cross_correlation_notes_v0.2_addendum.md.
+#
+# Every setting below outside the two new blocks is copied verbatim from
+# r_profiles_z05.yaml so the galaxy sample, aperture grid, annulus width and
+# jackknife match the Task 1 sweep exactly.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/make_calibration_factor.py -p configs/cross_corr/calibration_z05.yaml
+
+stack:
+  redshift: 0.5
+
+  # Only 'yz' is currently cached for every suite.  'xy' and 'xz' would each
+  # require a full particle sweep per field type per simulation.
+  projections: ['yz']
+
+  min_radius: 1.0        # arcmin
+  max_radius: 6.0        # arcmin
+  num_radii: 9           # nine linear bins, matching the existing pipeline
+  # Append further bins above max_radius at the same 0.625' spacing, as a
+  # large-aperture diagnostic. The 1'-6' bins above are untouched by this.
+  # Not extended below 1', where the data are resolution-limited.
+  extend_max_radius: 10.0
+  dr_arcmin: 0.75        # annulus width of the compensated filter
+  # (r0_arcmin is not read here: see upsilon_r0 below, which supersedes it.)
+
+  # Upsilon reference radii.  The production Task 1 runs used R0 = 2' while
+  # every prediction in the addendum assumes R0 = 1'; both are carried because
+  # Upsilon is a linear combination of DSigma amplitudes already on the grid,
+  # so a second R0 costs one extra aperture and no extra convolution.
+  upsilon_r0: [1.0, 2.0]
+
+  # Park et al. (2021) Y-transform reference radii, Y(R; Rmax) = Sigma(R) -
+  # Sigma(Rmax).  The addendum's fiducial is 5'; the scan settles Rmax rather
+  # than fixing it by assumption (its Section 8.2).  Bins at and above
+  # 0.8*Rmax are masked, where the transform vanishes by construction.
+  ytransform_rmax: [4.0, 5.0, 6.0, 9.0]
+
+  n_jk_side: 4           # 4x4 = 16 leave-one-out spatial jackknife patches
+
+  load_field: true
+  save_field: false      # everything needed is already cached
+
+  particle_type_e: 'ionized_gas'   # free electrons
+  particle_type_b: 'baryon'        # gas + stars + BH
+
+  # SHAM galaxy sample: top-N subhalos by stellar mass matching this number
+  # density, after restricting to parent FoF haloes below parent_mass_upper.
+  # Both settings reproduce the f_gas paper's sample exactly (the pre-filter is
+  # stackMap's default, applied by the existing use_subhalos=True path).
+  halo_abundance_target: 5.0e-4    # (cMpc/h)^-3, DESI LRG bin 1
+  parent_mass_upper: 5.0e14        # Msun/h; set to null to disable
+
+plot:
+  npz_path: '../data/cross_corr_C/'
+  fig_path: '../figures/'
+  fig_name: 'calibration_z05'
+  fig_type: 'png'
+
+# SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
+# 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number
+# densities, which is too few to measure Y_gg over 1'-6'. Their jackknife
+# errors on r_bm/r_gb exceeded the cross-code scatter itself, so they added
+# noise rather than a cross-code constraint. See docs/r_profiles_implementation_plan.md.
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+        n_pixels: 2674
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 8869

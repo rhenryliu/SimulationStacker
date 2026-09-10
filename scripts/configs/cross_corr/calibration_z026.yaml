@@ -1,0 +1,79 @@
+# Addendum Tasks 7, 8 and 10: the calibration factor C at z ~ 0.26 (BGS-like;
+# FLAMINGO at z = 0.30).
+#
+# Companion to calibration_z05.yaml; identical filter and jackknife settings,
+# the denser SHAM sample and the lower-redshift snapshot of each suite.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/make_calibration_factor.py -p configs/cross_corr/calibration_z026.yaml
+
+stack:
+  redshift: 0.26
+
+  projections: ['yz']
+
+  min_radius: 1.0
+  max_radius: 6.0
+  num_radii: 9
+  # See r_profiles_z05.yaml for the rationale.
+  extend_max_radius: 10.0
+  dr_arcmin: 0.75
+  # (r0_arcmin is not read here: see upsilon_r0 below, which supersedes it.)
+
+  # Upsilon reference radii.  The production Task 1 runs used R0 = 2' while
+  # every prediction in the addendum assumes R0 = 1'; both are carried because
+  # Upsilon is a linear combination of DSigma amplitudes already on the grid,
+  # so a second R0 costs one extra aperture and no extra convolution.
+  upsilon_r0: [1.0, 2.0]
+
+  # Park et al. (2021) Y-transform reference radii, Y(R; Rmax) = Sigma(R) -
+  # Sigma(Rmax).  The addendum's fiducial is 5'; the scan settles Rmax rather
+  # than fixing it by assumption (its Section 8.2).  Bins at and above
+  # 0.8*Rmax are masked, where the transform vanishes by construction.
+  ytransform_rmax: [4.0, 5.0, 6.0, 9.0]
+
+  n_jk_side: 4
+
+  load_field: true
+  save_field: false
+
+  particle_type_e: 'ionized_gas'
+  particle_type_b: 'baryon'
+
+  # Denser than the LRG sample, matching the BGS-like target of the spec.
+  halo_abundance_target: 1.0e-3    # (cMpc/h)^-3
+  parent_mass_upper: 5.0e14        # Msun/h
+
+plot:
+  npz_path: '../data/cross_corr_C/'
+  fig_path: '../figures/'
+  fig_name: 'calibration_z026'
+  fig_type: 'png'
+
+# SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
+# 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number
+# densities, which is too few to measure Y_gg over 1'-6'. Their jackknife
+# errors on r_bm/r_gb exceeded the cross-code scatter itself, so they added
+# noise rather than a cross-code constraint. See docs/r_profiles_implementation_plan.md.
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+        n_pixels: 4822
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 14015

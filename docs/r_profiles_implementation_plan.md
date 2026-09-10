@@ -1228,9 +1228,21 @@ cut. The move to R0 = 2 arcmin costs two apertures and moves the z ~ 0.5
 verdict from PASS to MARGINAL; trimming does not rescue it (0.143 either way at
 z ~ 0.5), and at z ~ 0.26 it is the worst of the six even after trimming
 (0.225). Nothing in this scan supports it.
-The configs are left at 2 arcmin pending the decision, since the choice is a
-scientific one and the exploratory intent was to probe the small-scale
-sensitivity, but the measurement does not favour it.
+**Decision taken (2026-09-10): the configs are back at R0 = 1 arcmin.** The
+exploratory intent of the 2 arcmin move was to probe the small-scale
+sensitivity, and the scan above answered it; nothing in the measurement
+favoured keeping it. This also restores agreement with
+`filter_specification.md` Sec. 1, which never stopped specifying
+`Upsilon(R0 = 1')` as the frozen filter, and with every prediction in the v0.2
+addendum, which assumes 1 arcmin throughout.
+
+Note that this is a decision about `r_bm/r_gb`, the Task 1 statistic scanned
+here. It does not conflict with `cross_correlation_notes_v0.3_response.md`
+Sec. 5.3, which disfavours `Upsilon(1')` on the *calibration factor* `|C-1|`
+and on the Gate A scatter of `C`: those are different statistics measured on
+different quantities, and the v0.3 recommendation to prefer `R0 = 2'` applies
+where `C` is the deliverable. If a single R0 has to serve both, that tension
+is unresolved and needs stating rather than splitting the difference.
 
 ### U7. The committed FLAMINGO r-profiles were stale at HEAD
 

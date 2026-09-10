@@ -27,6 +27,13 @@ Conventions (fixed by the spec, do not vary):
   ``DSigma`` is the compensated disk-minus-annulus filter; ``Upsilon`` is the
   linear combination ``DSigma(R) - (r0/R)**2 * DSigma(r0)``, formed at the
   amplitude level rather than by extra convolutions.
+- The Park et al. (2021) ``Y`` transform, ``Y(R; Rmax) = Sigma(R) -
+  Sigma(Rmax)``, is the same kind of amplitude-level linear combination, built
+  on request by :func:`assemble_ytransform` rather than by
+  :func:`compute_Y_matrix`, since it needs a reference radius the caller
+  chooses.  Note the name collision the theory documents warn about: the
+  *filter* ``Y(R; Rmax)`` always carries a radial argument, whereas the
+  *amplitudes* ``Y_ab`` always carry field subscripts.
 - The galaxy auto-correlation gets an analytic self-pair subtraction of
   ``K(0) / nbar_pix``, with ``nbar_pix`` the mean galaxy count per pixel.
 - Errors come from a spatial ``n_jk_side x n_jk_side`` block jackknife.  The
@@ -80,6 +87,10 @@ DR_ARCMIN: float = 0.75
 
 #: Upsilon reference radius, in arcmin.
 R0_ARCMIN: float = 1.0
+
+#: Y-transform bins are dropped at and above this fraction of Rmax, where the
+#: transform vanishes by construction.  Addendum Sections 2.5 and 8.2.
+YT_USABLE_FRACTION: float = 0.8
 
 #: Jackknife blocks per side (4x4 = 16 leave-one-out patches).
 N_JK_SIDE: int = 4
@@ -462,6 +473,59 @@ def upsilon_defined_mask(radii: Sequence[float], r0: float = R0_ARCMIN,
     return r > float(r0) + atol
 
 
+def ytransform_defined_mask(radii: Sequence[float], rmax: float,
+                            fraction: float = YT_USABLE_FRACTION,
+                            rtol: float = 1e-12) -> np.ndarray:
+    """Return the aperture bins where the Park et al. ``Y`` transform informs.
+
+    ``Y(R; Rmax) = Sigma(R) - Sigma(Rmax)`` localizes from below by referencing
+    the *largest* aperture, which is the mirror image of what ``Upsilon`` does
+    with ``R0``.  The consequence is the same, at the other end of the grid:
+
+    - at ``R = Rmax`` the amplitude vanishes identically, so the coefficient
+      ``Y_ab / sqrt(Y_aa Y_bb)`` is a genuine 0/0;
+    - just below ``Rmax`` the amplitude is a small difference of two comparable
+      ``Sigma`` amplitudes and carries almost no signal.  For a flat
+      ``DSigma``, which is what the kSZ data show,
+      ``Y(R) = 2 DSigma ln(Rmax/R)``, so at ``R = 0.8 Rmax`` only 14 per cent
+      of the ``R = Rmax/5`` amplitude survives.
+
+    ``fraction`` therefore drops a band below ``Rmax`` rather than the single
+    degenerate bin, following the addendum's Sections 2.5 and 8.2 ("in practice
+    drop ``R >~ 0.8 Rmax``").  :func:`assemble_ytransform` returns the raw
+    algebra and does not special-case either; this mask is what the figures and
+    the metrics use to drop the bins, exactly as
+    :func:`upsilon_defined_mask` is for ``Upsilon``.
+
+    Args:
+        radii (sequence): Aperture radii in arcmin.
+        rmax (float): Y-transform reference radius in arcmin.
+        fraction (float, optional): Bins at or above ``fraction * rmax`` are
+            dropped.  Defaults to :data:`YT_USABLE_FRACTION`.
+        rtol (float, optional): Relative tolerance on the ``R == fraction *
+            rmax`` comparison.  Defaults to 1e-12.  The cut is a *product* of
+            two floats, so an aperture that ought to sit exactly on it may land
+            either side by one ulp -- ``0.8 * 6.0`` is ``4.800000000000001``,
+            which would silently keep a 4.8 arcmin bin the rule excludes.  No
+            production grid has an aperture on the boundary, so this changes no
+            current result; it stops the rule from depending on rounding.
+
+    Returns:
+        np.ndarray: Boolean mask over ``radii``, True where
+        ``R < fraction * rmax``.
+
+    Raises:
+        ValueError: If ``rmax`` or ``fraction`` is not positive.
+    """
+    if not float(rmax) > 0:
+        raise ValueError(f"rmax must be positive, got {rmax!r}.")
+    if not float(fraction) > 0:
+        raise ValueError(f"fraction must be positive, got {fraction!r}.")
+    r = np.asarray(radii, dtype=np.float64)
+    cut = float(fraction) * float(rmax)
+    return (r < cut) & ~np.isclose(r, cut, rtol=rtol, atol=0.0)
+
+
 def filtered_map(field: np.ndarray, kernel_spectrum: np.ndarray,
                  shape: Tuple[int, int]) -> np.ndarray:
     """Apply an aperture kernel to a field by periodic FFT correlation.
@@ -801,6 +865,107 @@ def get_Y(Ymat: dict, filt: str, a: str, b: str, jackknife: bool = False
     return store[filt][_pair_key(a, b)]
 
 
+def _reference_index(radii: Sequence[float], target: float,
+                     atol: float = 1e-9) -> int:
+    """Locate a reference radius on the aperture grid.
+
+    Args:
+        radii (sequence): Aperture grid, arcmin.
+        target (float): Reference radius to locate, arcmin.
+        atol (float, optional): Absolute tolerance, arcmin.  Defaults to 1e-9.
+
+    Returns:
+        int: Index of the matching aperture.
+
+    Raises:
+        ValueError: If no aperture matches.  The reference radius must be a
+            grid point: the linear-combination construction reads the
+            amplitude there and must not interpolate it.
+    """
+    r = np.asarray(radii, dtype=np.float64)
+    hits = np.flatnonzero(np.abs(r - float(target)) <= atol)
+    if hits.size == 0:
+        raise ValueError(
+            f"Reference radius {target}' is not on the aperture grid "
+            f"{np.array2string(r, precision=4)}. Add it to the grid: the "
+            "linear-combination construction reads the amplitude at the "
+            "reference radius and must not interpolate it."
+        )
+    return int(hits[0])
+
+
+def assemble_ytransform(Ymat: dict, rmax: float, base: str = 'Sigma',
+                        fraction: float = YT_USABLE_FRACTION,
+                        atol: float = 1e-9) -> Tuple[dict, dict, np.ndarray]:
+    """Build the Park et al. (2021) ``Y`` transform from ``Sigma`` amplitudes.
+
+    ``F^Y_R = F^Sigma_R - F^Sigma_Rmax`` as an operator on the map, so
+
+        Y^(Y)_ab(R) = Y^(Sigma)_ab(R) - Y^(Sigma)_ab(Rmax)
+
+    holds exactly with no extra convolution -- this *is* the direct map-level
+    filter the addendum's Appendix A asks for, not the quadrature
+    reconstruction from ``DSigma`` of its Section 2, which is needed only for a
+    lensing leg that simulations do not have.  It is the same linearity
+    :func:`compute_Y_matrix` already uses to build ``Upsilon`` out of
+    ``DSigma``.
+
+    The combination is formed **per jackknife realization**, so the strong
+    correlation between the two apertures survives into the errors rather than
+    being lost to Gaussian propagation of marginal ones.
+
+    Although it is built from ``Sigma``, the ``Y`` transform is compensated:
+    ``W_ann(k -> 0) -> 1`` for both terms, so the uncompensated ``k -> 0``
+    response that disqualified ``Sigma`` at Gate B cancels identically in the
+    difference.  What it inherits instead is a much larger low-``k``
+    coefficient than ``DSigma`` (17.6x at ``R = 1'`` for ``Rmax = 5'``,
+    addendum Eq. A5), hence more box-scale and large-scale-noise sensitivity.
+
+    Args:
+        Ymat (dict): Output of :func:`compute_Y_matrix`.  ``rmax`` must be one
+            of its ``'radii'``.
+        rmax (float): Reference radius in arcmin.
+        base (str, optional): Base filter to difference.  Defaults to
+            ``'Sigma'``, which is the definition; exposed only so a test can
+            exercise the construction on another linear filter.
+        fraction (float, optional): Passed to
+            :func:`ytransform_defined_mask`.  Defaults to
+            :data:`YT_USABLE_FRACTION`.
+        atol (float, optional): Tolerance for locating ``rmax`` on the grid,
+            in arcmin.  Defaults to 1e-9.
+
+    Returns:
+        tuple: ``(Y, Y_jk, mask)`` where ``Y`` maps each field pair to an
+        amplitude of shape ``(n_radii,)``, ``Y_jk`` to leave-one-out
+        realizations of shape ``(n_jk, n_radii)``, and ``mask`` is the boolean
+        aperture mask from :func:`ytransform_defined_mask`.  The amplitudes are
+        the raw algebra and are **not** masked; masking is the caller's, so
+        that the amplitudes stay available as diagnostics.
+
+    Raises:
+        ValueError: If ``rmax`` is not on the aperture grid, or ``base`` is not
+            a filter present in ``Ymat``.
+    """
+    if base not in Ymat['Y']:
+        raise ValueError(
+            f"base filter {base!r} is not in Ymat; available: "
+            f"{tuple(Ymat['Y'])}.")
+
+    idx = _reference_index(Ymat['radii'], rmax, atol=atol)
+    Y_base = Ymat['Y'][base]
+    Y_base_jk = Ymat['Y_jk'][base]
+
+    Y: Dict[Tuple[str, str], np.ndarray] = {}
+    Y_jk: Dict[Tuple[str, str], np.ndarray] = {}
+    for pair, values in Y_base.items():
+        Y[pair] = values - values[idx]
+        jk = Y_base_jk[pair]
+        Y_jk[pair] = jk - jk[:, idx][:, None]
+
+    mask = ytransform_defined_mask(Ymat['radii'], rmax, fraction=fraction)
+    return Y, Y_jk, mask
+
+
 # ---------------------------------------------------------------------------
 # Cross-correlation coefficients
 # ---------------------------------------------------------------------------
@@ -831,7 +996,8 @@ def r_profiles(Ymat: dict,
                ratios: Sequence[Tuple[Tuple[str, str], Tuple[str, str]]] = (
                    (('b', 'm'), ('g', 'b')),
                    (('e', 'm'), ('g', 'e')),
-               )) -> dict:
+               ),
+               filters: Optional[Sequence[str]] = None) -> dict:
     """Form cross-correlation coefficients and their ratios with jackknife errors.
 
     Every coefficient and every ratio is formed PER jackknife realization
@@ -849,6 +1015,12 @@ def r_profiles(Ymat: dict,
         ratios (sequence, optional): Pairs of pairs ``(numerator,
             denominator)`` whose coefficient ratio to report.  Defaults to
             ``r_bm/r_gb`` and its electron analogue ``r_em/r_ge``.
+        filters (sequence, optional): Filter names to report.  Defaults to
+            None, meaning every filter present in ``Ymat``.  For an
+            unmodified :func:`compute_Y_matrix` result that is exactly
+            :data:`FILTERS`; the argument exists so a caller that has appended
+            a derived filter -- :func:`assemble_ytransform`'s output, say --
+            gets it reported without having to reimplement the algebra.
 
     Returns:
         dict: With keys
@@ -864,6 +1036,8 @@ def r_profiles(Ymat: dict,
     out_err: Dict[Tuple[str, str], Dict[str, np.ndarray]] = {}
     out_jk: Dict[Tuple[str, str], Dict[str, np.ndarray]] = {}
 
+    filters = tuple(Ymat['Y']) if filters is None else tuple(filters)
+
     available = set(Ymat['fields'])
     for (a, b) in pairs:
         if a not in available or b not in available:
@@ -871,7 +1045,7 @@ def r_profiles(Ymat: dict,
         out_r[(a, b)] = {}
         out_err[(a, b)] = {}
         out_jk[(a, b)] = {}
-        for filt in FILTERS:
+        for filt in filters:
             full = _coefficient(get_Y(Ymat, filt, a, b),
                                 get_Y(Ymat, filt, a, a),
                                 get_Y(Ymat, filt, b, b))
@@ -892,7 +1066,7 @@ def r_profiles(Ymat: dict,
         out_ratio[key] = {}
         out_ratio_err[key] = {}
         out_ratio_jk[key] = {}
-        for filt in FILTERS:
+        for filt in filters:
             with np.errstate(invalid='ignore', divide='ignore'):
                 full = out_r[num][filt] / out_r[den][filt]
                 jk = out_jk[num][filt] / out_jk[den][filt]

@@ -1,8 +1,12 @@
 """make_r_profiles.py
 ====================
-Compute the Task 1 cross-correlation coefficients r_gb, r_bm, r_ge, r_em and
-the ratio r_bm/r_gb for the filters {Sigma, DSigma, Upsilon(R0 = r0_arcmin)} over nine
-linear aperture bins in 1'-6', for every simulation listed in a YAML config.
+Compute the Task 1 cross-correlation coefficients r_gb, r_bm, r_gm, r_ge, r_em
+and the ratio r_bm/r_gb for the filter set
+
+    {Sigma, DSigma, Upsilon(R0 = r0_arcmin), Y(Rmax = ytransform_rmax)}
+
+over nine linear aperture bins in 1'-6' plus a diagnostic extension, for every
+simulation listed in a YAML config.
 
 One ``.npz`` is written per (simulation, projection).  ``plot_r_profiles.py``
 turns those into the Singh et al. (2020) Fig. 1 analogue and the Gate A
@@ -14,6 +18,27 @@ Fields, following ``docs/r_profiles_task1_spec.md``:
     e  'ionized_gas'                              (free electrons)
     b  'baryon'  = gas + stars + BH               (all baryons)
     m  'total' - 'baryon'                         (CDM)
+
+Two additions to the original Task 1 deliverable, both of which are
+post-processing of what ``rprofiles.compute_Y_matrix`` already returns:
+
+- **r_gm**, the galaxy-matter coefficient.  ``compute_Y_matrix`` measures every
+  unordered field pair, so ``Y_gm`` was always present; only the coefficient
+  was not being formed.  It is the third leg of the addendum's calibration
+  factor ``C = r_bm r_gm / r_gb`` (``cross_correlation_notes_v0.2_addendum.md``
+  Eq. A12), and the one that ``r_bm/r_gb`` alone cannot show.
+- **The Park et al. (2021) Y transform**, ``Y(R; Rmax) = Sigma(R) -
+  Sigma(Rmax)``, assembled by ``rprofiles.assemble_ytransform`` as an exact
+  linear combination of Sigma amplitudes -- the direct map-level filter of the
+  addendum's Appendix A, not the quadrature reconstruction of its Section 2.
+  Built from Sigma but compensated, so the ``k -> 0`` response that
+  disqualified Sigma at Gate B cancels in the difference.
+
+Both R0 and Rmax must be aperture-grid points, because the constructions read
+the amplitude there rather than interpolating it.  Any that are missing are
+unioned into the grid and the addition is logged: apertures are convolved
+independently, so appending one never moves the nine data-matched bins, but it
+must never happen silently either.
 
 The CDM map is derived by subtraction rather than by a separate DM particle
 sweep: ``mapMaker.make_combined_field`` builds 'total' as gas+DM+stars+BH and
@@ -41,6 +66,25 @@ sys.path.append('../src/')
 import rprofiles as rp
 from stacker import SimulationStacker
 from utils import comoving_to_arcmin
+
+
+# ---------------------------------------------------------------------------
+# Conventions
+# ---------------------------------------------------------------------------
+
+#: Field pairs whose coefficients are reported.  ``('g', 'm')`` is the addendum
+#: addition: with r_gb and r_bm it completes the calibration factor
+#: ``C = r_bm r_gm / r_gb`` (v0.2 addendum Eq. A12).
+PAIRS = (('g', 'b'), ('b', 'm'), ('g', 'm'), ('g', 'e'), ('e', 'm'))
+
+#: Coefficient ratios reported, ``(numerator, denominator)``.  This is the
+#: Route A transfer of the v0.1 note, Eq. (4), and the Gate A statistic.
+RATIOS = ((('b', 'm'), ('g', 'b')), (('e', 'm'), ('g', 'e')))
+
+#: Key under which the Park et al. Y transform is stored.  Deliberately not
+#: a bare 'Y': the theory documents reserve that glyph for the amplitudes
+#: ``Y_ab``, and the two must stay distinguishable in the saved payload.
+YTRANSFORM_KEY = 'Ytransform'
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +143,53 @@ def aperture_radii(cfg):
     # Half-step tolerance so the endpoint is included when it lands on a bin.
     extension = np.arange(base[-1] + step, float(extend_to) + 0.5 * step, step)
     return np.concatenate([base, extension])
+
+
+def union_reference_radii(radii, references, atol=1e-9, verbose=True):
+    """Ensure every filter reference radius is an aperture-grid point.
+
+    ``Upsilon`` reads ``DSigma`` at ``R0`` and the Y transform reads ``Sigma``
+    at ``Rmax``; neither interpolates, so a reference radius that is not on the
+    grid is an error rather than something to approximate.  Apertures are
+    convolved independently, so appending one leaves every existing bin
+    bit-identical -- but it does change the length of every saved array, and it
+    puts an off-cadence point in the plotted grid, so the addition is reported
+    rather than made silently.
+
+    Args:
+        radii (np.ndarray): Aperture grid in arcmin, strictly increasing.
+        references (sequence): Reference radii in arcmin, in any order, with
+            None entries ignored.
+        atol (float, optional): Absolute tolerance, arcmin, for deciding that
+            a reference is already on the grid.  Defaults to 1e-9.
+        verbose (bool, optional): Report any addition.  Defaults to True.
+
+    Returns:
+        np.ndarray: The grid, with any missing reference radii inserted in
+        sorted order.  Returned unchanged (and identical object contents) when
+        every reference is already present.
+    """
+    radii = np.asarray(radii, dtype=np.float64)
+    missing = []
+    for ref in references:
+        if ref is None:
+            continue
+        ref = float(ref)
+        if not np.any(np.abs(radii - ref) <= atol):
+            missing.append(ref)
+
+    if not missing:
+        if verbose:
+            print('  every filter reference radius is already an aperture; '
+                  'the grid is unchanged')
+        return radii
+
+    out = np.unique(np.concatenate([radii, np.asarray(missing, dtype=float)]))
+    if verbose:
+        print(f'  reference radii not on the grid, appended: '
+              f'{sorted(set(missing))} -> grid grows '
+              f'{len(radii)} to {len(out)} apertures')
+    return out
 
 
 def load_component_fields(stacker, n_pixels, projection, cfg, verbose=True):
@@ -217,9 +308,9 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
     theta_arcmin = comoving_to_arcmin(lbox, z_true, cosmo=stacker.cosmo)
     pixel_arcmin = theta_arcmin / n_pixels
 
-    radii = aperture_radii(cfg)
     dr = float(cfg.get('dr_arcmin', rp.DR_ARCMIN))
     r0 = float(cfg.get('r0_arcmin', rp.R0_ARCMIN))
+    rmax = float(cfg.get('ytransform_rmax', 6.0))
     n_jk_side = int(cfg.get('n_jk_side', rp.N_JK_SIDE))
     target = float(cfg.get('halo_abundance_target', 5e-4))
     parent_upper = cfg.get('parent_mass_upper', 5e14)
@@ -233,8 +324,24 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
         print(f'  box = {lbox / 1000:.1f} cMpc/h = {theta_arcmin:.1f} arcmin')
         print(f'  grid = {n_pixels}^2, pixel = {pixel_arcmin:.5f} arcmin '
               f'({lbox / n_pixels:.1f} ckpc/h)')
-        print(f'  smallest aperture {radii.min():.2f} arcmin spans '
-              f'{radii.min() / pixel_arcmin:.1f} pixels')
+        print(f"  Upsilon R0 = {r0:g}', Y transform Rmax = {rmax:g}'")
+
+    radii = union_reference_radii(aperture_radii(cfg), (r0, rmax),
+                                  verbose=verbose)
+    upsilon_mask = rp.upsilon_defined_mask(radii, r0)
+    ytransform_mask = rp.ytransform_defined_mask(radii, rmax)
+
+    if verbose:
+        print(f'  {len(radii)} apertures {radii.min():.3f}-{radii.max():.3f} '
+              f'arcmin; smallest spans {radii.min() / pixel_arcmin:.1f} pixels')
+        # Both derived filters null a band of the grid by construction, and
+        # which bins survive is the first thing to check when a curve looks
+        # short.  Report it here rather than leaving it to the plotting step.
+        in_data = radii <= float(cfg.get('max_radius', 6.0)) + 1e-9
+        print(f"  usable bins, data range: Upsilon "
+              f"{int((upsilon_mask & in_data).sum())}/{int(in_data.sum())}, "
+              f"Y transform "
+              f"{int((ytransform_mask & in_data).sum())}/{int(in_data.sum())}")
 
     # Report apertures whose disk or annulus edge lands exactly on a lattice
     # shell.  Membership of that shell flips under an arbitrarily small change
@@ -251,10 +358,11 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
                       f'{margin:.1e} pixels from the boundary')
 
     # Guard: an under-resolved aperture must raise before the field loads.
-    # r0 is checked as well as the smallest aperture, since a config may set
-    # r0 below min_radius.
-    for guard_radius in (float(radii.min()), r0):
-        rp.build_aperture_kernel(n_pixels, pixel_arcmin, guard_radius,
+    # Every aperture is checked, not merely the smallest: the reference radii
+    # are now part of the grid, and an unresolved one would poison every
+    # derived-filter bin rather than a single point.
+    for guard_radius in radii:
+        rp.build_aperture_kernel(n_pixels, pixel_arcmin, float(guard_radius),
                                  'DSigma', dr)
 
     subhalos = stacker.loadSubHalos()
@@ -286,8 +394,17 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
         Ymat = rp.compute_Y_matrix(deltas, pixel_arcmin, radii=radii, dr=dr,
                                    r0=r0, nbar_pix=nbar_pix,
                                    n_jk_side=n_jk_side)
-        prof = rp.r_profiles(Ymat)
         del deltas
+
+        # The Park et al. Y transform costs no convolution: it is an exact
+        # linear combination of the Sigma amplitudes just measured, formed per
+        # jackknife realization.  Injecting it here rather than inside
+        # compute_Y_matrix keeps rprofiles.FILTERS -- and therefore every other
+        # consumer of the library -- unchanged.
+        (Ymat['Y'][YTRANSFORM_KEY],
+         Ymat['Y_jk'][YTRANSFORM_KEY], _) = rp.assemble_ytransform(Ymat, rmax)
+
+        prof = rp.r_profiles(Ymat, pairs=PAIRS, ratios=RATIOS)
 
         meta = {
             'label': label,
@@ -306,6 +423,7 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
             'parent_mass_upper': np.nan if parent_upper is None else parent_upper,
             'dr_arcmin': dr,
             'r0_arcmin': r0,
+            'ytransform_rmax': rmax,
             'n_jk': Ymat['n_jk'],
             # Per-aperture flag: True where a lattice shell sits on the disk or
             # annulus edge, so the amplitude carries a convention-dependent
@@ -317,21 +435,48 @@ def process_simulation(sim_type, sim_entry, cfg, out_dir, verbose=True):
 
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f'r_profiles_{label}_{snapshot}_{projection}.npz'
+        # KNOWN GAP: this writes straight to the final path rather than to a
+        # temporary one followed by an atomic os.replace.  A crash or an
+        # interactive-QOS preemption part-way through would therefore leave a
+        # truncated file where the previous good cache was -- and these .npz
+        # are git-tracked products that double as the input to
+        # plot_r_profiles.py, so there is no second copy to fall back on
+        # besides git history.  Left as-is deliberately for now; fix by
+        # writing to `out_path.with_suffix('.npz.tmp')` and then
+        # `os.replace(tmp, out_path)`, which is atomic on POSIX.
         np.savez(out_path, **flatten_for_npz(prof, Ymat, meta))
         written.append(out_path)
 
         if verbose:
             print(f'    saved {out_path}  ({time.time() - t0:.1f} s)')
-            for filt in rp.FILTERS:
-                r_gb = prof['r'][('g', 'b')][filt]
-                r_bm = prof['r'][('b', 'm')][filt]
-                ratio = prof['ratio'][(('b', 'm'), ('g', 'b'))][filt]
-                with np.errstate(invalid='ignore'):
-                    print(f'      {filt:8s} r_gb[{np.nanmin(r_gb):.3f},'
-                          f'{np.nanmax(r_gb):.3f}]  '
-                          f'r_bm[{np.nanmin(r_bm):.3f},{np.nanmax(r_bm):.3f}]  '
-                          f'ratio[{np.nanmin(ratio):.3f},'
-                          f'{np.nanmax(ratio):.3f}]')
+            # Report each filter only over the bins it actually informs.  The
+            # derived filters are finite outside their mask but are not the
+            # quantity they are named after there -- Upsilon flips to r ~ -1
+            # below R0 -- so an unmasked min/max would advertise a number that
+            # means nothing.
+            masks = {'Upsilon': upsilon_mask, YTRANSFORM_KEY: ytransform_mask}
+            for filt in Ymat['Y']:
+                use = masks.get(filt, np.ones(len(radii), dtype=bool))
+                if not use.any():
+                    print(f'      {filt:11s} no usable aperture')
+                    continue
+
+                def _span(values, use=use):
+                    with np.errstate(invalid='ignore'), \
+                            warnings.catch_warnings():
+                        warnings.filterwarnings('ignore',
+                                                message='All-NaN slice')
+                        return np.nanmin(values[use]), np.nanmax(values[use])
+
+                lo_gb, hi_gb = _span(prof['r'][('g', 'b')][filt])
+                lo_bm, hi_bm = _span(prof['r'][('b', 'm')][filt])
+                lo_gm, hi_gm = _span(prof['r'][('g', 'm')][filt])
+                lo_ra, hi_ra = _span(
+                    prof['ratio'][(('b', 'm'), ('g', 'b'))][filt])
+                print(f'      {filt:11s} r_gb[{lo_gb:.3f},{hi_gb:.3f}]  '
+                      f'r_bm[{lo_bm:.3f},{hi_bm:.3f}]  '
+                      f'r_gm[{lo_gm:.3f},{hi_gm:.3f}]  '
+                      f'ratio[{lo_ra:.3f},{hi_ra:.3f}]')
 
     return written
 

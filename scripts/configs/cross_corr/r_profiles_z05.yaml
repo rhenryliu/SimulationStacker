@@ -1,7 +1,9 @@
 # Task 1 r-profiles, LRG-like sample at z ~ 0.5.
 #
-# Computes r_gb, r_bm, r_ge, r_em and the ratio r_bm/r_gb for the filters
-# {Sigma, DSigma, Upsilon(R0 = r0_arcmin below)} over nine linear aperture bins in 1'-6'.
+# Computes r_gb, r_bm, r_gm, r_ge, r_em and the ratio r_bm/r_gb for the filters
+# {Sigma, DSigma, Upsilon(R0), Y(Rmax)} over nine linear aperture bins in 1'-6'
+# plus a diagnostic extension.  r_gm is the third leg of the addendum's
+# calibration factor C = r_bm r_gm / r_gb; Y is the Park et al. (2021) transform.
 # See docs/cross_correlation_notes.md (Task 1) and
 # docs/r_profiles_task1_spec.md.
 #
@@ -30,7 +32,23 @@ stack:
   # Not extended below 1', where the data are resolution-limited.
   extend_max_radius: 10.0
   dr_arcmin: 0.75        # annulus width of the compensated filter
-  r0_arcmin: 2.0         # Upsilon reference radius
+
+  # Upsilon reference radius.  Restored to 1' from the exploratory 2' of
+  # commit 91e39d7: the R0 scan in docs/r_profiles_implementation_plan.md U6
+  # measured 1' as the only PASS at z ~ 0.5 (cross-code scatter 0.090 against
+  # 0.143), the most usable bins, and the one R0 whose statistic is neither
+  # propped up by nor hostage to the fragile bin next to the cut.
+  r0_arcmin: 1.0         # Upsilon reference radius
+
+  # Park et al. (2021) Y transform, Y(R; Rmax) = Sigma(R) - Sigma(Rmax).
+  # Compensated (unlike Sigma) and local from below (unlike DSigma), it
+  # references the LARGEST aperture rather than the smallest.  Bins at and
+  # above 0.8*Rmax are masked, where the transform vanishes by construction.
+  # 6' is the top of the data range and is already an aperture-grid point, so
+  # the grid is unchanged; the addendum's fiducial 5' would leave only five
+  # usable bins in 1'-6' and its best-performing 9' sits outside the range the
+  # kSZ stack measures (v0.3 response Sec. 4.2).
+  ytransform_rmax: 6.0
 
   n_jk_side: 4           # 4x4 = 16 leave-one-out spatial jackknife patches
 

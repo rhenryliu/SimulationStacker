@@ -39,6 +39,14 @@ With Σ̄(<R) the disk mean and Σ̄(R, R+δR) the annulus mean:
     ΔΣ(R)      = Σ̄(<R) − Σ̄(R, R + δR),        δR = 0.75 arcmin
     Υ(R; R₀)   = ΔΣ(R) − (R₀/R)² ΔΣ(R₀),      R₀ per config (see below)
     Σ(R)       = Σ̄(R, R + δR)                  [diagnostic only]
+    Y(R; Rmax) = Σ(R) − Σ(Rmax)                [diagnostic only]
+
+The last is the Park et al. (2021) transform added by the v0.2 addendum. It is
+**not** part of the frozen set: the v0.3 response Sec. 5.3 recommends against
+adopting it, because its best-performing configuration (Rmax = 9′) references
+an aperture outside the data range. It is computed and plotted so the filter
+comparison stays visible, on `Rmax = 6′` — the top of the data range, and
+already an aperture-grid point, so adopting it moves no bin.
 
 The annulus mean, not the local value Σ(R), is the second term of ΔΣ. This
 matches the existing kSZ pipeline; Singh et al.'s formulas use the local value
@@ -53,15 +61,28 @@ R ≤ R₀ unusable, in two distinct ways:
 - below R₀ the factor (R₀/R)² exceeds one and the reference term
   over-subtracts. The amplitude is finite and the coefficient is defined, but
   it is not the estimator's quantity. In the production runs it simply flips
-  sign: at R₀ = 2′ both `r_gb` and `r_bm` come out near −1 at R = 1′ and 1.625′.
+  sign: measured at R₀ = 2′, both `r_gb` and `r_bm` came out near −1 at
+  R = 1′ and 1.625′.
+
+**The Y transform is the mirror image**, at the other end of the grid:
+`Y(Rmax; Rmax) ≡ 0`, and just below Rmax it is a small difference of two
+comparable annulus means carrying almost no signal. Bins with R ≥ 0.8·Rmax are
+therefore dropped, following the addendum's Secs. 2.5 and 8.2.
 
 `rprofiles.compute_Y_matrix` returns the raw algebra and does not special-case
-either. `rprofiles.upsilon_defined_mask(radii, r0)` is the single definition of
-which bins survive, and `plot_r_profiles.series` applies it once so the curves
-and the Gate A metrics can never disagree about it.
+any of this. `rprofiles.upsilon_defined_mask(radii, r0)` and
+`rprofiles.ytransform_defined_mask(radii, rmax)` are the single definitions of
+which bins survive, and `plot_r_profiles.series` applies them once so the
+curves and the Gate A metrics can never disagree about it.
 
-The reference radius is **not** a global constant: it is read from each run's
-`meta_r0_arcmin`. The configs moved it from 1′ to 2′ (commit 91e39d7).
+Both reference radii are **not** global constants: they are read from each
+run's `meta_r0_arcmin` and `meta_ytransform_rmax`. R₀ moved from 1′ to 2′ in
+commit 91e39d7 and is now **back at 1′**, on the evidence of the R₀ scan in
+`r_profiles_implementation_plan.md` U6: 1′ gives the smallest cross-code
+scatter (0.090, the only PASS at z ~ 0.5, against 0.143 at 2′), the most usable
+bins (8 against 7 over 1′–6′), and is the one R₀ whose statistic survives the
+trim unchanged. This restores agreement with Sec. 1 above, which never stopped
+specifying R₀ = 1′.
 
 ## 3. Aperture grid
 

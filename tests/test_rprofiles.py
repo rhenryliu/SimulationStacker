@@ -956,3 +956,216 @@ class TestUpsilonConstruction:
 
         mask = rp.upsilon_defined_mask(radii, r0)
         assert list(mask) == [False, False, False, True, True]
+
+
+# ---------------------------------------------------------------------------
+# The Park et al. (2021) Y transform
+# ---------------------------------------------------------------------------
+
+class TestYTransformConstruction:
+    """The Y transform is assembled, not convolved -- so prove it is exact.
+
+    ``rprofiles.assemble_ytransform`` builds ``Y(R; Rmax) = Sigma(R) -
+    Sigma(Rmax)`` from amplitudes already measured, on the operator identity
+    ``F^Y_R = F^Sigma_R - F^Sigma_Rmax``.  That shortcut is the kind that fails
+    *silently*: a wrong reference index or a mis-shaped jackknife broadcast
+    still yields finite, smooth, plausible amplitudes.  Each check below
+    therefore tests it against the thing it replaces.
+    """
+
+    def test_amplitudes_match_a_directly_built_composite_kernel(self):
+        """The assembled amplitude equals one convolution with Sigma_R - Sigma_Rmax.
+
+        This is the claim that makes the shortcut legitimate, and it is the
+        addendum's Appendix A requirement that the transform be a direct
+        map-level filter rather than a reconstruction.
+        """
+        rng = np.random.default_rng(101)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        delta_y = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        radii = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        rmax = 5.0
+
+        Ymat = rp.compute_Y_matrix({'x': delta_x, 'y': delta_y},
+                                   PIXEL_ARCMIN, radii=radii)
+        Y, _, _ = rp.assemble_ytransform(Ymat, rmax)
+        got = Y[('x', 'y')]
+
+        ref_kernel = rp.build_aperture_kernel(N_PIX, PIXEL_ARCMIN, rmax,
+                                              'Sigma', rp.DR_ARCMIN)
+        direct = np.empty(len(radii))
+        for i, R in enumerate(radii):
+            composite = rp.build_aperture_kernel(
+                N_PIX, PIXEL_ARCMIN, float(R), 'Sigma', rp.DR_ARCMIN
+            ) - ref_kernel
+            fmap = rp.filtered_map(delta_x, rp.kernel_spectrum(composite),
+                                   delta_x.shape)
+            direct[i] = float(np.mean(fmap * delta_y, dtype=np.float64))
+
+        scale = np.abs(direct).max()
+        assert np.allclose(got, direct, rtol=0, atol=1e-12 * scale), (
+            f'assembled vs composite-kernel Y transform: worst absolute '
+            f'difference {np.abs(got - direct).max():.3e} against amplitude '
+            f'scale {scale:.3e}'
+        )
+
+    def test_the_transform_vanishes_identically_at_rmax(self):
+        """``Y(Rmax; Rmax) = 0`` exactly, which is why that bin is masked.
+
+        The coefficient there is a genuine 0/0, the mirror image of Upsilon at
+        ``R = R0``.
+        """
+        rng = np.random.default_rng(102)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        delta_y = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        radii = np.array([1.0, 2.0, 4.0])
+        rmax = 4.0
+
+        Ymat = rp.compute_Y_matrix({'x': delta_x, 'y': delta_y},
+                                   PIXEL_ARCMIN, radii=radii)
+        Y, Y_jk, _ = rp.assemble_ytransform(Ymat, rmax)
+
+        sigma = rp.get_Y(Ymat, 'Sigma', 'x', 'y')
+        assert Y[('x', 'y')][-1] == pytest.approx(
+            0.0, abs=1e-15 * abs(sigma[-1]) + 1e-300)
+        assert np.all(np.abs(Y_jk[('x', 'y')][:, -1]) <= 1e-15
+                      * np.abs(rp.get_Y(Ymat, 'Sigma', 'x', 'y',
+                                        jackknife=True)[:, -1]) + 1e-300)
+        assert np.all(np.abs(Y[('x', 'y')][:-1]) > 0.0)
+
+    def test_jackknife_realizations_are_differenced_per_realization(self):
+        """Each leave-one-out estimate is differenced against its own Rmax value.
+
+        Differencing the full-map value out of every realization instead would
+        still produce a smooth error bar, and a wrong one: the two apertures
+        are measured on the same map and are strongly correlated, which is
+        exactly the cancellation the addendum's Appendix A trap 5 is about.
+        """
+        rng = np.random.default_rng(103)
+        delta_x = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        delta_y = rp.to_overdensity(lognormal_map(N_PIX, 6.0, rng))
+        radii = np.array([1.0, 2.0, 3.0])
+        rmax = 3.0
+
+        Ymat = rp.compute_Y_matrix({'x': delta_x, 'y': delta_y},
+                                   PIXEL_ARCMIN, radii=radii, n_jk_side=3)
+        _, Y_jk, _ = rp.assemble_ytransform(Ymat, rmax)
+        sigma_jk = rp.get_Y(Ymat, 'Sigma', 'x', 'y', jackknife=True)
+
+        expected = sigma_jk - sigma_jk[:, -1][:, None]
+        assert np.array_equal(Y_jk[('x', 'y')], expected)
+
+        # And the naive alternative is measurably different, so the test has
+        # teeth rather than passing on a degenerate case.
+        naive = sigma_jk - rp.get_Y(Ymat, 'Sigma', 'x', 'y')[-1]
+        assert not np.allclose(Y_jk[('x', 'y')], naive)
+
+    def test_a_reference_radius_off_the_grid_raises(self):
+        """An interpolated reference radius is an error, not an approximation."""
+        rng = np.random.default_rng(104)
+        delta_x = rp.to_overdensity(lognormal_map(128, 6.0, rng))
+        Ymat = rp.compute_Y_matrix({'x': delta_x}, PIXEL_ARCMIN,
+                                   radii=np.array([1.0, 2.0, 3.0]))
+        with pytest.raises(ValueError, match='not on the aperture grid'):
+            rp.assemble_ytransform(Ymat, 2.5)
+
+    def test_an_unknown_base_filter_raises(self):
+        """The base filter must be one the amplitudes were measured with."""
+        rng = np.random.default_rng(105)
+        delta_x = rp.to_overdensity(lognormal_map(128, 6.0, rng))
+        Ymat = rp.compute_Y_matrix({'x': delta_x}, PIXEL_ARCMIN,
+                                   radii=np.array([1.0, 2.0, 3.0]))
+        with pytest.raises(ValueError, match='is not in Ymat'):
+            rp.assemble_ytransform(Ymat, 3.0, base='NotAFilter')
+
+
+class TestYTransformDefinedMask:
+    """The mask is the single definition of which Y-transform bins survive."""
+
+    def test_drops_the_band_at_and_above_the_usable_fraction(self):
+        radii = np.array([1.0, 2.0, 4.0, 4.8, 5.0, 6.0])
+        mask = rp.ytransform_defined_mask(radii, 6.0)
+        # 0.8 * 6.0 = 4.8, and the test is strict `<`, so 4.8 itself is out.
+        assert list(mask) == [True, True, True, False, False, False]
+
+    def test_the_production_configuration_keeps_the_expected_bins(self):
+        """R0 = 1' and Rmax = 6' on the production grid, pinned.
+
+        Both are already aperture-grid points, which is why the grid does not
+        move when they are adopted; this pins the bin counts the figures show.
+        """
+        base = np.linspace(1.0, 6.0, 9)
+        step = base[1] - base[0]
+        radii = np.concatenate(
+            [base, np.arange(base[-1] + step, 10.0 + 0.5 * step, step)])
+
+        assert np.any(np.isclose(radii, 1.0))
+        assert np.any(np.isclose(radii, 6.0))
+
+        in_data = radii <= 6.0 + 1e-9
+        upsilon = rp.upsilon_defined_mask(radii, 1.0)
+        ytr = rp.ytransform_defined_mask(radii, 6.0)
+
+        assert int((upsilon & in_data).sum()) == 8
+        assert int((ytr & in_data).sum()) == 7
+        assert radii[ytr][-1] == pytest.approx(4.75)
+
+    def test_rejects_a_non_positive_reference_radius(self):
+        radii = np.array([1.0, 2.0])
+        with pytest.raises(ValueError, match='rmax must be positive'):
+            rp.ytransform_defined_mask(radii, 0.0)
+        with pytest.raises(ValueError, match='fraction must be positive'):
+            rp.ytransform_defined_mask(radii, 6.0, fraction=0.0)
+
+
+class TestRProfilesFilterSelection:
+    """``r_profiles(filters=...)`` must not change the existing default."""
+
+    def _ymat(self, seed=106):
+        rng = np.random.default_rng(seed)
+        deltas = {k: rp.to_overdensity(lognormal_map(256, 6.0, rng))
+                  for k in ('g', 'm')}
+        return rp.compute_Y_matrix(deltas, PIXEL_ARCMIN,
+                                   radii=np.array([1.0, 2.0, 4.0]),
+                                   nbar_pix=1.0, n_jk_side=2)
+
+    def test_the_default_is_exactly_the_module_filter_set(self):
+        """An unmodified compute_Y_matrix result must reproduce FILTERS.
+
+        The default was a module constant and is now read off the amplitude
+        dict; if those two ever diverge, every existing caller silently
+        changes what it reports.
+        """
+        Ymat = self._ymat()
+        assert tuple(Ymat['Y']) == rp.FILTERS
+
+        got = rp.r_profiles(Ymat, pairs=(('g', 'm'),), ratios=())
+        expected = rp.r_profiles(Ymat, pairs=(('g', 'm'),), ratios=(),
+                                 filters=rp.FILTERS)
+        for filt in rp.FILTERS:
+            assert np.array_equal(got['r'][('g', 'm')][filt],
+                                  expected['r'][('g', 'm')][filt],
+                                  equal_nan=True)
+            assert np.array_equal(got['r_err'][('g', 'm')][filt],
+                                  expected['r_err'][('g', 'm')][filt],
+                                  equal_nan=True)
+
+    def test_an_injected_filter_is_reported(self):
+        """The whole point: an appended derived filter needs no new algebra."""
+        Ymat = self._ymat()
+        (Ymat['Y']['Ytransform'],
+         Ymat['Y_jk']['Ytransform'], _) = rp.assemble_ytransform(Ymat, 4.0)
+
+        prof = rp.r_profiles(Ymat, pairs=(('g', 'm'),), ratios=())
+        assert 'Ytransform' in prof['r'][('g', 'm')]
+        assert prof['r'][('g', 'm')]['Ytransform'].shape == (3,)
+
+        # Formed from the amplitudes, not copied from another filter.
+        coeff = prof['r'][('g', 'm')]['Ytransform']
+        with np.errstate(invalid='ignore', divide='ignore'):
+            expected = (rp.get_Y(Ymat, 'Ytransform', 'g', 'm')
+                        / np.sqrt(rp.get_Y(Ymat, 'Ytransform', 'g', 'g')
+                                  * rp.get_Y(Ymat, 'Ytransform', 'm', 'm')))
+        finite = np.isfinite(coeff) & np.isfinite(expected)
+        assert finite.any()
+        assert np.allclose(coeff[finite], expected[finite])

@@ -17,6 +17,27 @@ rank the filters at all. And the prediction that mattered most — that $C$ woul
 be stable across feedback and vary across codes — comes out backwards in 14 of
 16 cases.
 
+### A note on the three things called "Y"
+
+Three distinct objects in this programme are written with a Y-like glyph, and
+in the `dejavuserif` math font the `\Upsilon` macro renders *pixel-identically*
+to an upright Latin `Y`, so the figures could not distinguish them. The
+cross-correlation figures therefore use Computer Modern (`mathtext.fontset =
+'cm'`), which draws the forked ϒ. The convention, following the addendum's
+Section 1 notation table:
+
+| written | is | read it as |
+|---|---|---|
+| $\Upsilon(R;R_0)$ | the Baldauf et al. (2010) **filter** | forked ϒ, always with an $R_0$ argument |
+| $Y(R;R_{\max})$ | the Park et al. (2021) **filter** | plain italic Y, always with an $R_{\max}$ argument |
+| $Y_{\alpha\beta}$ | a filtered **amplitude** ($Y_{gb}$, $Y_{mm}$, $Y_{bm}$, …) | plain italic Y, always with *field subscripts* and never a radial argument |
+
+So a radial argument means a filter and a field subscript means an amplitude;
+the Baldauf filter is additionally distinguished by its glyph. In code the
+three are unambiguous already and are left alone: the filter keys are
+`'Upsilon_R0=<r0>'` and `'Ytransform_Rmax=<rmax>'`, and amplitudes are
+`Y_<pair>_<filter>`.
+
 ---
 
 ## 0. What changed
@@ -55,7 +76,7 @@ everything else as post-processing. Nothing in `src/` and nothing in
 `make_r_profiles.py` was modified, so `data/r_profiles/*.npz` is untouched.
 
 **Three linearity facts made the run cheap**, and each is tested against the
-thing it replaces in `tests/test_calibration_factor.py` (17 tests, all passing):
+thing it replaces in `tests/test_calibration_factor.py` (22 tests, all passing):
 
 | claim | replaces | test |
 |---|---|---|

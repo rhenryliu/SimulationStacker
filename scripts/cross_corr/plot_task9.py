@@ -53,7 +53,12 @@ from make_calibration_factor import suppression
 matplotlib.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['DejaVu Serif'],
-    'mathtext.fontset': 'dejavuserif',
+    # Computer Modern rather than dejavuserif: in dejavuserif the
+    # \Upsilon macro renders pixel-identically to an upright Latin Y,
+    # which makes the Baldauf filter indistinguishable from the Park
+    # et al. Y transform and from the Y_ab amplitudes.  'cm' draws the
+    # forked Upsilon.
+    'mathtext.fontset': 'cm',
     'text.usetex': False,      # no LaTeX in the cosmodesi environment
     'font.size': 13,
     'axes.titlesize': 14,

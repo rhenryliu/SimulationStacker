@@ -1,0 +1,21 @@
+# Config for lensing/compare_cmb_fgas.py (not a paper figure).
+# Overlays the beam-compensated DESI x ACT x HSC f_gas(R) points (same as the
+# data points in beam_compensated_z05.yaml) with the DESI LS x ACT DR6 f_gas
+# points digitized from Hadzhiyska et al. (2025), arXiv:2507.14136 Fig. 6 (top).
+# No simulation curves are plotted; the beamTest simulations are only stacked to
+# recompute the beam compensation factor.
+beam_test_config: mass_ratio_beamTest_z05.yaml
+
+compensation:
+  use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
+
+plot:
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  data_label: 'DESI $\times$ ACT $\times$ HSC (beam-corrected)'
+  cmb_fgas_path: ../data/cmb_fgas/fgas_desi_ls_x_act_dr6_fig6top.npz
+  cmb_fgas_label: 'Hadzhiyska et al. (2025)'
+  x_offset: 0.05  # arcmin; the two datasets are shifted by -/+ this so markers do not overlap
+  fig_path: '../figures/'
+  fig_name: 'compare_cmb_fgas'
+  fig_type: 'pdf'
+  ylabel: '$f_{\rm gas}(R)$'

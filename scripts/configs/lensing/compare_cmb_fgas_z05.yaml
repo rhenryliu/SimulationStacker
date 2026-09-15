@@ -2,12 +2,14 @@
 # Overlays the beam-compensated DESI x ACT x HSC f_gas(R) points (same as the
 # data points in beam_compensated_z05.yaml) with the DESI LS x ACT DR6 f_gas
 # points digitized from Hadzhiyska et al. (2025), arXiv:2507.14136 Fig. 6 (top).
-# No simulation curves are plotted; the beamTest simulations are only stacked to
-# recompute the beam compensation factor.
+# No simulation curves are plotted; the beamTest simulations are only stacked
+# (if the cached beam factor is missing or stale) to recompute the beam
+# compensation factor.
 beam_test_config: mass_ratio_beamTest_z05.yaml
 
 compensation:
   use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
+  load_beam_factor: true  # read beam_test_config's beam_factor.npz_path; restack if missing or stale
 
 plot:
   data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz

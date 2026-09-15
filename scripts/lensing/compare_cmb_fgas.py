@@ -12,7 +12,10 @@ beam_compensated_ratio_v2.py (Phases 1–2): the beam suppression factor
 
 is stacked from the beamTest simulations, and the measured ratio is divided by
 it.  No simulation curves are plotted; the simulations are only needed for the
-beam factor, so this script still needs a compute node.
+beam factor.  With ``compensation.load_beam_factor`` (default true) the factor
+is read from the file plot_beam_factors.py writes, so no stacking (and no compute
+node) is needed unless that file is missing or was made with different beamTest
+settings.
 
 The digitized data are plotted with the symmetric error bar ``fgas_err``.
 Both datasets sit on the same 1–6 arcmin grid, so they are shifted
@@ -46,7 +49,8 @@ import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker i
 # Reuse the stacker/Omega_b resolution and the nested-npz loader from the
 # beam-compensation script so both scripts build the data points identically.
 # (scripts/lensing/ is on sys.path because this script lives there.)
-from beam_compensated_ratio_v2 import _resolve_stacker, load_measurements_npz  # type: ignore
+from beam_compensated_ratio_v2 import (  # type: ignore
+    _resolve_stacker, load_beam_factor_npz, load_measurements_npz)
 
 # ---------------------------------------------------------------------------
 # Matplotlib style — matches beam_compensated_ratio_v2.py exactly
@@ -83,7 +87,8 @@ def main(path2config: str, verbose: bool = True) -> None:
     comp_config = master.get('compensation', {})
     plot_config = master.get('plot', {})
 
-    use_sim_scatter = comp_config.get('use_sim_scatter', False)
+    use_sim_scatter  = comp_config.get('use_sim_scatter', False)
+    load_beam_factor = comp_config.get('load_beam_factor', True)
 
     # ---- Output path: figures/<year-month>/<month-day>/ ----
     now      = datetime.now()
@@ -136,44 +141,70 @@ def main(path2config: str, verbose: bool = True) -> None:
         halo_abundance_target = bt_stack.get('halo_abundance_target', None),
     )
 
+    # The cached file (written by plot_beam_factors.py) holds the same per-sim
+    # ratios as the loop below; stack instead if it is missing or stale.
+    bf_path = bt_config.get('beam_factor', {}).get(
+        'npz_path', f'../data/beam_factors/beam_factor_z{bt_redshift}.npz')
+    cached = load_beam_factor_npz(bf_path, bt_config) if load_beam_factor else None
+
     beam_factors: list = []   # one (n_radii,) array per simulation
-    bt_radii = None
 
-    for sim_group in bt_config['simulations']:
-        sim_type_name = sim_group['sim_type']
-        for sim in sim_group['sims']:
-            stacker, sim_label, omega_b = _resolve_stacker(
-                sim_type_name, sim, bt_redshift, verbose)
+    if cached is not None:
+        beam_factors    = list(cached['beam_factor'])
+        bt_theta_arcmin = cached['theta_arcmin']
 
-            # Cache the cosmology of the first simulation for the top axis.
-            if cosmo_ref is None:
-                cosmo_ref = FlatLambdaCDM(
-                    H0=100 * stacker.header['HubbleParam'],
-                    Om0=stacker.header['Omega0'],
-                    Tcmb0=2.7255 * u.K,
-                    Ob0=omega_b,
-                )
+        # No stacking, but the top axis still needs the first simulation's
+        # cosmology; building its stacker only reads the snapshot header.
+        first_group = bt_config['simulations'][0]
+        stacker, _, omega_b = _resolve_stacker(
+            first_group['sim_type'], first_group['sims'][0], bt_redshift, verbose)
+        cosmo_ref = FlatLambdaCDM(
+            H0=100 * stacker.header['HubbleParam'],
+            Om0=stacker.header['Omega0'],
+            Tcmb0=2.7255 * u.K,
+            Ob0=omega_b,
+        )
+    else:
+        bt_radii = None
 
-            if verbose:
-                print(f"[beamTest] Processing {sim_label}")
+        for sim_group in bt_config['simulations']:
+            sim_type_name = sim_group['sim_type']
+            for sim in sim_group['sims']:
+                stacker, sim_label, omega_b = _resolve_stacker(
+                    sim_type_name, sim, bt_redshift, verbose)
 
-            radii_b, profiles_b = stacker.stackMap(
-                bt_pType,  filterType=bt_filter_type,
-                pixelSize=bt_pixel_size, beamSize=bt_beam_size,
-                **bt_base_kwargs)
-            radii_n, profiles_n = stacker.stackMap(
-                bt_pType2, filterType=bt_filter_type2,
-                pixelSize=bt_pixel_size_2, beamSize=bt_beam_size_2,
-                **bt_base_kwargs)
+                # Cache the cosmology of the first simulation for the top axis.
+                if cosmo_ref is None:
+                    cosmo_ref = FlatLambdaCDM(
+                        H0=100 * stacker.header['HubbleParam'],
+                        Om0=stacker.header['Omega0'],
+                        Tcmb0=2.7255 * u.K,
+                        Ob0=omega_b,
+                    )
 
-            # Ratio of halo-means for this simulation.  No baryon normalisation
-            # since pType == pType2 (same particle, different resolution/beam).
-            mean_b = np.mean(profiles_b, axis=1)   # (n_radii,)
-            mean_n = np.mean(profiles_n, axis=1)
-            beam_factors.append(mean_b / mean_n)
+                if verbose:
+                    print(f"[beamTest] Processing {sim_label}")
 
-            if bt_radii is None:
-                bt_radii = radii_b
+                radii_b, profiles_b = stacker.stackMap(
+                    bt_pType,  filterType=bt_filter_type,
+                    pixelSize=bt_pixel_size, beamSize=bt_beam_size,
+                    **bt_base_kwargs)
+                radii_n, profiles_n = stacker.stackMap(
+                    bt_pType2, filterType=bt_filter_type2,
+                    pixelSize=bt_pixel_size_2, beamSize=bt_beam_size_2,
+                    **bt_base_kwargs)
+
+                # Ratio of halo-means for this simulation.  No baryon normalisation
+                # since pType == pType2 (same particle, different resolution/beam).
+                mean_b = np.mean(profiles_b, axis=1)   # (n_radii,)
+                mean_n = np.mean(profiles_n, axis=1)
+                beam_factors.append(mean_b / mean_n)
+
+                if bt_radii is None:
+                    bt_radii = radii_b
+
+        # bt_radii * bt_rad_distance gives the x-axis in arcmin, matching the data.
+        bt_theta_arcmin = bt_radii * bt_rad_distance
 
     # Mean across simulations — each sim contributes equally regardless of
     # halo count, so we average the per-sim ratios rather than pooling halos.
@@ -187,9 +218,6 @@ def main(path2config: str, verbose: bool = True) -> None:
     # Phase 2: compensate the data
     # (identical to beam_compensated_ratio_v2.py Phase 2, diagonal errors only)
     # ==========================================================================
-    # bt_radii * bt_rad_distance gives the x-axis in arcmin, matching the data.
-    bt_theta_arcmin = bt_radii * bt_rad_distance
-
     data       = load_measurements_npz(plot_config['data_path'])
     key        = 'source_bin_0'
     theta_data = data[key]['ksz_theta_arcmin']

@@ -30,6 +30,16 @@ stack:
   halo_abundance_target: 5.0e-4 # Target halo abundance for subhalo selection when use_subhalos is true. In units of h^3/Mpc^3.
 
 
+# Cached per-simulation beam factor. plot_beam_factors.py writes it; the
+# beam-compensation scripts read npz_path (their load flags are in their own
+# configs) and restack if the file is missing or was made with different
+# stack/simulations settings than above.
+beam_factor:
+  npz_path: '../data/beam_factors/beam_factor_z0.5.npz'
+  load_beam_factor: false  # plot_beam_factors.py only: read npz instead of stacking
+  save_beam_factor: true   # plot_beam_factors.py only: write npz after stacking
+
+
 plot:
   plot_data: false
   # data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/specY3_hsc/ratio_specY3_hsc_zbin1_DSigma_ksz_uniformweight.npz'

@@ -14,6 +14,12 @@ where "beamed" uses the ACT pixel/beam settings (0.5 / 1.6 arcmin) and
 Simulations are distinguished by colour (same colourmap as compare_data_ratio.py).
 Redshifts are distinguished by linestyle (solid = z=0.5, dashed = z=0.26).
 
+Caching: each beamTest config's ``beam_factor`` section sets ``npz_path``,
+``load_beam_factor`` (default false: stack, or read the file instead) and
+``save_beam_factor`` (default true: write the per-sim factors after stacking).
+beam_compensated_ratio_v2.py and compare_cmb_fgas.py read the same file.  A file
+made with different beamTest settings is ignored and the sims are restacked.
+
 Usage
 -----
     python lensing/plot_beam_factors.py
@@ -21,6 +27,8 @@ Usage
                                 --config-z026 configs/lensing/mass_ratio_beamTest_z026.yaml
 """
 
+import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -115,6 +123,77 @@ def sham_parent_halo_stats(stacker: SimulationStacker,
     return mean_mass, mean_R200m
 
 
+def _beam_factor_settings(bt_config: dict) -> str:
+    """Canonical string of the beamTest settings that determine the beam factor.
+
+    Stored in the beam-factor ``.npz`` and compared on load, so a file made with
+    different stacking settings or simulations is restacked rather than used.
+    The field-caching flags are dropped since they do not change the numbers.
+    Keep in sync with beam_compensated_ratio_v2.py.
+
+    Args:
+        bt_config: Parsed beamTest YAML config.
+
+    Returns:
+        JSON string of the ``stack`` and ``simulations`` sections, keys sorted.
+    """
+    stack = {k: v for k, v in bt_config['stack'].items()
+             if k not in ('load_field', 'save_field')}
+    return json.dumps({'stack': stack, 'simulations': bt_config['simulations']},
+                      sort_keys=True)
+
+
+def load_beam_factor_npz(path, bt_config: dict) -> Optional[dict]:
+    """Load the per-sim beam factors written by :func:`save_beam_factor_npz`.
+
+    Keep in sync with beam_compensated_ratio_v2.py.
+
+    Args:
+        path: Path to the beam-factor ``.npz``.
+        bt_config: Parsed beamTest config the file should correspond to.
+
+    Returns:
+        Dict with ``theta_arcmin`` (n_radii,), ``sim_labels`` (n_sims,),
+        ``beam_factor`` and ``beam_factor_err`` (n_sims, n_radii), or None
+        (with the reason printed) if the file is missing or was made with
+        different beamTest settings.
+    """
+    path = Path(path)
+    if not path.exists():
+        print(f"No beam factor file at {path}; stacking the beamTest simulations.")
+        return None
+    with np.load(path, allow_pickle=False) as archive:
+        if str(archive['settings']) != _beam_factor_settings(bt_config):
+            print(f"[warn] Beam factor file {path} was made with different beamTest "
+                  "settings; stacking the beamTest simulations instead.")
+            return None
+        out = {k: archive[k] for k in
+               ('theta_arcmin', 'sim_labels', 'beam_factor', 'beam_factor_err')}
+    print(f"Loaded beam factor from {path}")
+    return out
+
+
+def save_beam_factor_npz(path, results: dict, bt_config: dict) -> None:
+    """Write the per-sim beam factors to an ``.npz``, atomically.
+
+    Writes to a temporary file in the same directory and renames it into place,
+    so a failed run never leaves a truncated file behind.
+
+    Args:
+        path: Destination ``.npz`` path.
+        results: Dict with ``theta_arcmin``, ``sim_labels``, ``beam_factor``
+            and ``beam_factor_err`` arrays.
+        bt_config: Parsed beamTest config the factors were stacked with; its
+            settings string is stored for the staleness check on load.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # The suffix must stay '.npz': np.savez appends '.npz' to any other name.
+    tmp = path.with_name(path.name + '.tmp.npz')
+    np.savez(tmp, settings=_beam_factor_settings(bt_config), **results)
+    os.replace(tmp, path)
+
+
 def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
     """Compute and plot beam suppression factors for both redshifts.
 
@@ -201,73 +280,102 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
             halo_abundance_target = stack.get('halo_abundance_target', None),
         )
 
-        for sim_group in config['simulations']:
-            sim_type_name = sim_group['sim_type']
-            for sim in sim_group['sims']:
-                # Per-sim redshift override: a sim entry may declare its own
-                # 'redshift' (e.g. a FLAMINGO z=0.30 snapshot substituted into the
-                # z=0.26 slot); otherwise fall back to this config's redshift.
-                sim_z = sim.get('redshift', redshift)
-                if sim_type_name == 'IllustrisTNG':
-                    stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=sim_z, simType=sim_type_name)
-                    sim_label = sim['name']
-                elif sim_type_name == 'SIMBA':
-                    stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=sim_z, simType=sim_type_name,
-                                                  feedback=sim['feedback'])
-                    # sim_label = f"{sim['name']}_{sim['feedback']}"
-                    sim_label = f"SIMBA-100"
-                elif sim_type_name == 'FLAMINGO':
-                    stacker   = SimulationStacker(sim['name'], sim['snapshot'],
-                                                  z=sim_z, simType=sim_type_name,
-                                                  feedback=sim['feedback'])
-                    sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
-                else:
-                    raise ValueError(f"Unknown sim type: {sim_type_name!r}")
+        bf_config = config.get('beam_factor', {})
+        npz_path  = bf_config.get(
+            'npz_path', f'../data/beam_factors/beam_factor_z{redshift}.npz')
+        results   = (load_beam_factor_npz(npz_path, config)
+                     if bf_config.get('load_beam_factor', False) else None)
 
-                if verbose:
-                    print(f"[{z_key}] Processing {sim_label} (z={sim_z})")
+        if results is None:
+            theta = None
+            sim_labels, factors, factor_errs = [], [], []
 
-                # Mean parent-halo mass and R200m of the SHAM-selected sample.
-                mean_mass, R200m_kpch = sham_parent_halo_stats(
-                    stacker, stack.get('halo_abundance_target', None))
-                if verbose:
-                    print(f"  [{z_key}] {sim_label}: mean M = {mean_mass:.3e} Msun/h "
-                          f"(log10 = {np.log10(mean_mass):.3f}), "
-                          f"mean R200m = {R200m_kpch:.3f} comoving kpc/h")
+            for sim_group in config['simulations']:
+                sim_type_name = sim_group['sim_type']
+                for sim in sim_group['sims']:
+                    # Per-sim redshift override: a sim entry may declare its own
+                    # 'redshift' (e.g. a FLAMINGO z=0.30 snapshot substituted into the
+                    # z=0.26 slot); otherwise fall back to this config's redshift.
+                    sim_z = sim.get('redshift', redshift)
+                    if sim_type_name == 'IllustrisTNG':
+                        stacker   = SimulationStacker(sim['name'], sim['snapshot'],
+                                                      z=sim_z, simType=sim_type_name)
+                        sim_label = sim['name']
+                    elif sim_type_name == 'SIMBA':
+                        stacker   = SimulationStacker(sim['name'], sim['snapshot'],
+                                                      z=sim_z, simType=sim_type_name,
+                                                      feedback=sim['feedback'])
+                        # sim_label = f"{sim['name']}_{sim['feedback']}"
+                        sim_label = f"SIMBA-100"
+                    elif sim_type_name == 'FLAMINGO':
+                        stacker   = SimulationStacker(sim['name'], sim['snapshot'],
+                                                      z=sim_z, simType=sim_type_name,
+                                                      feedback=sim['feedback'])
+                        sim_label = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                    else:
+                        raise ValueError(f"Unknown sim type: {sim_type_name!r}")
 
-                radii_b, profiles_b = stacker.stackMap(
-                    pType,  filterType=filter_type,
-                    pixelSize=pixel_size, beamSize=beam_size,
-                    **base_kwargs)
-                radii_n, profiles_n = stacker.stackMap(
-                    pType2, filterType=filter_type2,
-                    pixelSize=pixel_size_2, beamSize=beam_size_2,
-                    **base_kwargs)
+                    if verbose:
+                        print(f"[{z_key}] Processing {sim_label} (z={sim_z})")
 
-                # Ratio of halo-means — no baryon normalisation since pType == pType2.
-                mean_b = np.mean(profiles_b, axis=1)
-                mean_n = np.mean(profiles_n, axis=1)
-                beam_factor = mean_b / mean_n
+                    # Mean parent-halo mass and R200m of the SHAM-selected sample.
+                    mean_mass, R200m_kpch = sham_parent_halo_stats(
+                        stacker, stack.get('halo_abundance_target', None))
+                    if verbose:
+                        print(f"  [{z_key}] {sim_label}: mean M = {mean_mass:.3e} Msun/h "
+                              f"(log10 = {np.log10(mean_mass):.3f}), "
+                              f"mean R200m = {R200m_kpch:.3f} comoving kpc/h")
 
-                # Error: standard error of the mean propagated through the ratio.
-                err_b = np.std(profiles_b, axis=1) / np.sqrt(profiles_b.shape[1])
-                err_n = np.std(profiles_n, axis=1) / np.sqrt(profiles_n.shape[1])
-                beam_factor_err = beam_factor * np.sqrt(
-                    (err_b / mean_b)**2 + (err_n / mean_n)**2)
+                    radii_b, profiles_b = stacker.stackMap(
+                        pType,  filterType=filter_type,
+                        pixelSize=pixel_size, beamSize=beam_size,
+                        **base_kwargs)
+                    radii_n, profiles_n = stacker.stackMap(
+                        pType2, filterType=filter_type2,
+                        pixelSize=pixel_size_2, beamSize=beam_size_2,
+                        **base_kwargs)
 
-                colour = colour_for_sim[sim_label]
-                theta  = radii_b * rad_distance
+                    # Ratio of halo-means — no baryon normalisation since pType == pType2.
+                    mean_b = np.mean(profiles_b, axis=1)
+                    mean_n = np.mean(profiles_n, axis=1)
+                    beam_factor = mean_b / mean_n
 
-                ax.plot(theta, beam_factor,
-                        color=colour, lw=2, ls=style['ls'], marker='o')
-                ax.fill_between(
-                    theta,
-                    beam_factor - beam_factor_err,
-                    beam_factor + beam_factor_err,
-                    color=colour, alpha=0.15,
-                )
+                    # Error: standard error of the mean propagated through the ratio.
+                    err_b = np.std(profiles_b, axis=1) / np.sqrt(profiles_b.shape[1])
+                    err_n = np.std(profiles_n, axis=1) / np.sqrt(profiles_n.shape[1])
+                    beam_factor_err = beam_factor * np.sqrt(
+                        (err_b / mean_b)**2 + (err_n / mean_n)**2)
+
+                    sim_labels.append(sim_label)
+                    factors.append(beam_factor)
+                    factor_errs.append(beam_factor_err)
+                    if theta is None:
+                        theta = radii_b * rad_distance
+
+            results = dict(
+                theta_arcmin    = theta,
+                sim_labels      = np.array(sim_labels),
+                beam_factor     = np.array(factors),       # (n_sims, n_radii)
+                beam_factor_err = np.array(factor_errs),   # (n_sims, n_radii)
+            )
+            if bf_config.get('save_beam_factor', True):
+                save_beam_factor_npz(npz_path, results, config)
+                print(f'Saved beam factor to {npz_path}')
+
+        theta = results['theta_arcmin']
+        for sim_label, beam_factor, beam_factor_err in zip(
+                results['sim_labels'], results['beam_factor'],
+                results['beam_factor_err']):
+            colour = colour_for_sim[str(sim_label)]
+
+            ax.plot(theta, beam_factor,
+                    color=colour, lw=2, ls=style['ls'], marker='o')
+            ax.fill_between(
+                theta,
+                beam_factor - beam_factor_err,
+                beam_factor + beam_factor_err,
+                color=colour, alpha=0.15,
+            )
 
     # ==========================================================================
     # Legend: coloured entries for sims, grey entries for redshift linestyles

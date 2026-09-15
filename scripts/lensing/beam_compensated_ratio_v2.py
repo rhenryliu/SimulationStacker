@@ -20,11 +20,20 @@ identically to beam_compensated_ratio.py.
 The beam-compensation logic (Phases 1–2) and the data overlay (Phase 4) are
 unchanged from beam_compensated_ratio.py.
 
+Caching: with ``compensation.load_beam_factor`` (default true) the per-sim beam
+factors are read from the file plot_beam_factors.py writes (``beam_factor.npz_path``
+in the beamTest config), and the beamTest sims are only stacked if that file is
+missing or was made with different beamTest settings.  With
+``compensation.save_compensated`` (default true) the beam-compensated data points
+are written to ``../data/beam_compensated/``.
+
 Usage
 -----
     python lensing/beam_compensated_ratio_v2.py -p configs/lensing/beam_compensated_z05.yaml
 """
 
+import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -97,6 +106,74 @@ def load_measurements_npz(path: str) -> dict:
         outer_key, inner_key = k.split("/", 1)
         out.setdefault(outer_key, {})[inner_key] = archive[k]
     return out
+
+
+def _beam_factor_settings(bt_config: dict) -> str:
+    """Canonical string of the beamTest settings that determine the beam factor.
+
+    Stored in the beam-factor ``.npz`` and compared on load, so a file made with
+    different stacking settings or simulations is restacked rather than used.
+    The field-caching flags are dropped since they do not change the numbers.
+    Keep in sync with plot_beam_factors.py.
+
+    Args:
+        bt_config: Parsed beamTest YAML config.
+
+    Returns:
+        JSON string of the ``stack`` and ``simulations`` sections, keys sorted.
+    """
+    stack = {k: v for k, v in bt_config['stack'].items()
+             if k not in ('load_field', 'save_field')}
+    return json.dumps({'stack': stack, 'simulations': bt_config['simulations']},
+                      sort_keys=True)
+
+
+def load_beam_factor_npz(path, bt_config: dict) -> Optional[dict]:
+    """Load the per-sim beam factors written by plot_beam_factors.py.
+
+    Keep in sync with plot_beam_factors.py.
+
+    Args:
+        path: Path to the beam-factor ``.npz``.
+        bt_config: Parsed beamTest config the file should correspond to.
+
+    Returns:
+        Dict with ``theta_arcmin`` (n_radii,), ``sim_labels`` (n_sims,),
+        ``beam_factor`` and ``beam_factor_err`` (n_sims, n_radii), or None
+        (with the reason printed) if the file is missing or was made with
+        different beamTest settings.
+    """
+    path = Path(path)
+    if not path.exists():
+        print(f"No beam factor file at {path}; stacking the beamTest simulations.")
+        return None
+    with np.load(path, allow_pickle=False) as archive:
+        if str(archive['settings']) != _beam_factor_settings(bt_config):
+            print(f"[warn] Beam factor file {path} was made with different beamTest "
+                  "settings; stacking the beamTest simulations instead.")
+            return None
+        out = {k: archive[k] for k in
+               ('theta_arcmin', 'sim_labels', 'beam_factor', 'beam_factor_err')}
+    print(f"Loaded beam factor from {path}")
+    return out
+
+
+def save_compensated_npz(path, data: dict) -> None:
+    """Write the beam-compensated data points to an ``.npz``, atomically.
+
+    Writes to a temporary file in the same directory and renames it into place,
+    so a failed run never leaves a truncated file behind.
+
+    Args:
+        path: Destination ``.npz`` path.
+        data: Arrays to save.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # The suffix must stay '.npz': np.savez appends '.npz' to any other name.
+    tmp = path.with_name(path.name + '.tmp.npz')
+    np.savez(tmp, **data)
+    os.replace(tmp, path)
 
 
 def _resolve_stacker(sim_type_name: str, sim: dict, redshift: float,
@@ -224,7 +301,9 @@ def main(path2config: str, verbose: bool = True) -> None:
     plot_config      = master.get('plot', {})
     extra_sim_ratios = master.get('extra_sim_ratios', [])
 
-    use_sim_scatter = comp_config.get('use_sim_scatter', False)
+    use_sim_scatter  = comp_config.get('use_sim_scatter', False)
+    load_beam_factor = comp_config.get('load_beam_factor', True)
+    save_compensated = comp_config.get('save_compensated', True)
 
     # ---- Output path: figures/<year-month>/<month-day>/ ----
     now      = datetime.now()
@@ -279,35 +358,49 @@ def main(path2config: str, verbose: bool = True) -> None:
         halo_abundance_target = bt_stack.get('halo_abundance_target', None),
     )
 
+    # The cached file (written by plot_beam_factors.py) holds the same per-sim
+    # ratios as the loop below; stack instead if it is missing or stale.
+    bf_path = bt_config.get('beam_factor', {}).get(
+        'npz_path', f'../data/beam_factors/beam_factor_z{bt_redshift}.npz')
+    cached = load_beam_factor_npz(bf_path, bt_config) if load_beam_factor else None
+
     beam_factors: list = []   # one (n_radii,) array per simulation
-    bt_radii = None
 
-    for sim_group in bt_config['simulations']:
-        sim_type_name = sim_group['sim_type']
-        for sim in sim_group['sims']:
-            stacker, sim_label, _ = _resolve_stacker(
-                sim_type_name, sim, bt_redshift, verbose)
+    if cached is not None:
+        beam_factors    = list(cached['beam_factor'])
+        bt_theta_arcmin = cached['theta_arcmin']
+    else:
+        bt_radii = None
 
-            if verbose:
-                print(f"[beamTest] Processing {sim_label}")
+        for sim_group in bt_config['simulations']:
+            sim_type_name = sim_group['sim_type']
+            for sim in sim_group['sims']:
+                stacker, sim_label, _ = _resolve_stacker(
+                    sim_type_name, sim, bt_redshift, verbose)
 
-            radii_b, profiles_b = stacker.stackMap(
-                bt_pType,  filterType=bt_filter_type,
-                pixelSize=bt_pixel_size, beamSize=bt_beam_size,
-                **bt_base_kwargs)
-            radii_n, profiles_n = stacker.stackMap(
-                bt_pType2, filterType=bt_filter_type2,
-                pixelSize=bt_pixel_size_2, beamSize=bt_beam_size_2,
-                **bt_base_kwargs)
+                if verbose:
+                    print(f"[beamTest] Processing {sim_label}")
 
-            # Ratio of halo-means for this simulation.  No baryon normalisation
-            # since pType == pType2 (same particle, different resolution/beam).
-            mean_b = np.mean(profiles_b, axis=1)   # (n_radii,)
-            mean_n = np.mean(profiles_n, axis=1)
-            beam_factors.append(mean_b / mean_n)
+                radii_b, profiles_b = stacker.stackMap(
+                    bt_pType,  filterType=bt_filter_type,
+                    pixelSize=bt_pixel_size, beamSize=bt_beam_size,
+                    **bt_base_kwargs)
+                radii_n, profiles_n = stacker.stackMap(
+                    bt_pType2, filterType=bt_filter_type2,
+                    pixelSize=bt_pixel_size_2, beamSize=bt_beam_size_2,
+                    **bt_base_kwargs)
 
-            if bt_radii is None:
-                bt_radii = radii_b
+                # Ratio of halo-means for this simulation.  No baryon normalisation
+                # since pType == pType2 (same particle, different resolution/beam).
+                mean_b = np.mean(profiles_b, axis=1)   # (n_radii,)
+                mean_n = np.mean(profiles_n, axis=1)
+                beam_factors.append(mean_b / mean_n)
+
+                if bt_radii is None:
+                    bt_radii = radii_b
+
+        # bt_radii * bt_rad_distance gives the x-axis in arcmin, matching the data.
+        bt_theta_arcmin = bt_radii * bt_rad_distance
 
     # Mean across simulations — each sim contributes equally regardless of
     # halo count, so we average the per-sim ratios rather than pooling halos.
@@ -321,9 +414,6 @@ def main(path2config: str, verbose: bool = True) -> None:
     # ==========================================================================
     # Phase 2: compensate the data
     # ==========================================================================
-    # bt_radii * bt_rad_distance gives the x-axis in arcmin, matching the data.
-    bt_theta_arcmin = bt_radii * bt_rad_distance
-
     data       = load_measurements_npz(plot_config['data_path'])
     key        = 'source_bin_0'
     theta_data = data[key]['ksz_theta_arcmin']
@@ -519,6 +609,24 @@ def main(path2config: str, verbose: bool = True) -> None:
     # ==========================================================================
     snr_feedback = detection_snr(R_compensated, cov_compensated, null=1.0)
     print(f"Beam-compensated data detection SNR (relative to null=1): {snr_feedback:.2f}")
+
+    if save_compensated:
+        comp_path = (Path('../data/beam_compensated')
+                     / f'beam_compensated_{nb_pType}_{nb_pType2}_z{nb_redshift}.npz')
+        save_compensated_npz(comp_path, dict(
+            theta_arcmin      = theta_data,
+            ratio             = ratio_data,
+            ratio_err         = sigma_data,
+            ratio_cov         = cov_data,
+            beam_factor       = beam_factor,
+            R_compensated     = R_compensated,
+            sigma_compensated = sigma_compensated,
+            cov_compensated   = cov_compensated,
+            snr               = snr_feedback,
+            use_sim_scatter   = use_sim_scatter,
+            data_path         = str(plot_config['data_path']),
+        ))
+        print(f'Saved beam-compensated data points to {comp_path}')
 
     # ==========================================================================
     # Figure cosmetics

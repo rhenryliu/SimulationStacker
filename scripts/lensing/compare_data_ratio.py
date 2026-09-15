@@ -428,17 +428,17 @@ def main(path2config: str, verbose: bool = True) -> None:
                 capsize=2,
             )
 
-    # ---- Secondary x-axis: comoving kpc/h ----
+    # ---- Secondary x-axis: comoving Mpc/h ----
     # Only added if at least one simulation was successfully processed.
     if cosmo_ref is not None:
         secax_x = ax.secondary_xaxis(
             'top',
             functions=(
-                lambda arcmin: arcmin_to_comoving(arcmin, redshift, cosmo_ref),
-                lambda kpc_h:  comoving_to_arcmin(kpc_h,  redshift, cosmo_ref),
+                lambda arcmin: arcmin_to_comoving(arcmin, redshift, cosmo_ref) / 1e3,
+                lambda mpc_h:  comoving_to_arcmin(mpc_h * 1e3, redshift, cosmo_ref),
             ),
         )
-        secax_x.set_xlabel(r'R [comoving kpc/h]')
+        secax_x.set_xlabel(r'R [comoving Mpc/h]')
 
     # ---- Axes labels and cosmetics ----
     # Dashed horizontal line at R=1: the baryon fraction equals the cosmic mean.

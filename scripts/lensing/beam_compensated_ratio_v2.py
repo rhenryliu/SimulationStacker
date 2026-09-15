@@ -527,11 +527,11 @@ def main(path2config: str, verbose: bool = True) -> None:
         secax_x = ax.secondary_xaxis(
             'top',
             functions=(
-                lambda arcmin: arcmin_to_comoving(arcmin, nb_redshift, cosmo_ref),
-                lambda kpc_h:  comoving_to_arcmin(kpc_h,  nb_redshift, cosmo_ref),
+                lambda arcmin: arcmin_to_comoving(arcmin, nb_redshift, cosmo_ref) / 1e3,
+                lambda mpc_h:  comoving_to_arcmin(mpc_h * 1e3, nb_redshift, cosmo_ref),
             ),
         )
-        secax_x.set_xlabel(r'R [comoving kpc/h]')
+        secax_x.set_xlabel(r'R [comoving Mpc/h]')
 
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
 

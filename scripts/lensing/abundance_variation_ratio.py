@@ -703,11 +703,11 @@ def make_figure(results: dict, nb_config: dict, plot_config: dict,
     secax_x = ax.secondary_xaxis(
         'top',
         functions=(
-            lambda arcmin: arcmin_to_comoving(arcmin, nb_redshift, cosmo_ref),
-            lambda kpc_h:  comoving_to_arcmin(kpc_h,  nb_redshift, cosmo_ref),
+            lambda arcmin: arcmin_to_comoving(arcmin, nb_redshift, cosmo_ref) / 1e3,
+            lambda mpc_h:  comoving_to_arcmin(mpc_h * 1e3, nb_redshift, cosmo_ref),
         ),
     )
-    secax_x.set_xlabel(r'R [comoving kpc/h]')
+    secax_x.set_xlabel(r'R [comoving Mpc/h]')
 
     default_ylabel = (r'$f_{\rm gas}(R)$' if mode == 'absolute'
                       else r'$\Delta f_{\rm gas} / f_{\rm gas}$ [\%]')

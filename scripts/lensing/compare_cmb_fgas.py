@@ -11,11 +11,15 @@ beam_compensated_ratio_v2.py (Phases 1–2): the beam suppression factor
                      <DSigma_ionized_gas(beamed)>(r) / <DSigma_ionized_gas(no beam)>(r)
 
 is stacked from the beamTest simulations, and the measured ratio is divided by
-it.  No simulation curves are plotted; the simulations are only needed for the
-beam factor.  With ``compensation.load_beam_factor`` (default true) the factor
-is read from the file plot_beam_factors.py writes, so no stacking (and no compute
-node) is needed unless that file is missing or was made with different beamTest
-settings.
+it.  With ``compensation.load_beam_factor`` (default true) the factor is read
+from the file plot_beam_factors.py writes, so no beamTest stacking is needed
+unless that file is missing or was made with different beamTest settings.
+
+With ``use_sims: true`` (default false) the simulation f_gas(R) curves are also
+plotted, stacked exactly as in beam_compensated_ratio_v2.py Phase 3 from the
+``stack`` and ``simulations`` sections of this script's own config (extra
+gas-component ratios are not supported).  That stacking needs a compute node;
+the figure name then gains a ``_sims`` suffix.
 
 The digitized data are plotted with the symmetric error bar ``fgas_err``.
 Both datasets sit on the same 1–6 arcmin grid, so they are shifted
@@ -50,7 +54,8 @@ import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker i
 # beam-compensation script so both scripts build the data points identically.
 # (scripts/lensing/ is on sys.path because this script lives there.)
 from beam_compensated_ratio_v2 import (  # type: ignore
-    _resolve_stacker, load_beam_factor_npz, load_measurements_npz)
+    _FLAMINGO_COLOURS, _resolve_stacker, load_beam_factor_npz,
+    load_measurements_npz, sham_parent_halo_stats)
 
 # ---------------------------------------------------------------------------
 # Matplotlib style — matches beam_compensated_ratio_v2.py exactly
@@ -65,7 +70,7 @@ matplotlib.rcParams.update({
     "axes.labelsize": 18,
     "xtick.labelsize": 16,
     "ytick.labelsize": 16,
-    "legend.fontsize": 14,
+    "legend.fontsize": 18,
 })
 
 
@@ -84,8 +89,13 @@ def main(path2config: str, verbose: bool = True) -> None:
     with open(config_dir / master['beam_test_config']) as f:
         bt_config = yaml.safe_load(f)
 
+    # The simulation curves read 'stack' and 'simulations' from this config
+    # itself, in the layout of beam_compensated_ratio_v2.py's no_beam_config.
+    nb_config = master
+
     comp_config = master.get('compensation', {})
     plot_config = master.get('plot', {})
+    use_sims    = master.get('use_sims', False)
 
     use_sim_scatter  = comp_config.get('use_sim_scatter', False)
     load_beam_factor = comp_config.get('load_beam_factor', True)
@@ -102,11 +112,19 @@ def main(path2config: str, verbose: bool = True) -> None:
     fig_name = plot_config.get('fig_name', 'compare_cmb_fgas')
     fig_type = plot_config.get('fig_type', 'pdf')
     x_offset = plot_config.get('x_offset', 0.05)   # arcmin
+    plot_error_bars = plot_config.get('plot_error_bars', True)
+    do_plot_r200m   = plot_config.get('plot_r200m', True)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
 
     # Reference cosmology for the top (comoving) axis: taken from the first
     # beamTest simulation, which is the same sim beam_compensated_ratio_v2.py
     # uses (the first noBeam sim) in the z05 configs.
     cosmo_ref: Optional[FlatLambdaCDM] = None
+
+    # R200m reference line: cached from the first IllustrisTNG sim (use_sims only).
+    R200m_arcmin_ref: Optional[float] = None
+    R200m_label: Optional[str] = None
 
     t0 = time.time()
 
@@ -260,10 +278,127 @@ def main(path2config: str, verbose: bool = True) -> None:
         print(f"  theta [arcmin]: {theta_cmb}")
 
     # ==========================================================================
-    # Phase 4: overlay the two datasets
+    # Phase 4 (optional): noBeam simulation profiles
+    # (identical to beam_compensated_ratio_v2.py Phase 3, without extra ratios)
     # ==========================================================================
-    fig, ax = plt.subplots(figsize=(10, 8))
+    if use_sims:
+        nb_stack = nb_config['stack']
 
+        nb_redshift     = nb_stack.get('redshift',        0.5)
+        nb_rad_distance = nb_stack.get('rad_distance',    1.0)
+        nb_pType        = nb_stack.get('particle_type',   'ionized_gas')
+        nb_filter_type  = nb_stack.get('filter_type',     'DSigma')
+        nb_pixel_size   = nb_stack.get('pixel_size',      0.2)
+        nb_beam_size    = nb_stack.get('beam_size',       None)
+        nb_pType2       = nb_stack.get('particle_type_2', 'total')
+        nb_filter_type2 = nb_stack.get('filter_type_2',   'DSigma')
+        nb_pixel_size_2 = nb_stack.get('pixel_size_2',    0.2)
+        nb_beam_size_2  = nb_stack.get('beam_size_2',     None)
+
+        nb_base_kwargs = dict(
+            minRadius    = nb_stack.get('min_radius',   1.0),
+            maxRadius    = nb_stack.get('max_radius',   6.0),
+            numRadii     = nb_stack.get('num_radii',    9),
+            projection   = nb_stack.get('projection',   'yz'),
+            save         = nb_stack.get('save_field',   True),
+            load         = nb_stack.get('load_field',   True),
+            radDistance  = nb_rad_distance,
+            mask         = nb_stack.get('mask_haloes',  False),
+            maskRad      = nb_stack.get('mask_radii',   3.0),
+            use_subhalos = nb_stack.get('use_subhalos', False),
+            halo_abundance_target = nb_stack.get('halo_abundance_target', None),
+        )
+
+        # Pre-build sim_label → colour mapping from the noBeam config, using the
+        # same colourmap logic as compare_data_ratio.py so colours are identical
+        # for the same simulations.
+        colour_for_sim: dict = {}
+        for i, sim_group in enumerate(nb_config['simulations']):
+            cmap    = matplotlib.colormaps[['plasma', 'twilight', 'hot'][i]]  # type: ignore[attr-defined]
+            n_sims  = len(sim_group['sims'])
+            colours = cmap(np.linspace(0.2, 0.85, n_sims))
+            for j, sim in enumerate(sim_group['sims']):
+                if sim_group['sim_type'] == 'IllustrisTNG':
+                    label  = sim['name']
+                    colour = colours[j]
+                elif sim_group['sim_type'] == 'FLAMINGO':
+                    label  = f"FLAMINGO {sim['feedback']}".replace('_', '-')
+                    colour = _FLAMINGO_COLOURS.get(sim['feedback'], colours[j])
+                else:
+                    label  = f"{sim['name']}_{sim['feedback']}"
+                    label  = f"SIMBA-100"
+                    colour = colours[j]
+                colour_for_sim[label] = colour
+
+        for sim_group in nb_config['simulations']:
+            sim_type_name = sim_group['sim_type']
+            for sim in sim_group['sims']:
+                stacker, sim_label, omega_b = _resolve_stacker(
+                    sim_type_name, sim, nb_redshift, verbose)
+
+                cosmo = FlatLambdaCDM(
+                    H0=100 * stacker.header['HubbleParam'],
+                    Om0=stacker.header['Omega0'],
+                    Tcmb0=2.7255 * u.K,
+                    Ob0=omega_b,
+                )
+                if cosmo_ref is None:
+                    cosmo_ref = cosmo
+
+                # Mean parent-halo mass and R200m of the SHAM-selected sample.
+                mean_mass, R200m_kpch = sham_parent_halo_stats(
+                    stacker, nb_stack.get('halo_abundance_target', None))
+                if verbose:
+                    print(f"  {sim_label}: mean M = {mean_mass:.3e} Msun/h "
+                          f"(log10 = {np.log10(mean_mass):.3f}), "
+                          f"mean R200m = {R200m_kpch:.3f} comoving kpc/h")
+
+                # Cache R200m (arcmin) from the first IllustrisTNG sim for the vline.
+                if (do_plot_r200m and sim_type_name == 'IllustrisTNG'
+                        and R200m_arcmin_ref is None):
+                    R200m_arcmin_ref = comoving_to_arcmin(R200m_kpch, nb_redshift, cosmo=cosmo)
+                    R200m_label = sim_label
+
+                if verbose:
+                    print(f"[noBeam] Processing {sim_label}")
+
+                f_baryon = omega_b / stacker.header['Omega0']
+                factor   = 1.0 / f_baryon
+                colour   = colour_for_sim[sim_label]
+                x_axis   = None   # set on first stack
+
+                # Stack the shared denominator once and reuse for all ratios.
+                radii1, profiles1 = stacker.stackMap(
+                    nb_pType2, filterType=nb_filter_type2,
+                    pixelSize=nb_pixel_size_2, beamSize=nb_beam_size_2,
+                    **nb_base_kwargs)
+                mean1 = np.mean(profiles1, axis=1)
+                err1  = np.std(profiles1, axis=1) / np.sqrt(profiles1.shape[1])
+
+                # ---- primary ratio (ionized_gas / total, solid line + marker) ----
+                radii0, profiles0 = stacker.stackMap(
+                    nb_pType, filterType=nb_filter_type,
+                    pixelSize=nb_pixel_size, beamSize=nb_beam_size,
+                    **nb_base_kwargs)
+                x_axis = radii0 * nb_rad_distance
+                mean0  = np.mean(profiles0, axis=1)
+
+                profiles_plot = mean0 / mean1 * factor
+                ax.plot(x_axis, profiles_plot,
+                        label=sim_label, color=colour, lw=2, marker='o', ls='-')
+
+                if plot_error_bars:
+                    err0         = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                    profiles_err = np.abs(profiles_plot) * np.sqrt(
+                        (err0 / mean0)**2 + (err1 / mean1)**2)
+                    ax.fill_between(x_axis,
+                                    profiles_plot - profiles_err,
+                                    profiles_plot + profiles_err,
+                                    color=colour, alpha=0.2)
+
+    # ==========================================================================
+    # Phase 5: overlay the two datasets
+    # ==========================================================================
     # Our beam-compensated measurement, shifted left by x_offset.
     ax.errorbar(
         theta_data - x_offset,
@@ -278,11 +413,13 @@ def main(path2config: str, verbose: bool = True) -> None:
     )
 
     # Digitized Hadzhiyska et al. (2025) measurement, shifted right by x_offset.
+    # Green diamonds keep it distinct from the simulation curves (blue/purple/red
+    # colours with circle markers).
     ax.errorbar(
         theta_cmb + x_offset,
         fgas_cmb,
         yerr=sigma_cmb,
-        fmt='o',
+        fmt='D',
         color='tab:blue',
         label=plot_config.get('cmb_fgas_label', 'Hadzhiyska et al. (2025)'),
         markersize=6,
@@ -306,6 +443,11 @@ def main(path2config: str, verbose: bool = True) -> None:
     # f_gas = 1 corresponds to the cosmic baryon fraction (no feedback).
     ax.axhline(1.0, color='k', ls='--', lw=1.5, label='_nolegend_')
 
+    # Vertical dotted line at mean R200m of the first IllustrisTNG sim's halos.
+    if do_plot_r200m and R200m_arcmin_ref is not None:
+        ax.axvline(R200m_arcmin_ref, color='gray', ls=':', lw=2,
+                   label=rf'$\langle R_{{200\mathrm{{m}}}} \rangle$ ({R200m_label})')
+
     ax.set_xlabel(r'$\theta$ [arcmin]')
     ax.set_ylabel(plot_config.get('ylabel', r'$f_{\rm gas}(R)$'))
     ax.set_xlim(0.0, bt_stack.get('max_radius', 6.0) * bt_rad_distance + 0.5)
@@ -314,7 +456,7 @@ def main(path2config: str, verbose: bool = True) -> None:
 
     fig.tight_layout()
 
-    out_stem = f'{fig_name}_z{bt_redshift}'
+    out_stem = f"{fig_name}{'_sims' if use_sims else ''}_z{bt_redshift}"
     out_path = fig_path / f'{out_stem}.{fig_type}'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150)  # type: ignore

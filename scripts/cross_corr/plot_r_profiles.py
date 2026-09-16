@@ -6,23 +6,31 @@ Turn the ``.npz`` files written by ``make_r_profiles.py`` into the Singh et al.
 
 Figures (one per field definition, baryons and electrons):
 
-    rows:    r_gb(R),  r_bm(R),  r_gm(R),  r_bm/r_gb(R)
+    rows:    r_gb(R),  r_bm(R),  r_gm(R),  C(R) = r_bm r_gm / r_gb
     columns: Sigma,    DSigma,   Upsilon(R0),  Y(Rmax)
     curves:  one per simulation, with its within-projection jackknife band
 
 Both reference radii are read from each run's own metadata, never assumed.
 
-``r_gm`` is the same curve in the baryon and electron figures -- it touches
-neither field -- but it appears in both, so that each figure carries all three
-legs of the addendum's calibration factor ``C = r_bm r_gm / r_gb``
-(``cross_correlation_notes_v0.2_addendum.md`` Eq. A12) without a cross-
-reference.  The bottom row is the Route A transfer ``C_A``.
+The bottom row is the calibration factor of the v0.2 addendum Eq. (A12), whose
+Sec. 4.3 argues it is what should be plotted "in place of the individual r's,
+which are convention-free only in combination and which are not bounded by
+unity".  The three rows above it are its three legs; ``r_gm`` is the same curve
+in the baryon and electron figures -- it touches neither field -- but appears
+in both so each figure stands alone.  The electron figure's C is the analogue
+``r_em r_gm / r_ge``.
+
+Nothing here is recomputed from the maps: every quantity is assembled from the
+coefficients and their jackknife stacks already in the ``.npz``, per jackknife
+realization.
 
 Metrics printed and written alongside the figure:
 
-    - max_R |r - 1| per coefficient, filter and simulation;
-    - the cross-simulation scatter of r_bm/r_gb at each aperture, which is the
-      quantity Gate A thresholds at 10 per cent.
+    - max_R |x - 1| per quantity, filter and simulation;
+    - the cross-simulation scatter, at each aperture, of BOTH C and the Task 1
+      statistic r_bm/r_gb.  Gate A's verdict is taken on C, per addendum
+      Task 10; r_bm/r_gb is reported without a verdict because it is what
+      tasks_1_to_4_record.md and the U6 R0 scan are quoted against.
 
 Usage
 -----
@@ -62,19 +70,55 @@ matplotlib.rcParams.update({
     'legend.fontsize': 9,
 })
 
-#: Rows of the figure: (numerator pair, denominator pair or None, label).
+#: Rows of the figure: (numerator, denominator or None, label).  Each of the
+#: first two entries is a field pair, or a tuple of field pairs whose
+#: coefficients are multiplied.
+#:
+#: The bottom row is the calibration factor
+#:
+#:     C = r_bm r_gm / r_gb = Y_bm Y_gm / (Y_mm Y_gb)
+#:
+#: of the v0.2 addendum Eq. (A12), whose Sec. 4.3 argues it is what should be
+#: plotted "in place of the individual r's, which are convention-free only in
+#: combination and which are not bounded by unity".  It equals unity
+#: identically whenever the galaxies' correlation with the gas is entirely
+#: mediated by the matter field, whatever the feedback does, so its departure
+#: from one measures direct galaxy-gas stochasticity.  The three rows above it
+#: are exactly its three legs.
 BARYON_ROWS = [
     (('g', 'b'), None, r'$r_{gb}$'),
     (('b', 'm'), None, r'$r_{bm}$'),
     (('g', 'm'), None, r'$r_{gm}$'),
-    (('b', 'm'), ('g', 'b'), r'$r_{bm}\,/\,r_{gb}$'),
+    ((('b', 'm'), ('g', 'm')), (('g', 'b'),),
+     r'$r_{bm}\,r_{gm}\,/\,r_{gb}$'),
 ]
 
 ELECTRON_ROWS = [
     (('g', 'e'), None, r'$r_{ge}$'),
     (('e', 'm'), None, r'$r_{em}$'),
     (('g', 'm'), None, r'$r_{gm}$'),
-    (('e', 'm'), ('g', 'e'), r'$r_{em}\,/\,r_{ge}$'),
+    ((('e', 'm'), ('g', 'm')), (('g', 'e'),),
+     r'$r_{em}\,r_{gm}\,/\,r_{ge}$'),
+]
+
+#: Cross-simulation scatter statistics, as ``(numerator, denominator, label,
+#: carries_verdict)``.  These are deliberately NOT derived from the figure rows.
+#: Gate A is re-taken on ``C`` per addendum Task 10, but ``r_bm/r_gb`` is the
+#: statistic every number in ``tasks_1_to_4_record.md`` and the U6 R0 scan is
+#: quoted against, so it stays in the report without a verdict rather than
+#: disappearing when it stopped being a row.
+BARYON_SCATTER = [
+    ((('b', 'm'), ('g', 'm')), (('g', 'b'),),
+     'C = r_bm r_gm / r_gb', True),
+    ((('b', 'm'),), (('g', 'b'),),
+     'r_bm / r_gb  (Task 1 statistic)', False),
+]
+
+ELECTRON_SCATTER = [
+    ((('e', 'm'), ('g', 'm')), (('g', 'e'),),
+     'C = r_em r_gm / r_ge', True),
+    ((('e', 'm'),), (('g', 'e'),),
+     'r_em / r_ge  (Task 1 statistic)', False),
 ]
 
 #: Column order.  Only the filters actually present in the loaded runs are
@@ -245,6 +289,27 @@ def common_filters(runs):
     return shared
 
 
+def every_run_has(runs, num, den, filters):
+    """Return whether every run carries the coefficients a quantity needs.
+
+    Both the full-map array and the jackknife stack are required: ``series``
+    reads both, and the error bar is formed from the stack.
+
+    Args:
+        runs (list): Runs from :func:`load_runs`.
+        num (tuple): Numerator field pair or tuple of pairs.
+        den (tuple or None): Denominator field pair or tuple of pairs.
+        filters (list): Filter columns, from :func:`common_filters`.
+
+    Returns:
+        bool: True if every run can supply the quantity for every filter.
+    """
+    needed = as_pairs(num) + as_pairs(den)
+    return all(f'r_{a}{b}_{filt}' in run['data'].files
+               and f'rjk_{a}{b}_{filt}' in run['data'].files
+               for run in runs for (a, b) in needed for filt in filters)
+
+
 def common_rows(runs, rows, filters):
     """Drop rows whose field pair is missing from any loaded run.
 
@@ -265,14 +330,9 @@ def common_rows(runs, rows, filters):
     Returns:
         list: The rows every run can supply, in the given order.
     """
-    def has_pair(run, pair):
-        return all(f'r_{pair[0]}{pair[1]}_{filt}' in run['data'].files
-                   for filt in filters)
-
     kept = []
     for num, den, label in rows:
-        needed = (num,) if den is None else (num, den)
-        if all(has_pair(run, p) for run in runs for p in needed):
+        if every_run_has(runs, num, den, filters):
             kept.append((num, den, label))
         else:
             print(f'WARNING: row {label} needs a coefficient missing from at '
@@ -281,14 +341,85 @@ def common_rows(runs, rows, filters):
     return kept
 
 
+def common_stats(runs, stats, filters):
+    """Drop scatter statistics whose coefficients are missing from any run.
+
+    The companion to :func:`common_rows` for the Gate A statistics, which are
+    deliberately independent of the figure rows and so are never seen by it.
+    They reach :func:`series` by the same route and must degrade the same way:
+    without this, a run lacking ``r_gm`` writes both figures and then raises
+    ``KeyError`` inside :func:`gate_a_metrics`, before either metrics file is
+    written.  That is not hypothetical -- the Illustris-1 and SIMBA ``.npz``
+    predate ``r_gm`` and are still in ``data/r_profiles/``, excluded from the
+    current configs but a config edit away from being loaded again.
+
+    Args:
+        runs (list): Runs from :func:`load_runs`.
+        stats (list): Scatter statistics as ``(num, den, label,
+            carries_verdict)``, e.g. :data:`BARYON_SCATTER`.
+        filters (list): Filter columns, from :func:`common_filters`.
+
+    Returns:
+        list: The statistics every run can supply, in the given order.
+    """
+    kept = []
+    for num, den, label, carries_verdict in stats:
+        if every_run_has(runs, num, den, filters):
+            kept.append((num, den, label, carries_verdict))
+        else:
+            print(f'WARNING: scatter statistic "{label}" needs a coefficient '
+                  'missing from at least one run and is dropped from the '
+                  'Gate A report. Re-run make_r_profiles.py for every run in '
+                  'the config to restore it.')
+    return kept
+
+
+def as_pairs(spec):
+    """Normalize a row's numerator or denominator to a tuple of field pairs.
+
+    Accepts the single-pair form ``('b', 'm')`` used throughout the original
+    row specification, the multi-pair form ``(('b', 'm'), ('g', 'm'))`` needed
+    for the calibration factor, and None for an absent denominator.
+
+    Args:
+        spec (tuple or None): Field pair, tuple of field pairs, or None.
+
+    Returns:
+        tuple: Tuple of ``(a, b)`` field pairs, empty for None.
+    """
+    if spec is None or len(spec) == 0:
+        return ()
+    if isinstance(spec[0], str):
+        if len(spec) != 2:
+            raise ValueError(
+                f'A field pair must have exactly two entries, got {spec!r}. '
+                'Pass a tuple of pairs to multiply several coefficients.')
+        return (spec,)
+    return tuple(spec)
+
+
 def series(run, num, den, filt):
-    """Extract a coefficient or coefficient ratio and its jackknife error.
+    """Extract a coefficient, ratio or product, and its jackknife error.
+
+    Every quantity here is formed **per jackknife realization** and the spread
+    taken afterwards, never by Gaussian propagation of marginal errors.  That
+    is essential rather than stylistic: the coefficients entering one product
+    are measured on the same map and are strongly correlated, so propagating
+    marginal errors would badly misestimate the uncertainty and would miss the
+    partial cancellation that makes the combination well behaved
+    (``filter_specification.md`` Sec. 8; addendum Appendix A trap 5).
+
+    Values are recomputed from the stored ``r_*``/``rjk_*`` arrays rather than
+    read from the stored ``rerr_``/``ratio_``/``ratioerr_`` arrays, so that one
+    code path serves bare coefficients, ratios and products alike.  This is a
+    no-op for the cases that have a stored counterpart: across all production
+    runs and filters the recomputation reproduces them to exactly zero.
 
     Args:
         run (dict): One entry from :func:`load_runs`.
-        num (tuple): Numerator field pair, e.g. ``('b', 'm')``.
-        den (tuple or None): Denominator field pair for a ratio, or None for
-            a bare coefficient.
+        num (tuple): Numerator field pair ``('b', 'm')``, or tuple of pairs
+            ``(('b', 'm'), ('g', 'm'))`` whose coefficients are multiplied.
+        den (tuple or None): Denominator field pair or tuple of pairs, or None.
         filt (str): Filter name.
 
     Returns:
@@ -305,13 +436,29 @@ def series(run, num, den, filt):
         disagree about which bins exist.
     """
     d = run['data']
-    if den is None:
-        values = d[f'r_{num[0]}{num[1]}_{filt}']
-        errors = d[f'rerr_{num[0]}{num[1]}_{filt}']
-    else:
-        tag = f'{num[0]}{num[1]}_over_{den[0]}{den[1]}'
-        values = d[f'ratio_{tag}_{filt}']
-        errors = d[f'ratioerr_{tag}_{filt}']
+
+    num_pairs = as_pairs(num)
+    den_pairs = as_pairs(den)
+    if not num_pairs:
+        raise ValueError('series needs at least one numerator field pair; '
+                         f'got num={num!r}.')
+
+    a, b = num_pairs[0]
+    values = d[f'r_{a}{b}_{filt}']
+    jk = d[f'rjk_{a}{b}_{filt}']
+    with np.errstate(invalid='ignore', divide='ignore'):
+        for a, b in num_pairs[1:]:
+            values = values * d[f'r_{a}{b}_{filt}']
+            jk = jk * d[f'rjk_{a}{b}_{filt}']
+        for a, b in den_pairs:
+            # NaN rather than +/-inf on an exact zero, matching
+            # rprofiles._coefficient.  An inf would survive every nanmax and
+            # nanmean downstream and be reported as though it were a number.
+            den_full = d[f'r_{a}{b}_{filt}']
+            den_jk = d[f'rjk_{a}{b}_{filt}']
+            values = np.where(den_full != 0.0, values / den_full, np.nan)
+            jk = np.where(den_jk != 0.0, jk / den_jk, np.nan)
+    errors = rp.jackknife_error(jk, axis=0)
 
     defined = None
     if filt == 'Upsilon':
@@ -456,13 +603,32 @@ def make_figure(runs, rows, filters, out_path, title, show_errors=True):
     print(f'Figure saved to: {out_path}')
 
 
-def gate_a_metrics(runs, rows, filters, data_max=None):
+def quantity_name(num, den):
+    """Build a compact plain-text name for a coefficient, ratio or product.
+
+    Args:
+        num (tuple): Numerator field pair or tuple of pairs.
+        den (tuple or None): Denominator field pair or tuple of pairs.
+
+    Returns:
+        str: e.g. ``'gb'``, ``'bm/gb'`` or ``'bm.gm/gb'``.
+    """
+    top = '.'.join(f'{a}{b}' for a, b in as_pairs(num))
+    bottom = '.'.join(f'{a}{b}' for a, b in as_pairs(den))
+    return f'{top}/{bottom}' if bottom else top
+
+
+def gate_a_metrics(runs, rows, filters, stats, data_max=None):
     """Compute the Task 1 deliverable metrics.
 
     Args:
         runs (list): Runs from :func:`load_runs`.
-        rows (list): Row specification.
+        rows (list): Row specification, used for ``max_dev``.
         filters (list): Filter columns, from :func:`common_filters`.
+        stats (list): Scatter statistics as ``(num, den, label,
+            carries_verdict)``, e.g. :data:`BARYON_SCATTER`.  Deliberately
+            independent of ``rows``: the Gate A quantity is a scientific
+            choice, not a consequence of what the figure happens to draw.
         data_max (float, optional): Largest observationally accessible
             aperture in arcmin.  Statistics are reported separately for
             apertures at or below it and for the diagnostic extension above
@@ -471,14 +637,13 @@ def gate_a_metrics(runs, rows, filters, data_max=None):
 
     Returns:
         dict: ``{'max_dev': {...}, 'scatter': {...}}`` where ``max_dev`` maps
-        ``(label, coefficient, filter)`` to ``max_R |r - 1|`` and ``scatter``
-        maps ``filter`` to the per-radius cross-simulation standard deviation
-        of the ratio row.
+        ``(label, quantity, filter)`` to ``max_R |x - 1|`` and ``scatter`` maps
+        ``statistic label`` to ``subset`` to ``filter`` to its per-radius
+        cross-simulation spread.
     """
     max_dev = {}
     for num, den, _ in rows:
-        name = (f'{num[0]}{num[1]}' if den is None
-                else f'{num[0]}{num[1]}/{den[0]}{den[1]}')
+        name = quantity_name(num, den)
         for filt in filters:
             for run in runs:
                 values, _ = series(run, num, den, filt)
@@ -495,18 +660,17 @@ def gate_a_metrics(runs, rows, filters, data_max=None):
     # single code's parameter sweep dominate a statistic meant to measure
     # code-to-code disagreement.  The all-run scatter is computed too and
     # reported separately as the feedback-inclusive diagnostic.
-    ratio_rows = [r for r in rows if r[1] is not None]
     scatter = {}
-    if ratio_rows and runs:
-        num, den, _ = ratio_rows[0]
-        subsets = {
-            'cross-code': representative_runs(runs),
-            'all-runs': list(runs),
-        }
+    subsets = {
+        'cross-code': representative_runs(runs) if runs else [],
+        'all-runs': list(runs),
+    }
+    for num, den, stat_label, carries_verdict in stats:
+        scatter[stat_label] = {'carries_verdict': carries_verdict}
         for subset_name, subset in subsets.items():
             if len(subset) < 2:
                 continue
-            scatter[subset_name] = {}
+            scatter[stat_label][subset_name] = {}
             for filt in filters:
                 stack = np.vstack([series(run, num, den, filt)[0]
                                    for run in subset])
@@ -530,7 +694,7 @@ def gate_a_metrics(runs, rows, filters, data_max=None):
                     radii = subset[0]['radii']
                     in_data = (np.ones(len(radii), dtype=bool) if data_max is
                                None else radii <= data_max + 1e-9)
-                    scatter[subset_name][filt] = {
+                    scatter[stat_label][subset_name][filt] = {
                         'radii': radii,
                         'mean': mean,
                         'std': std,
@@ -575,14 +739,11 @@ def report_metrics(metrics, runs, rows, filters, out_path, data_max=None):
              f"N_gal={run['n_galaxies']}")
     emit()
 
-    emit('max_R |r - 1|  (deliverable metric 1)')
-    names = []
-    for num, den, _ in rows:
-        names.append(f'{num[0]}{num[1]}' if den is None
-                     else f'{num[0]}{num[1]}/{den[0]}{den[1]}')
-    # One block per coefficient rather than one wide row: with four
-    # coefficients and four filters a single row runs past 370 characters and
-    # stops being readable in a terminal or a diff.
+    emit('max_R |x - 1|  (deliverable metric 1)')
+    names = [quantity_name(num, den) for num, den, _ in rows]
+    # One block per quantity rather than one wide row: with four quantities
+    # and four filters a single row runs past 370 characters and stops being
+    # readable in a terminal or a diff.
     for n in names:
         emit(f'  {n}:')
         emit(f"    {'simulation':24s}" + ''.join(f'{f:>14s}'
@@ -594,43 +755,60 @@ def report_metrics(metrics, runs, rows, filters, out_path, data_max=None):
             emit(row)
         emit()
 
-    subset_titles = {
-        'cross-code': ('Scatter of the ratio across CODES  '
-                       '(deliverable metric 2, the Gate A quantity)'),
-        'all-runs': ('Scatter of the ratio across ALL runs  '
-                     '(diagnostic: includes feedback variants within a code, '
-                     'so this is NOT the Gate A statistic)'),
-    }
-    for subset_name in ('cross-code', 'all-runs'):
-        if subset_name not in metrics['scatter']:
-            continue
-        per_filter = metrics['scatter'][subset_name]
-        emit(subset_titles[subset_name])
-        any_filt = next(iter(per_filter.values()))
-        emit(f"  members ({len(any_filt['members'])}): "
-             f"{', '.join(any_filt['members'])}")
-        for filt, s in per_filter.items():
-            emit(f'  {filt}:')
-            emit(f"    {'R [arcmin]':>11}  {'mean':>10}  {'std':>10}  "
-                 f"{'frac. std':>10}")
-            for R, m, sd, fs, ind in zip(s['radii'], s['mean'], s['std'],
-                                         s['frac_std'], s['in_data']):
-                tag = '' if ind else '   (extension)'
-                emit(f'    {R:11.3f}  {m:10.4f}  {sd:10.4f}  {fs:10.4f}{tag}')
-            worst = s['worst_data']
-            emit(f'    worst fractional scatter, data range: {worst:.4f}')
-            if np.isfinite(s['worst_ext']):
-                emit(f'    worst fractional scatter, extension: '
-                     f"{s['worst_ext']:.4f}")
-            if np.isfinite(worst) and subset_name == 'cross-code':
-                if worst <= 0.10:
-                    verdict = 'PASS  (<= 10%: fixed-transfer route)'
-                elif worst <= 0.20:
-                    verdict = 'MARGINAL  (10-20%: parametrized-r route)'
-                else:
-                    verdict = 'FAIL  (> 20%: revisit the estimator)'
-                emit(f'    Gate A on this filter (data range): {verdict}')
-            emit()
+    for stat_label, per_subset in metrics['scatter'].items():
+        carries_verdict = per_subset.get('carries_verdict', False)
+        emit('=' * 78)
+        emit(f'Cross-simulation scatter of  {stat_label}')
+        if carries_verdict:
+            emit('  (deliverable metric 2, the Gate A quantity -- addendum '
+                 'Task 10 re-takes')
+            emit('   Gate A on this calibration factor rather than on '
+                 'the Task 1 statistic')
+            emit('   also reported in this file)')
+        else:
+            emit('  (reported for continuity with tasks_1_to_4_record.md and '
+                 'the U6 R0 scan,')
+            emit('   which quote this statistic; it carries no Gate A verdict '
+                 'here)')
+        emit('=' * 78)
+        subset_titles = {
+            'cross-code': 'Across CODES (one representative run per family)',
+            'all-runs': ('Across ALL runs (diagnostic: includes feedback '
+                         'variants within a code,'
+                         '\n  so this is NOT the Gate A statistic)'),
+        }
+        for subset_name in ('cross-code', 'all-runs'):
+            if subset_name not in per_subset:
+                continue
+            per_filter = per_subset[subset_name]
+            emit(subset_titles[subset_name])
+            any_filt = next(iter(per_filter.values()))
+            emit(f"  members ({len(any_filt['members'])}): "
+                 f"{', '.join(any_filt['members'])}")
+            for filt, s in per_filter.items():
+                emit(f'  {filt}:')
+                emit(f"    {'R [arcmin]':>11}  {'mean':>10}  {'std':>10}  "
+                     f"{'frac. std':>10}")
+                for R, m, sd, fs, ind in zip(s['radii'], s['mean'], s['std'],
+                                             s['frac_std'], s['in_data']):
+                    tag = '' if ind else '   (extension)'
+                    emit(f'    {R:11.3f}  {m:10.4f}  {sd:10.4f}  '
+                         f'{fs:10.4f}{tag}')
+                worst = s['worst_data']
+                emit(f'    worst fractional scatter, data range: {worst:.4f}')
+                if np.isfinite(s['worst_ext']):
+                    emit(f'    worst fractional scatter, extension: '
+                         f"{s['worst_ext']:.4f}")
+                if (np.isfinite(worst) and subset_name == 'cross-code'
+                        and carries_verdict):
+                    if worst <= 0.10:
+                        verdict = 'PASS  (<= 10%: fixed-transfer route)'
+                    elif worst <= 0.20:
+                        verdict = 'MARGINAL  (10-20%: parametrized-r route)'
+                    else:
+                        verdict = 'FAIL  (> 20%: revisit the estimator)'
+                    emit(f'    Gate A on this filter (data range): {verdict}')
+                emit()
 
     emit('Note: apertures above the config max_radius are a diagnostic')
     emit('extension, not observationally accessible, and the Gate A verdict')
@@ -729,13 +907,17 @@ def main(path2config, verbose=True):
 
     print()
     data_max = config.get('stack', {}).get('max_radius')
-    metrics = gate_a_metrics(runs, baryon_rows, filters, data_max=data_max)
+    metrics = gate_a_metrics(runs, baryon_rows, filters,
+                             common_stats(runs, BARYON_SCATTER, filters),
+                             data_max=data_max)
     report_metrics(metrics, runs, baryon_rows, filters,
                    fig_dir / f'{fig_name}_metrics.txt', data_max=data_max)
 
     print()
-    metrics_e = gate_a_metrics(runs, electron_rows, filters,
-                               data_max=data_max)
+    metrics_e = gate_a_metrics(
+        runs, electron_rows, filters,
+        common_stats(runs, ELECTRON_SCATTER, filters),
+        data_max=data_max)
     report_metrics(metrics_e, runs, electron_rows, filters,
                    fig_dir / f'{fig_name}_metrics_electron.txt',
                    data_max=data_max)

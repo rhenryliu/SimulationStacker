@@ -685,6 +685,15 @@ class SimulationStacker(object):
         else:
             raise NotImplementedError('Filter Type not implemented: ' + filterType)
 
+        # Annulus width of the compensated filters, resolved once rather than
+        # per halo. 0.75 arcmin is the f_gas paper convention: the DSigma
+        # filter needs a slightly wider annulus than 0.5 to be stable at the
+        # smallest radii. Resolved before the cutout is sized, which needs it.
+        if dr is None:
+            dr_filter = 0.75 if radDistanceUnits == 'arcmin' else 3 / RadPixel
+        else:
+            dr_filter = dr
+
         # Set up radial bins and cutout size
         radii = np.linspace(minRadius, maxRadius, numRadii)
         if filterType in ('CAP', 'ringring'):
@@ -696,17 +705,21 @@ class SimulationStacker(object):
             # annulus. The renormalisation inside the filter hides it, so the
             # symptom was a quietly biased profile at the largest radii.
             n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
+        elif filterType in ('DSigma', 'upsilon'):
+            # The compensated kernels subtract an annulus reaching r + dr, and
+            # 'upsilon' also evaluates one at r0, so the cutout must reach the
+            # outermost annulus edge. Sizing it on radii.max() alone clipped
+            # that annulus whenever its edge overshot the square cutout by more
+            # than a pixel, silently dropping its pixels near the x/y axes.
+            # Whenever the edge already fell inside the old int(radii.max() + 1)
+            # bound, the value below is that same integer, so the cutout (and
+            # the result) is unchanged.
+            r_outer = radii.max() + dr_filter
+            if filterType == 'upsilon':
+                r_outer = max(r_outer, r0 + dr_filter)
+            n_vir = int(r_outer + 1)
         else:
             n_vir = int(radii.max() + 1)  # number of virial radii to cutout
-
-        # Annulus width of the compensated filters, resolved once rather than
-        # per halo. 0.75 arcmin is the f_gas paper convention: the DSigma
-        # filter needs a slightly wider annulus than 0.5 to be stable at the
-        # smallest radii.
-        if dr is None:
-            dr_filter = 0.75 if radDistanceUnits == 'arcmin' else 3 / RadPixel
-        else:
-            dr_filter = dr
 
         # 'upsilon' takes a reference radius on top of the compensated kernel;
         # 'DSigma' does not accept the keyword at all.

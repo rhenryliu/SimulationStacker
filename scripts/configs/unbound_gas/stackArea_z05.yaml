@@ -1,6 +1,10 @@
 # stackArea_z05.yaml
 # ------------------
-# Configuration for make_stackArea.py.
+# Configuration for the ORIGINAL Figure 4, now reproduced by the frozen
+# archive/make_stackArea_v1.py (run from scripts/):
+#   python archive/make_stackArea_v1.py -p configs/unbound_gas/stackArea_z05.yaml
+# The current unbound_gas/make_stackArea.py uses stackArea_dsigma_z05.yaml.
+#
 # Produces a 2x3 combined baryon-fraction stacked-area figure at z=0.5.
 #   Top row    : 3-D stacking (x-axis in comoving kpc/h)
 #   Bottom row : 2-D map stacking (x-axis in arcmin)

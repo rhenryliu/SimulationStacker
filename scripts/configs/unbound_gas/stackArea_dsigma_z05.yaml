@@ -1,0 +1,134 @@
+# stackArea_dsigma_z05.yaml
+# -------------------------
+# Configuration for make_stackArea.py (unbound gas paper, Figure 4).
+#
+# Supersedes stackArea_z05.yaml, whose settings are kept as they were so the
+# original 2x3 figure (TNG300-1 / Illustris-1 / SIMBA, CAP filter, 0.5' pixels,
+# 1.6' beam) can still be reproduced with the frozen archive/make_stackArea_v1.py.
+#
+# Produces two 3-row x 2-column figures at z=0.5, panels filled column-major
+# (the same panel positions as Figure 5, baryonFraction_z05.yaml):
+#   Left column  : TNG300-1 | Illustris-1 | SIMBA m100n1024
+#   Right column : FLAMINGO L1_m9 | fgas-8sigma | Jet_fgas-4sigma
+#
+#   <fig_name>_z0.5_3D_stackArea.pdf         -- 3D cumulative (spheres)
+#   <fig_name>_z0.5_2D_DSigma_stackArea.pdf  -- 2D Delta Sigma-filtered
+#
+# Run from the scripts/ directory:
+#   python unbound_gas/make_stackArea.py -p configs/unbound_gas/stackArea_dsigma_z05.yaml
+#
+# The FLAMINGO 3D fields at n_pixels 2000 (see the simulations list) must be
+# precomputed first with runCPU_stackArea_precompute.sh; with load_field: true
+# a missing field is otherwise rebuilt inline, a multi-hour particle pass.
+
+stack:
+  redshift: 0.5
+
+  # Cache behaviour: load pre-computed fields/maps from disk when available,
+  # and save newly computed ones for future runs.
+  load_field: true
+  save_field: true
+
+  # Stacking radii expressed in comoving kpc/h.
+  # For 2D runs these are automatically converted to arcmin via the cosmology.
+  min_radius: 0.0      # comoving kpc/h (r = 0 is dropped from the plots)
+  max_radius: 4000.0   # comoving kpc/h
+  num_radii: 19        # number of linearly-spaced radii (~222 ckpc/h apart)
+
+  # Overall multiplicative scale for the plotted x-axis values (set to 1 for
+  # no scaling).
+  rad_distance: 1.0
+
+  # 3-D field resolution: number of voxels per side of the cubic grid, for the
+  # simulations that do not set their own n_pixels below. 1000 gives 205 ckpc/h
+  # voxels for TNG300-1, 75 for Illustris-1 and 100 for SIMBA m100n1024.
+  n_pixels: 1000
+
+  # 2-D map settings. 0.2 arcmin with no beam loads the raw projected fields
+  # already cached for all six simulations (nPixels 2674 / 966 / 1301 / 8869),
+  # so the 2D figure needs no new particle passes.
+  pixel_size: 0.2   # arcmin per pixel in 2-D projected maps
+  beam_size: 0      # arcmin FWHM; 0 disables smoothing
+
+  # Projection axis used when making 2-D maps (3-D fields are not projected).
+  # 'yz' is the only projection cached at pixel_size 0.2.
+  projection: 'yz'  # options: 'xy', 'xz', 'yz'
+
+  # 2-D filter for the baryon-component maps (numerators) and for the
+  # total-mass map (denominator). Keep the two equal: the ratio of different
+  # filters has no clean meaning. 'DSigma' uses stackMap's default 0.75 arcmin
+  # compensating annulus.
+  filter_type: 'DSigma'     # options: 'DSigma', 'CAP', 'cumulative'
+  filter_type_2: 'DSigma'
+  # Particle type used as the common total-mass denominator.
+  particle_type_2: 'total'
+
+  # Obtain neutral_gas as (gas - ionized_gas) rather than stacking the
+  # neutral_gas field. The two agree to float32 round-off, and no neutral_gas
+  # field is cached at 0.2 arcmin (nor in 3D for FLAMINGO).
+  derive_neutral_gas: true
+
+  # Baryon components to decompose, bottom to top in the stack. Each is divided
+  # by the total-matter profile and by Omega_b / Omega_m, so a halo holding its
+  # cosmic share of baryons reaches y = 1.
+  baryon_types: ['ionized_gas', 'neutral_gas', 'Stars', 'BH']
+
+  # Halo selection ('massive' method): pick the highest-mass haloes whose
+  # cumulative average mass matches halo_mass_avg, capped at halo_mass_upper.
+  # Applied identically to the 3-D and 2-D stacks so both use the same sample.
+  # NB: exponents must be signed (e.g. 5.0e+14, not 5.0e14) or PyYAML parses
+  # them as strings rather than floats.
+  halo_mass_avg: 1.6595869e+13   # target average halo mass [M_sun/h] (= 10**13.22)
+  halo_mass_upper: 5.0e+14       # upper halo-mass bound [M_sun/h]
+
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'combined'
+  fig_type: 'pdf'
+  n_cols: 2          # panels are filled column-major; rows follow from the count
+
+
+# ---------------------------------------------------------------------------
+# Simulations — six entries, filled column-major into the 3x2 grid.
+# A flat list (sim_type alongside name/snapshot), as in baryonFraction_z05.yaml.
+# ---------------------------------------------------------------------------
+simulations:
+  # --- left column ---
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 67        # z ≈ 0.5
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 103       # z ≈ 0.5
+
+  - sim_type: 'SIMBA'
+    name: 'm100n1024'
+    snapshot: 125       # z ≈ 0.5
+    feedback: 's50'
+
+  # --- right column ---
+  # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+  # n_pixels overrides stack.n_pixels for the 3D grid: the 681,000 ckpc/h box
+  # gives 340 ckpc/h voxels at 2000 (681 at 1000), still coarser than the
+  # ~222 ckpc/h radial step, so the innermost FLAMINGO 3D points stay
+  # voxel-limited (make_stackArea.py warns). Five 2000^3 float32 fields are
+  # 160 GB, and the 3D stack peaks near 200 GB -- a full CPU node, not a login node.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67        # z ≈ 0.5 (the only FLAMINGO snapshot downloaded)
+    feedback: 'L1_m9'
+    n_pixels: 2000
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000

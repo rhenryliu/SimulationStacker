@@ -31,8 +31,11 @@ srun python -u unbound_gas/star_fraction.py -p configs/unbound_gas/star_fraction
 srun python -u unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml --ptype ionized_gas
 # Figure 3: baryon fraction ratios (3x2)
 srun python -u unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml --ptype baryon
-# Figure 4: cumulative baryon-component stacked areas
-srun python -u unbound_gas/make_stackArea.py -p configs/unbound_gas/stackArea_z05.yaml
+# Figure 4: cumulative baryon-component stacked areas (two 3x2 grids, 3D and
+# 2D DSigma, six simulations; needs runCPU_stackArea_precompute.sh first)
+srun python -u unbound_gas/make_stackArea.py -p configs/unbound_gas/stackArea_dsigma_z05.yaml
+# Original Figure 4 (2x3, TNG300-1 / Illustris-1 / SIMBA, 2D CAP), frozen script:
+# srun python -u archive/make_stackArea_v1.py -p configs/unbound_gas/stackArea_z05.yaml
 # Figure 5: differential baryon-component fractions (3x2 grid, six simulations)
 srun python -u unbound_gas/make_baryonFraction.py -p configs/unbound_gas/baryonFraction_z05.yaml
 # Figure 6: 2D CAP f_gas profiles, SHAM vs mass-cut halo selection

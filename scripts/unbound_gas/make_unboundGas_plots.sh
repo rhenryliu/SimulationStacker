@@ -33,8 +33,8 @@ srun python -u unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z
 srun python -u unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml --ptype baryon
 # Figure 4: cumulative baryon-component stacked areas
 srun python -u unbound_gas/make_stackArea.py -p configs/unbound_gas/stackArea_z05.yaml
-# Figure 5: non-cumulative baryon-component fractions
-srun python -u unbound_gas/make_baryonFraction.py -p configs/unbound_gas/stackArea_z05.yaml
+# Figure 5: differential baryon-component fractions (3x2 grid, six simulations)
+srun python -u unbound_gas/make_baryonFraction.py -p configs/unbound_gas/baryonFraction_z05.yaml
 # Figure 6: 2D CAP f_gas profiles, SHAM vs mass-cut halo selection
 srun python -u unbound_gas/make_fgas_profiles.py -p configs/unbound_gas/fgas_profiles_z05.yaml
 # Figure 7: kSZ CAP profiles with progressive halo masking

@@ -177,8 +177,9 @@ def make_stacker(sim: dict, redshift: float):
 def safe_fractions(means, baryon_types):
     """Normalise per-component means by their sum, guarding empty radial bins.
 
-    A radial bin whose total baryon mass is zero (e.g. the innermost shell when
-    ``min_radius = 0``, which can contain no particles) would otherwise produce
+    A radial bin whose total baryon mass is zero (the r=0 point of a cumulative
+    profile, or a shell thinner than a voxel whose two edges select the same
+    voxels) would otherwise produce
     a silent ``0 / 0 = NaN`` for some components and a misleading uniform split
     for others.  Such bins are set to NaN for *every* component and a
     ``RuntimeWarning`` is emitted, so the stacked plot shows a visible gap there
@@ -449,6 +450,20 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
     cumulative = {pt: [] for pt in stack_types}
     t0 = time.time()
     for edge in edges:
+        if edge <= 0.0:
+            # precompute_offsets_3d(0) returns the CENTRAL VOXEL, not an empty
+            # sphere: its mask test is `dist_sq <= radius**2`, i.e. 0 <= 0.
+            # Differencing against that subtracts the halo's densest, most
+            # star-rich voxel out of the innermost shell -- 25.6% of that bin's
+            # mass for TNG300-1, shifting its stellar fraction by 4.3 points.
+            # A zero radius encloses nothing, so say so explicitly.
+            # make_stackArea.py guards the same trap by dropping r=0 outright,
+            # which suits its cumulative profiles but here would delete a shell
+            # rather than repair it.
+            for pt in stack_types:
+                cumulative[pt].append(
+                    np.zeros(n_haloes, dtype=baryon_fields[pt].dtype))
+            continue
         rr = np.full(n_haloes, edge / kpcPerPixel)
         mask_indices = get_cutout_indices_3d(first_field, GroupPos_px, rr)
         for pt in stack_types:
@@ -465,8 +480,9 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
 
     if sphere:
         # Cumulative composition -> stacked area (continuous / integral reading).
-        # The r=0 edge encloses no mass, so its bin is empty and safe_fractions
-        # sets it to NaN (a gap at the origin) instead of dividing 0/0.
+        # The r=0 edge is forced to zero enclosed mass above, so its bin is
+        # empty and safe_fractions sets it to NaN (a gap at the origin) instead
+        # of dividing 0/0.
         means = {bt: np.mean(cumulative[bt], axis=1) for bt in baryon_types}
         fractions = safe_fractions(means, baryon_types)
         ax.stackplot(edges * radDistance, fractions, labels=baryon_types,
@@ -478,9 +494,13 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
         shells = {bt: cumulative[bt][1:] - cumulative[bt][:-1] # type: ignore
                   for bt in baryon_types}                       # (nRadii-1, n_haloes)
         means = {bt: np.mean(shells[bt], axis=1) for bt in baryon_types}
-        # Shells with no enclosed particles (e.g. the innermost one when
-        # min_radius=0) have zero total baryon mass; safe_fractions flags them
-        # as NaN so the bar shows a gap rather than a spurious uniform split.
+        # A shell thinner than a voxel can select exactly the same voxels at
+        # both of its edges, so it differences to zero total baryon mass (e.g.
+        # FLAMINGO at n_pixels=1000, where the edges at 222 and 444 ckpc/h both
+        # fall inside the central 681 ckpc/h voxel). safe_fractions flags such
+        # shells as NaN so the bar shows a gap rather than a spurious uniform
+        # split. The innermost shell is never empty on this account: the r=0
+        # edge is forced to zero above, so shell 0 is the full inner sphere.
         fractions = safe_fractions(means, baryon_types)
 
         left = edges[:-1] * radDistance          # inner edge of each shell

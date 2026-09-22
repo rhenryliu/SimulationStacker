@@ -34,17 +34,12 @@ stack:
   # no scaling).
   rad_distance: 1.0
 
-  # 3-D field resolution: number of voxels per side of the cubic grid.
+  # Default 3-D field resolution: voxels per side of the cubic grid. Individual
+  # simulations may override it with their own `n_pixels` (see the FLAMINGO
+  # entries below), because the boxes differ in size by a factor of ~3.
   #
-  # CAVEAT: this is a compromise. 1000 voxels give 205 ckpc/h for TNG300-1,
-  # 75 for Illustris-1 and 100 for SIMBA m100n1024 -- all at or below the
-  # 222 ckpc/h shell width. The FLAMINGO L1_m9 box is 681,000 ckpc/h, so the
-  # same grid gives 681 ckpc/h voxels, coarser than both the shell width and
-  # the mean R200m of the selected sample (558 ckpc/h). The FLAMINGO rows of
-  # the 3D figure are therefore unresolved below ~700 ckpc/h and are indicative
-  # only; make_baryonFraction.py emits a RuntimeWarning saying so. Matching
-  # TNG300-1's resolution would need n_pixels ~ 3300, i.e. ~147 GB per field.
-  # The 2D figure is unaffected.
+  # At 1000 voxels: 205 ckpc/h per voxel for TNG300-1, 75 for Illustris-1 and
+  # 100 for SIMBA m100n1024 -- all at or below the 222 ckpc/h shell width.
   n_pixels: 1000
 
   # 2-D map settings.
@@ -126,18 +121,28 @@ simulations:
     feedback: 's50'
 
   # --- right column ---
-  # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+  # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+  #
+  # n_pixels: 2000 overrides the global 1000. The L1_m9 box is 681,000 ckpc/h,
+  # so 2000 voxels give 341 ckpc/h each (32 GB per float32 field) rather than
+  # 681. That is still coarser than the 222 ckpc/h shell width, so the innermost
+  # 3D bins stay poorly resolved and run_3d_stacking warns about it -- matching
+  # TNG300-1's 205 ckpc/h would need n_pixels ~3300 (~147 GB per field). The 2D
+  # panels are unaffected; they use 0.2 arcmin pixels.
   - sim_type: 'FLAMINGO'
     name: 'L1_m9'
     snapshot: 67        # z ≈ 0.5 (the only FLAMINGO snapshot downloaded)
     feedback: 'L1_m9'
+    n_pixels: 2000
 
   - sim_type: 'FLAMINGO'
     name: 'L1_m9'
     snapshot: 67
     feedback: 'fgas-8sigma'
+    n_pixels: 2000
 
   - sim_type: 'FLAMINGO'
     name: 'L1_m9'
     snapshot: 67
     feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000

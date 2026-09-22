@@ -41,11 +41,17 @@ derived internally.
 
 Resolution caveat
 -----------------
-The FLAMINGO L1_m9 box is 681,000 ckpc/h, so the 3D figure's ``n_pixels: 1000``
-grid gives 681 ckpc/h voxels — coarser than the ~222 ckpc/h radial shells and
-than the mean R200m of the selected sample (558 ckpc/h).  The FLAMINGO rows of
-the **3D** figure are therefore unresolved below ~700 ckpc/h and should be read
-as indicative only.  The 2D figure is unaffected (0.2 arcmin pixels).
+``n_pixels`` may be set per simulation (alongside ``name``/``snapshot`` in the
+``simulations`` list), falling back to the global value.  This exists because the
+suites need different grids to reach comparable voxel sizes: the FLAMINGO L1_m9
+box is 681,000 ckpc/h against TNG300-1's 205,000, so a shared grid would leave
+FLAMINGO 3.3x coarser.
+
+Even at ``n_pixels: 2000`` FLAMINGO gives 341 ckpc/h voxels, still coarser than
+the ~222 ckpc/h radial shells, so its innermost 3D bins remain poorly resolved
+and ``run_3d_stacking`` emits a ``RuntimeWarning`` saying so.  Matching
+TNG300-1's 205 ckpc/h would need ``n_pixels`` ~3300, i.e. ~147 GB per field.
+The 2D figure is unaffected (0.2 arcmin pixels).
 
 Dependencies
 ------------
@@ -387,8 +393,9 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
     -----
     RuntimeWarning
         If the voxel size exceeds the radial bin width, i.e. the radial grid is
-        finer than the field itself.  This is the case for FLAMINGO at
-        ``n_pixels = 1000`` (681 ckpc/h voxels against ~222 ckpc/h shells).
+        finer than the field itself.  This still applies to FLAMINGO at
+        ``n_pixels = 2000`` (341 ckpc/h voxels against ~222 ckpc/h shells);
+        matching TNG300-1's 205 ckpc/h would need ``n_pixels`` ~3300.
     """
     if dr is not None and dr != 0.0:
         warnings.warn(
@@ -793,8 +800,14 @@ def main(path2config: str, verbose: bool = True):
         row, col = idx % n_rows, idx // n_rows   # column-major fill
         sim_type = sim['sim_type']
         sim_name = sim['name']
+        # Per-simulation 3D grid size, falling back to the global n_pixels. The
+        # suites need different grids to reach comparable voxel sizes: the
+        # FLAMINGO L1_m9 box is 3.3x the side of TNG300-1, so it needs a finer
+        # grid to get anywhere near the same ckpc/h per voxel.
+        nPixels_sim = int(sim.get('n_pixels', nPixels))
         if verbose:
             print(f"\n=== Processing simulation [{idx+1}/{n_sims}]: {sim_name} ({sim_type}) ===")
+            print(f"  3D grid: {nPixels_sim} voxels per side")
 
         stacker, cosmo, sim_label = make_stacker(sim, redshift)
 
@@ -813,7 +826,7 @@ def main(path2config: str, verbose: bool = True):
         run_3d_stacking(
             stacker=stacker,
             baryon_types=baryon_types,
-            nPixels=nPixels,
+            nPixels=nPixels_sim,
             minRadius=minRadius,
             maxRadius=maxRadius,
             nRadii=nRadii,

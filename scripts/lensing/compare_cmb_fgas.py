@@ -56,6 +56,7 @@ import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker i
 from beam_compensated_ratio_v2 import (  # type: ignore
     _FLAMINGO_COLOURS, _resolve_stacker, load_beam_factor_npz,
     load_measurements_npz, sham_parent_halo_stats)
+import figure_data  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Matplotlib style — matches beam_compensated_ratio_v2.py exactly
@@ -395,6 +396,8 @@ def main(path2config: str, verbose: bool = True) -> None:
                                     profiles_plot - profiles_err,
                                     profiles_plot + profiles_err,
                                     color=colour, alpha=0.2)
+                figure_data.record('', sim_label, theta_arcmin=x_axis, fgas=profiles_plot,
+                                   fgas_err=profiles_err if plot_error_bars else None)
 
     # ==========================================================================
     # Phase 5: overlay the two datasets
@@ -411,6 +414,9 @@ def main(path2config: str, verbose: bool = True) -> None:
         markersize=6,
         capsize=2,
     )
+    figure_data.record('', figure_data.plain(plot_config.get(
+        'data_label', r'DESI $\times$ ACT $\times$ HSC (beam-corrected)')),
+        theta_arcmin=theta_data, fgas=R_compensated, fgas_err=sigma_compensated)
 
     # Digitized Hadzhiyska et al. (2025) measurement, shifted right by x_offset.
     # Green diamonds keep it distinct from the simulation curves (blue/purple/red
@@ -425,6 +431,9 @@ def main(path2config: str, verbose: bool = True) -> None:
         markersize=6,
         capsize=2,
     )
+    figure_data.record('', figure_data.plain(plot_config.get(
+        'cmb_fgas_label', 'Hadzhiyska et al. (2025)')),
+        theta_arcmin=theta_cmb, fgas=fgas_cmb, fgas_err=sigma_cmb)
 
     # ==========================================================================
     # Figure cosmetics
@@ -460,6 +469,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     out_path = fig_path / f'{out_stem}.{fig_type}'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150)  # type: ignore
+    figure_data.save(out_path)
     plt.close(fig)
 
     print(f'Done. Elapsed: {time.time() - t0:.1f} s')

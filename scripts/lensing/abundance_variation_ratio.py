@@ -78,6 +78,7 @@ import astropy.units as u
 sys.path.append('../src/')
 from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
 from stacker import SimulationStacker  # type: ignore
+import figure_data  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -617,6 +618,9 @@ def make_figure(results: dict, nb_config: dict, plot_config: dict,
 
             ax.fill_between(theta_data, -frac_err, frac_err,
                             color='0.85', lw=0, zorder=0)
+            figure_data.record('', 'DESI x ACT x HSC 1 sigma', theta_arcmin=theta_data,
+                               fgas_deviation_percent=0.0,
+                               fgas_deviation_percent_err=frac_err)
             # Crisp edges, so the band still reads as an envelope where it runs
             # off-panel.
             for sign in (+1, -1):
@@ -658,6 +662,11 @@ def make_figure(results: dict, nb_config: dict, plot_config: dict,
                                     color=colour, alpha=0.2, lw=0, zorder=1)
                     fgas_min = min(fgas_min, float((fgas_fid - err).min()))
                     fgas_max = max(fgas_max, float((fgas_fid + err).max()))
+            fid_err = (np.asarray(results[fiducial_key]['fgas_err'])
+                       if plot_error_bars and 'fgas_err' in results[fiducial_key]
+                       else None)
+            figure_data.record('', f'{sim_label}, n_gal = {fiducial:.1e} h^3 cMpc^-3',
+                               theta_arcmin=theta, fgas=fgas_fid, fgas_err=fid_err)
 
         deviations[sim_label] = {}
         for target in non_fiducial:
@@ -680,10 +689,14 @@ def make_figure(results: dict, nb_config: dict, plot_config: dict,
                 ax.plot(theta, fgas, color=colour, lw=1.5, alpha=0.75,
                         ls=linestyle_for_target[target], label='_nolegend_',
                         zorder=3)
+                figure_data.record('', f'{sim_label}, n_gal = {target:.1e} h^3 cMpc^-3',
+                                   theta_arcmin=theta, fgas=fgas)
             else:
                 ax.plot(theta, dev, color=colour, lw=2, marker='o',
                         markersize=3.5, ls=linestyle_for_target[target],
                         label='_nolegend_', zorder=3)
+                figure_data.record('', f'{sim_label}, n_gal = {target:.1e} h^3 cMpc^-3',
+                                   theta_arcmin=theta, fgas_deviation_percent=dev)
 
     if missing_err:
         print("[warn] the cache has no 'fgas_err' -- it predates the shaded "
@@ -770,6 +783,7 @@ def make_figure(results: dict, nb_config: dict, plot_config: dict,
     fig.tight_layout()
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150)  # type: ignore[union-attr]
+    figure_data.save(out_path)
     plt.close(fig)
 
 

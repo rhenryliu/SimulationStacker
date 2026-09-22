@@ -45,6 +45,7 @@ import argparse
 sys.path.append('../src/')
 from stacker import SimulationStacker  # type: ignore
 from halos import select_halos  # type: ignore
+import figure_data  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -376,6 +377,8 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
                 beam_factor + beam_factor_err,
                 color=colour, alpha=0.15,
             )
+            figure_data.record('', f'{sim_label}, z = {redshift}', theta_arcmin=theta,
+                               beam_factor=beam_factor, beam_factor_err=beam_factor_err)
 
     # ==========================================================================
     # Legend: coloured entries for sims, grey entries for redshift linestyles
@@ -408,6 +411,7 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
     out_path = fig_path / 'beam_factors_all_sims.pdf'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150) # type: ignore[union-attr] (Path has no `savefig` method, but fig does)
+    figure_data.save(out_path)
     plt.close(fig)
 
     print(f'Done. Elapsed: {time.time() - t0:.1f} s')

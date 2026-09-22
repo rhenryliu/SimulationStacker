@@ -36,6 +36,7 @@ sys.path.append('../src/')
 from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
 from stacker import SimulationStacker  # type: ignore
 from halos import select_halos  # type: ignore
+import figure_data  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -392,6 +393,9 @@ def main(path2config: str, verbose: bool = True) -> None:
                     color=colours[j],
                     alpha=0.2,
                 )
+            figure_data.record('', sim_label, theta_arcmin=radii0 * rad_distance,
+                               fgas_obs=profiles_plot,
+                               fgas_obs_err=profiles_err if plot_error_bars else None)
 
     # ---- Overlay observational data points (optional) ----
     if do_plot_data and 'data_path' in plot_config:
@@ -427,6 +431,8 @@ def main(path2config: str, verbose: bool = True) -> None:
                 markersize=6,
                 capsize=2,
             )
+            figure_data.record('', label, theta_arcmin=data[key]['ksz_theta_arcmin'],
+                               fgas_obs=data[key]['ratio'], fgas_obs_err=data[key]['ratio_err'])
 
     # ---- Secondary x-axis: comoving Mpc/h ----
     # Only added if at least one simulation was successfully processed.
@@ -483,6 +489,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     out_path = fig_path / f'{out_stem}.{fig_type}'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150)  # type: ignore
+    figure_data.save(out_path)
     plt.close(fig)
 
     print(f'Done. Elapsed: {time.time() - t0:.1f} s')

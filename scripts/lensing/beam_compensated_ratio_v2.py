@@ -54,6 +54,7 @@ from utils import arcmin_to_comoving, comoving_to_arcmin  # type: ignore
 from stacker import SimulationStacker  # type: ignore
 from snr import detection_snr
 from halos import select_halos  # type: ignore
+import figure_data  # type: ignore
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il  # type: ignore  # noqa: F401 (needed by stacker internals)
@@ -460,6 +461,8 @@ def main(path2config: str, verbose: bool = True) -> None:
     nb_filter_type2 = nb_stack.get('filter_type_2',   'DSigma')
     nb_pixel_size_2 = nb_stack.get('pixel_size_2',    0.2)
     nb_beam_size_2  = nb_stack.get('beam_size_2',     None)
+    # Exported-data column for the plotted fraction, e.g. 'fgas' or 'fbaryon'.
+    y_name = {'ionized_gas': 'fgas', 'baryon': 'fbaryon'}.get(nb_pType, f'f_{nb_pType}')
 
     nb_base_kwargs = dict(
         minRadius    = nb_stack.get('min_radius',   1.0),
@@ -561,6 +564,9 @@ def main(path2config: str, verbose: bool = True) -> None:
                                 profiles_plot - profiles_err,
                                 profiles_plot + profiles_err,
                                 color=colour, alpha=0.2)
+            figure_data.record('', sim_label, theta_arcmin=x_axis, **{
+                y_name: profiles_plot,
+                f'{y_name}_err': profiles_err if plot_error_bars else None})
 
             # ---- extra ratios (gas/total, baryon/total, …) ----
             for extra in extra_sim_ratios:
@@ -579,6 +585,9 @@ def main(path2config: str, verbose: bool = True) -> None:
                 profiles_extra = mean_e / mean1 * factor
                 ax.plot(radii_e * nb_rad_distance, profiles_extra,
                         label='_nolegend_', color=colour, lw=2, ls=extra_ls, alpha=0.7)
+                figure_data.record('', f'{sim_label} ({extra_pType}/{nb_pType2})',
+                                   theta_arcmin=radii_e * nb_rad_distance,
+                                   **{y_name: profiles_extra})
 
                 # if plot_error_bars:
                 if False:
@@ -603,6 +612,9 @@ def main(path2config: str, verbose: bool = True) -> None:
         markersize=6,
         capsize=2,
     )
+    figure_data.record('', figure_data.plain(r'DESI $\times$ ACT $\times$ HSC (beam-corrected)'),
+                       theta_arcmin=theta_data,
+                       **{y_name: R_compensated, f'{y_name}_err': sigma_compensated})
 
     # ==========================================================================
     # Phase 5: Print out the SNR of the beam-compensated data detection
@@ -682,6 +694,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     out_path = fig_path / f'{out_stem}.{fig_type}'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150)  # type: ignore
+    figure_data.save(out_path)
     plt.close(fig)
 
     print(f'Done. Elapsed: {time.time() - t0:.1f} s')

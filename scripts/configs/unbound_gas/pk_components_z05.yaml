@@ -35,6 +35,29 @@ pk:
   # Wavenumbers (h/Mpc) at which make_pk_alpha.py tabulates the results.
   k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
 
+# Local redistribution model. Read ONLY by compute_pk_local.py and
+# make_pk_local.py; build_dmo_field.py, validate_pk_caches.py,
+# compute_pk_components.py and make_pk_alpha.py ignore this block, so their
+# behaviour and outputs are unchanged by it.
+#
+# Each moved component e is transported within a radius R so that it follows
+# the target template T: m_e = rho_T * [W_R * (rho_e / (W_R * rho_T))], i.e.
+# every cell spreads its mass over the kernel around it in proportion to T.
+# Mass is conserved exactly and large-scale power is unchanged (unlike the
+# global alpha model).
+local:
+  radii: [0.5, 1.0, 2.0, 4.0]    # R [comoving Mpc/h]
+  min_radius_cells: 2.0          # skip R below this many grid cells (drops
+                                 # R=0.5 for FLAMINGO's 0.34 Mpc/h cells)
+  kernels: ['tophat', 'gaussian']
+  # Gaussian per-axis width sigma = factor * R. 1/sqrt(5) = 0.4472 gives the
+  # Gaussian the same rms radius as the sphere of radius R (sqrt(3/5) R), so
+  # the two kernels are compared at matched scale. Set 1.0 for the
+  # W(k) = exp(-k^2 R^2 / 2) convention.
+  gaussian_sigma_factor: 0.4472136
+  targets: ['ionized', 'dm']     # lay the moved mass out like local ionized gas / DM
+  moved: ['all', 'stars', 'neutral']   # 'all' = neutral_gas + Stars + BH
+
 plot:
   fig_path: '../figures/'
   fig_name: 'pk_components_z05'

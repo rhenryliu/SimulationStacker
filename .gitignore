@@ -10,6 +10,7 @@ figures/
 .vscode/
 external/
 .ipynb_checkpoints/
+NOTES/
 
 # Deliberately untracked archived material (external/exploratory scripts)
 scripts/archive/clean_mass_bin_stack.py

@@ -1,0 +1,109 @@
+# pk_components_z05.yaml
+# ----------------------
+# Configuration for the matter power spectrum section of the unbound gas paper:
+# how much the non-ionized baryons (neutral gas, stars, black holes) matter for
+# the baryonic suppression of P(k).
+#
+# Read by (run from the scripts/ directory):
+#   unbound_gas/build_dmo_field.py        -- 3D DM field of each DMO reference run
+#   unbound_gas/validate_pk_caches.py     -- checks on the cached 3D fields used
+#   unbound_gas/compute_pk_components.py  -- auto/cross spectra of the components
+#   unbound_gas/make_pk_alpha.py          -- figures and tables
+#
+# Each hydro simulation is split into five mass components on one 3D grid,
+#   DM, ionized_gas, neutral_gas, Stars, BH,
+# built from the existing TSC caches in <root>/<SimType>/products/3D/:
+#   DM          = total - gas - Stars - BH
+#   neutral_gas = gas - ionized_gas
+# The 15 auto and cross spectra of their overdensities are enough to evaluate
+# P_mm exactly for any linear redistribution of the baryon mass between the
+# components (P_mm is bilinear in the component weights).
+#
+# All simulations are at z ~ 0.5 (snapshot numbers per entry).
+
+pk:
+  threads: 128          # Pylians FFT/loop threads
+
+  # Omega_b for mass-budget checks only (validate_pk_caches.py), used when the
+  # snapshot header has no 'OmegaBaryon' (Illustris and SIMBA). Same values as
+  # make_pk_suppression.py. The analysis itself never uses these: component
+  # weights come from the box means of the cached fields.
+  omega_baryon_fallback:
+    Illustris-1: 0.0456   # WMAP-9 cosmology
+    m100n1024: 0.048      # SIMBA, Planck 2016 cosmology
+
+  # Wavenumbers (h/Mpc) at which make_pk_alpha.py tabulates the results.
+  k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_components_z05'
+  fig_type: 'pdf'
+
+# ---------------------------------------------------------------------------
+# Simulations. `n_pixels` is the 3D grid (voxels per side) of the cached fields.
+# `dmo` names the dark-matter-only run with the same initial conditions; its DM
+# field is built on the same grid by build_dmo_field.py. `dmo.path` is the
+# snapshot location relative to the data root: a directory of chunk files, or
+# a single file for SIMBA.
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 67              # z = 0.503
+    n_pixels: 1000            # 205 ckpc/h voxels, k_Nyq = 15.3 h/Mpc
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 67
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_067/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 103             # z = 0.503
+    n_pixels: 1000            # 75 ckpc/h voxels, k_Nyq = 41.9 h/Mpc
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 103
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_103/'
+
+  - sim_type: 'SIMBA'
+    name: 'm100n1024'
+    snapshot: 125             # z = 0.4904
+    feedback: 's50'
+    n_pixels: 1000            # 100 ckpc/h voxels, k_Nyq = 31.4 h/Mpc
+    dmo:
+      # Public SIMBA DM-only run (simba.roe.ac.uk/simdata/m100n1024/dm/);
+      # its snapshot 009 is at z = 0.4904, the same as hydro snapshot 125.
+      name: 'm100n1024'
+      feedback: 'dm'
+      snapshot: 9
+      path: 'SIMBA/m100n1024/dm/snapshots/snap_m100n1024_009.hdf5'
+
+  # FLAMINGO at 2000^3 (341 ckpc/h voxels, k_Nyq = 9.2 h/Mpc), the grid of the
+  # existing float32 caches. All three variants share the L1_m9_DMO reference.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67              # z = 0.5
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 67
+      # Nested by the download; holds flamingo_0067.hdf5 (virtual file, used
+      # for the header) and swift_snapshot_0067/ (the 32 chunk files).
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

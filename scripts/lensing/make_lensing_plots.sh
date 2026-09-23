@@ -36,8 +36,11 @@ srun python -u lensing/beam_compensated_ratio_v2.py -p configs/lensing/beam_comp
 srun python -u lensing/beam_compensated_ratio_v2.py -p configs/lensing/beam_compensated_z026_baryon.yaml
 # Figure 17b (total baryons, data repeated for reference)
 srun python -u lensing/beam_compensated_ratio_v2.py -p configs/lensing/beam_compensated_z05_baryon.yaml
-# Appendix: SHAM abundance-target sensitivity (both redshifts)
+# Appendix (Figure 20): SHAM abundance-target sensitivity (both redshifts)
 srun python -u lensing/abundance_variation_ratio.py -p configs/lensing/abundance_variation_z05.yaml
+# This one is related to Fig. 20 but unused as it looks almost the same.
 srun python -u lensing/abundance_variation_ratio.py -p configs/lensing/abundance_variation_z026.yaml
+
+
 # Not a paper figure: testing only -- simulated Delta Sigma vs the HSC Y3 x DESI LRG measurement.
 srun python -u lensing/simulated_dsigma_profiles.py -p configs/lensing/dsigma_profile_z05.yaml

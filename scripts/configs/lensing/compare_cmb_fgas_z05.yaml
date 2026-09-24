@@ -9,7 +9,7 @@
 # simulations sections below (copied from mass_ratio_noBeam_z05.yaml).
 beam_test_config: mass_ratio_beamTest_z05.yaml
 
-use_sims: false  # if true, stack and plot the simulations below
+use_sims: true  # if true, stack and plot the simulations below
 
 compensation:
   use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
@@ -23,7 +23,7 @@ plot:
   x_offset: 0.025  # arcmin; the two datasets are shifted by -/+ this so markers do not overlap
   fig_path: '../figures/'
   fig_name: 'compare_cmb_fgas'
-  fig_type: 'pdf'
+  fig_type: 'png'
   ylabel: '$f_{\rm gas}(R)$'
   plot_error_bars: true  # use_sims only: shaded error band on the simulation curves
   plot_r200m: true       # use_sims only: vertical line at the first IllustrisTNG sim's mean R200m

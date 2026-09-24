@@ -607,6 +607,147 @@ def load_subset(sim_path, snapshot, sim_type, p_type, snap_path, header=None, ke
     return particles
 
 
+# ---------------------------------------------------------------------------
+# Halo-finder membership of particles
+#
+# Each reader returns membership in terms of the rows of load_halos, i.e.
+# FoF groups (IllustrisTNG/Illustris), CAESAR haloes (SIMBA) and SOAP-HBT
+# centrals (FLAMINGO, whose FoF groups map one-to-one onto centrals).
+# ---------------------------------------------------------------------------
+
+_PTYPE_INDEX = {'gas': 0, 'DM': 1, 'Stars': 4, 'BH': 5}
+
+
+def load_fof_group_ends(sim_path, snapshot, p_type):
+    """IllustrisTNG/Illustris: end index of each FoF group's particles of one type.
+
+    The snapshots are ordered by FoF group (then subhalo, then the group's
+    inner fuzz), with particles outside every group at the end. Particle j of
+    the type (global index over the chunk files in numeric order) belongs to
+    group g if ends[g-1] <= j < ends[g]; j >= ends[-1] is outside all groups.
+
+    Args:
+        sim_path (str): Base path to the simulation ('.../output/').
+        snapshot (int): Snapshot number.
+        p_type (str): 'gas', 'DM', 'Stars' or 'BH'.
+
+    Returns:
+        np.ndarray: int64 array, cumulative sum of GroupLenType for the type,
+        one entry per group (load_halos row).
+    """
+    lens = _require_il().groupcat.loadHalos(sim_path, snapshot, fields=['GroupLenType'])
+    return np.cumsum(lens[:, _PTYPE_INDEX[p_type]].astype(np.int64))
+
+
+def load_caesar_particle_halos(sim_path, snapshot, sim_name, p_type, n_particles):
+    """SIMBA: CAESAR halo index of every particle of one type (-1 outside all haloes).
+
+    Uses the CAESAR particle lists (``halo_data/lists/{glist,dmlist,slist,bhlist}``
+    with per-halo ``*_start``/``*_end``), whose halo order is that of
+    load_halos. The snapshot's own ``HaloID`` field is a different numbering
+    and must not be used to index the CAESAR catalogue.
+
+    Args:
+        sim_path (str): Base path to the simulation variant.
+        snapshot (int): Snapshot number.
+        sim_name (str): e.g. 'm100n1024'.
+        p_type (str): 'gas', 'DM', 'Stars' or 'BH'.
+        n_particles (int): Number of particles of the type in the snapshot.
+
+    Returns:
+        np.ndarray: int32 halo index per particle, -1 if in no halo.
+
+    Raises:
+        ValueError: If a particle is listed in more than one halo.
+    """
+    name = {'gas': 'glist', 'DM': 'dmlist', 'Stars': 'slist', 'BH': 'bhlist'}[p_type]
+    path = sim_path + 'catalogs/' + sim_name + '_' + str(snapshot) + '.hdf5'
+    with h5py.File(path, 'r') as f:
+        hd = f['halo_data']
+        members = hd['lists'][name][:]
+        starts = hd[name + '_start'][:].astype(np.int64)
+        ends = hd[name + '_end'][:].astype(np.int64)
+    labels = np.full(n_particles, -1, dtype=np.int32)
+    if len(np.unique(members)) != len(members):
+        raise ValueError(f"CAESAR {name}: a particle is listed in more than one halo")
+    lengths = ends - starts
+    if starts[0] == 0 and np.array_equal(starts[1:], ends[:-1]) and ends[-1] == len(members):
+        labels[members] = np.repeat(np.arange(len(starts), dtype=np.int32), lengths)
+    else:
+        for h in np.flatnonzero(lengths > 0):
+            labels[members[starts[h]:ends[h]]] = h
+    return labels
+
+
+def load_flamingo_central_fof_ids(sim_path, snapshot):
+    """FLAMINGO: FoF group ID of each SOAP central, in load_halos row order.
+
+    Args:
+        sim_path (str): Base path to the FLAMINGO variant.
+        snapshot (int): Snapshot number.
+
+    Returns:
+        np.ndarray: ``InputHalos/HBTplus/HostFOFId`` of the centrals (int64;
+        negative for the hostless centrals, which have no FoF group).
+    """
+    soap_path = sim_path + 'SOAP-HBT/halo_properties_' + str(snapshot).zfill(4) + '.hdf5'
+    with h5py.File(soap_path, 'r') as f:
+        is_central = f['InputHalos/IsCentral'][:].astype(bool)
+        return f['InputHalos/HBTplus/HostFOFId'][:][is_central].astype(np.int64)
+
+
+def load_flamingo_fof_ids(sim_path, snapshot, p_type, chunk):
+    """FLAMINGO: FoF group IDs of one chunk's particles, from the membership files.
+
+    The raw chunk files ``swift_snapshot_NNNN/flamingo_NNNN.{i}.hdf5`` also
+    carry a ``FOFGroupIDs`` dataset, but from a different (on-the-fly) FoF
+    run: its IDs and its no-group flags differ from the post-processed FoF
+    that SOAP-HBT used. The matching IDs are in the chunk-aligned files
+    ``membership_NNNN/membership_NNNN.{i}.hdf5`` (which the virtual snapshot
+    file also points to). Particles in no group carry 2147483647.
+
+    Args:
+        sim_path (str): Base path to the FLAMINGO variant.
+        snapshot (int): Snapshot number.
+        p_type (str): 'gas', 'DM', 'Stars' or 'BH'.
+        chunk (int): Chunk index i.
+
+    Returns:
+        np.ndarray: int64 FoF group ID per particle of the chunk.
+    """
+    snap_str = str(snapshot).zfill(4)
+    path = (sim_path + 'snapshots/flamingo_' + snap_str + '/membership_' + snap_str +
+            '/membership_' + snap_str + '.' + str(chunk) + '.hdf5')
+    with h5py.File(path, 'r') as f:
+        return f['PartType' + str(_PTYPE_INDEX[p_type])]['FOFGroupIDs'][:]
+
+
+def load_halo_stellar_masses(sim_path, snapshot, sim_type, sim_name=None, header=None):
+    """Catalogue stellar mass of each load_halos row, for membership checks.
+
+    Args:
+        sim_path (str): Base path to the simulation.
+        snapshot (int): Snapshot number.
+        sim_type (str): 'IllustrisTNG', 'SIMBA' or 'FLAMINGO'.
+        sim_name (str, optional): Needed for SIMBA.
+        header (dict, optional): Needed for SIMBA (h).
+
+    Returns:
+        np.ndarray or None: Stellar mass in Msun/h. IllustrisTNG:
+        ``GroupMassType[:, 4]``, which excludes wind-phase particles; SIMBA:
+        CAESAR ``masses.stellar``; FLAMINGO: None (SOAP has no FoF-level
+        stellar mass).
+    """
+    if sim_type == 'IllustrisTNG':
+        mt = _require_il().groupcat.loadHalos(sim_path, snapshot, fields=['GroupMassType'])
+        return mt[:, 4].astype(np.float64) * 1e10
+    if sim_type == 'SIMBA':
+        path = sim_path + 'catalogs/' + sim_name + '_' + str(snapshot) + '.hdf5'
+        with h5py.File(path, 'r') as f:
+            return f['halo_data/dicts/masses.stellar'][:].astype(np.float64) * header['HubbleParam']
+    return None
+
+
 def _get_data_filepath(sim_type, sim_name, snapshot, feedback, p_type, n_pixels,
                        projection='xy', data_type='field', dim='2D',
                        mask=False, maskRad=2.0, base_path=None):

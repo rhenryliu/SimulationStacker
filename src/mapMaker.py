@@ -601,8 +601,69 @@ def make_sz_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     
     
     print('hist2d time:', time.time() - t0)
-    
+
     return field_total
+
+def ionized_gas_keys(sim_type):
+    """Gas particle fields needed by :func:`ionized_gas_masses` (besides Coordinates).
+
+    Args:
+        sim_type (str): 'IllustrisTNG', 'SIMBA' or 'FLAMINGO'.
+
+    Returns:
+        list: Dataset names to pass to ``load_subset``.
+    """
+    if sim_type == 'FLAMINGO':
+        # No ElectronAbundance in FLAMINGO; electron counts come from
+        # the cooling-table ElectronNumberDensities (cf. make_sz_field)
+        return ['Masses', 'Densities', 'ElectronNumberDensities']
+    return ['Masses', 'ElectronAbundance']
+
+def ionized_gas_masses(particles, stacker):
+    """Ionized-gas mass of each gas particle, as used for the 'ionized_gas' fields.
+
+    The ionized mass is the gas mass that would carry the particle's free
+    electrons if it were fully ionized primordial gas: M_ion = N_e m_p mu_e with
+    mu_e = 2 / (1 + X_H) and a fixed X_H = 0.76. For TNG/Illustris/SIMBA the
+    electron count is N_e = x_e X_H M_gas / m_p (x_e = ElectronAbundance), so
+    M_ion = 0.864 x_e M_gas (= M_gas for fully ionized primordial gas). For
+    FLAMINGO N_e = n_e V from ElectronNumberDensities, which is zero for
+    star-forming particles.
+
+    Args:
+        particles (dict): Gas particle fields from ``loadIO.load_subset`` with
+            the keys of :func:`ionized_gas_keys` ('Masses' in 1e10 Msun/h).
+        stacker (SimulationStacker): Provides the header ('HubbleParam'), the
+            simulation type and the redshift (scale factor for FLAMINGO).
+
+    Returns:
+        np.ndarray: Ionized-gas mass per particle in Msun/h (float64).
+    """
+    solar_mass = 1.989e33 # g
+    m_p = 1.6726e-24 # g, mass of proton
+    X_H = 0.76 # unitless, primordial hydrogen fraction
+    h = stacker.header['HubbleParam'] # Hubble Parameter
+
+    mu_e = 2.0 / (1.0 + X_H)
+
+    if stacker.simType == 'FLAMINGO':
+        # Electron count N_e = n_e * V with n_e (physical Mpc^-3, zero
+        # for star-forming particles) and particle volume V = M/D
+        # converted to physical Mpc^3; the Mpc^3 factors cancel.
+        # Same construction as _flamingo_sz_weights; the /h undoes the
+        # loadIO mass convention to recover native 1e10 Msun.
+        a = 1. / (1. + stacker.z) # scale factor
+        M_native = particles['Masses'].astype(np.float64) / h      # 1e10 Msun
+        D_native = particles['Densities'].astype(np.float64)       # comoving 1e10 Msun/Mpc^3
+        V_phys = (M_native / D_native) * a**3                      # physical Mpc^3
+        Ne = particles['ElectronNumberDensities'] * V_phys         # electron count
+    else:
+        Mgas_g = particles['Masses'].astype(np.float64)  * 1e10 * (solar_mass / h) # convert to grams
+        xe = particles['ElectronAbundance']
+        Ne = xe * X_H * Mgas_g / m_p # dimensionless count of electrons
+
+    Mion_e_g = Ne * m_p * mu_e # grams of ionized gas
+    return Mion_e_g * (h / solar_mass) # convert back to Msun/h
 
 def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     """Used a histogram binning to make projected 2D fields of a given particle type from the simulation.
@@ -671,12 +732,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
     for i, snap in enumerate(snaps):
         # particles = stacker.loadSubset(pType, snapPath=snap)
         if use_ionized_gas:
-            if stacker.simType == 'FLAMINGO':
-                # No ElectronAbundance in FLAMINGO; electron counts come from
-                # the cooling-table ElectronNumberDensities (cf. make_sz_field)
-                keys = ['Coordinates', 'Masses', 'Densities', 'ElectronNumberDensities']
-            else:
-                keys = ['Coordinates', 'Masses', 'ElectronAbundance']
+            keys = ['Coordinates'] + ionized_gas_keys(stacker.simType)
         else:
             keys = ['Coordinates', 'Masses']
 
@@ -688,31 +744,7 @@ def make_mass_field(stacker, pType, nPixels=None, projection='xy', dim='2D'):
         masses = particles['Masses'].astype(np.float64)  * 1e10 # Msun/h # this is better than doing just Msun
 
         if use_ionized_gas:
-            solar_mass = 1.989e33 # g
-            m_p = 1.6726e-24 # g, mass of proton
-            X_H = 0.76 # unitless, primordial hydrogen fraction
-            h = stacker.header['HubbleParam'] # Hubble Parameter
-
-            mu_e = 2.0 / (1.0 + X_H)
-
-            if stacker.simType == 'FLAMINGO':
-                # Electron count N_e = n_e * V with n_e (physical Mpc^-3, zero
-                # for star-forming particles) and particle volume V = M/D
-                # converted to physical Mpc^3; the Mpc^3 factors cancel.
-                # Same construction as _flamingo_sz_weights; the /h undoes the
-                # loadIO mass convention to recover native 1e10 Msun.
-                a = 1. / (1. + stacker.z) # scale factor
-                M_native = particles['Masses'].astype(np.float64) / h      # 1e10 Msun
-                D_native = particles['Densities'].astype(np.float64)       # comoving 1e10 Msun/Mpc^3
-                V_phys = (M_native / D_native) * a**3                      # physical Mpc^3
-                Ne = particles['ElectronNumberDensities'] * V_phys         # electron count
-            else:
-                Mgas_g = particles['Masses'].astype(np.float64)  * 1e10 * (solar_mass / h) # convert to grams
-                xe = particles['ElectronAbundance']
-                Ne = xe * X_H * Mgas_g / m_p # dimensionless count of electrons
-
-            Mion_e_g = Ne * m_p * mu_e # grams of ionized gas
-            masses = Mion_e_g * (h / solar_mass) # convert back to Msun/h
+            masses = ionized_gas_masses(particles, stacker) # Msun/h
 
             # ionized_fractions = xe * X_H / (1 + X_H + xe * 2) # number of electrons per baryon
             # ionized_fractions = particles['IonizedFractions']

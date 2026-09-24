@@ -58,6 +58,26 @@ local:
   targets: ['ionized', 'dm']     # lay the moved mass out like local ionized gas / DM
   moved: ['all', 'stars', 'neutral']   # 'all' = neutral_gas + Stars + BH
 
+# Halo-level stellar-to-ionized-gas transfer. Read ONLY by
+# compute_pk_stellar.py and make_pk_stellar.py; every other script ignores
+# this block.
+#
+# In each selected halo region, a fraction (1 - s) of the stellar mass is
+# removed from the stars and added to the region's ionized gas in proportion
+# to each gas particle's ionized mass (mass conserved halo by halo; nothing
+# outside the regions changes). s = stellar scale: 1 = the simulation, 0 = all
+# selected stellar mass moved. Stars exclude TNG/Illustris wind particles.
+# Regions: the halo finder's membership ('membership': FoF groups; CAESAR
+# haloes for SIMBA; FoF groups of the SOAP centrals for FLAMINGO) and/or
+# spheres of x * R200m (GroupRad) around GroupPos ('aperture'; overlaps go
+# to the most massive halo). P_mm(s) is exactly quadratic in (1 - s), so the
+# spectra are computed once (s = 0) and stellar_scales only affects plots.
+stellar:
+  methods: ['membership', 'aperture']
+  aperture_radii: [1.0, 2.0]                 # x, in units of R200m
+  halo_mass_min: [1.0e11, 1.0e12, 1.0e13]    # FoF GroupMass cuts [Msun/h]
+  stellar_scales: [1.0, 0.75, 0.5, 0.25, 0.0]
+
 plot:
   fig_path: '../figures/'
   fig_name: 'pk_components_z05'

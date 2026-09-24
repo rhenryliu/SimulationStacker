@@ -15,24 +15,26 @@ halo's ionized gas):
     Q(s)    = P_mm(s) / P_mm - 1                         (= P_modified/P_original - 1)
     S(s)    = P_mm(s) / P_DMO ,  dS(s) = S(s) - S(1)
 
-The context curves move all stars: 'global' = like the box-wide ionized gas
-(make_pk_alpha's stars-only variant), 'local R=1' = transported within a
-1 Mpc/h sphere to follow the local ionized gas (make_pk_local's 'stars' set).
-Both use the cached Stars field, which for TNG/Illustris includes wind-phase
-particles (~8% of Illustris-1's; excluded from the halo-level transfer).
+The context models move all stars: 'global' = like the box-wide ionized gas
+(make_pk_alpha's stars-only variant; in the table only, not in the figures),
+'local R=1' = transported within a 1 Mpc/h sphere to follow the local ionized
+gas (make_pk_local's 'stars' set; figures and table). Both use the cached
+Stars field, which for TNG/Illustris includes wind-phase particles (~8% of
+Illustris-1's; excluded from the halo-level transfer).
 
 Outputs in <fig_path>/YYYY-MM/MM-DD/ (fig_name from the config):
   <fig_name>_stellar_scales_<variant>_<tag>.<ext>
                                   Q(k) for every s of stellar.stellar_scales,
-                                  one panel per simulation (--scale-variant,
-                                  --scale-tag; default fof, lowest cut)
+                                  one panel per simulation, one figure per
+                                  mass cut (--scale-variant, default fof;
+                                  --scale-tag, default every cut)
   <fig_name>_stellar_methods.<ext>
                                   Q(k) at s = 0 for every method and mass cut
   <fig_name>_stellar_S_<variant>_<tag>.<ext>
                                   S(k) from s = 1 to s = 0 for all simulations
                                   with dS below (layout of make_pk_alpha's
-                                  _alpha figure), one per method variant
-                                  (--band-tag; default lowest cut)
+                                  _alpha figure), one per method variant and
+                                  mass cut (--band-tag, default every cut)
   <fig_name>_stellar_table.txt    budgets, Q and dS at pk.k_table, large-scale
                                   Q, and every validation number
 
@@ -227,9 +229,7 @@ def _finish_grid(fig, axes, n, ylabel, path, z_label=None):
 
 
 def _context(ax, r, sel, which='Q'):
-    if r[f'{which}_global'] is not None:
-        ax.plot(r['k'][sel], 100 * r[f'{which}_global'][sel] if which == 'Q' else r[f'{which}_global'][sel],
-                color='k', ls=':', lw=1.2)
+    # Only the local model is drawn; the global one is in the table only.
     if r[f'{which}_local'] is not None:
         ax.plot(r['k'][sel], 100 * r[f'{which}_local'][sel] if which == 'Q' else r[f'{which}_local'][sel],
                 color='gray', ls='-.', lw=1.2)
@@ -238,9 +238,6 @@ def _context(ax, r, sel, which='Q'):
 def _context_legend(results):
     """Legend handles and labels of the context curves present in any result."""
     h, lab = [], []
-    if any(r['Q_global'] is not None for r in results):
-        h.append(plt.Line2D([], [], color='k', ls=':'))
-        lab.append('all stars, global')
     if any(r['Q_local'] is not None for r in results):
         h.append(plt.Line2D([], [], color='gray', ls='-.'))
         lab.append(r'all stars, local $R=1$')
@@ -318,8 +315,6 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
         ax1.plot(k, d['S'][s_lo][sel], color=col, lw=1.5, ls='--')
         ax1.fill_between(k, r['S0'][sel], d['S'][s_lo][sel], color=col, alpha=0.2, lw=0)
         ax2.plot(k, d['dS'][s_lo][sel], color=col, lw=2)
-        if r['dS_global'] is not None:
-            ax2.plot(k, r['dS_global'][sel], color=col, lw=1, ls=':')
     ax1.axhline(1.0, color='k', lw=1)
     _style_axis(ax1)
     _style_axis(ax2)
@@ -332,8 +327,6 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
     ax2.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
     ax2.set_ylabel(r'$\Delta S = S(s{=}0) - S$')
     ax2.plot([], [], color='gray', lw=2, label=r'simulation (solid, top); $s=0$ (dashed top, solid bottom)')
-    if any(r['dS_global'] is not None for r in have):
-        ax2.plot([], [], color='gray', lw=1, ls=':', label='all stars like the global ionized gas')
     ax2.legend(loc='lower left', framealpha=0.85, fontsize=10)
     fig.savefig(path, bbox_inches='tight')
     plt.close(fig)
@@ -435,9 +428,9 @@ def main() -> None:
     parser.add_argument('--scale-variant', default='fof',
                         help="method variant of the stellar-scale figure (default fof)")
     parser.add_argument('--scale-tag', default=None,
-                        help="mass-cut tag of the stellar-scale figure, e.g. M11 (default lowest cut)")
+                        help="mass-cut tag of the stellar-scale figure, e.g. M11 (default: every cut)")
     parser.add_argument('--band-tag', default=None,
-                        help="mass-cut tag of the S(k) band figures (default lowest cut)")
+                        help="mass-cut tag of the S(k) band figures (default: every cut)")
     parser.add_argument('--suffix', default='')
     args = parser.parse_args()
 
@@ -448,7 +441,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = plot_cfg['fig_name'] + (f"_{args.suffix}" if args.suffix else '')
     ext = plot_cfg.get('fig_type', 'pdf')
-    lowest = mass_tag(min(float(m) for m in config['stellar']['halo_mass_min']))
+    all_tags = [mass_tag(m) for m in sorted(float(m) for m in config['stellar']['halo_mass_min'])]
 
     results = []
     for entry in select_sims(config, args.sims):
@@ -460,15 +453,15 @@ def main() -> None:
         raise SystemExit("no stellar-transfer spectra found")
 
     s_min = min(float(s) for s in config['stellar']['stellar_scales'])
-    tag = args.scale_tag or lowest
     z_label = plot_cfg.get('z_label')  # optional figure title, e.g. for z ~ 0.26
-    fig_scales(results, args.scale_variant, tag, args.kmax,
-               out_dir / f"{stem}_stellar_scales_{args.scale_variant}_{tag}.{ext}", z_label)
+    for tag in ([args.scale_tag] if args.scale_tag else all_tags):
+        fig_scales(results, args.scale_variant, tag, args.kmax,
+                   out_dir / f"{stem}_stellar_scales_{args.scale_variant}_{tag}.{ext}", z_label)
     fig_methods(results, s_min, args.kmax, out_dir / f"{stem}_stellar_methods.{ext}", z_label)
-    btag = args.band_tag or lowest
-    for v in variants_of(config):
-        fig_S_band(results, v['name'], btag, args.kmax,
-                   out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}", z_label)
+    for btag in ([args.band_tag] if args.band_tag else all_tags):
+        for v in variants_of(config):
+            fig_S_band(results, v['name'], btag, args.kmax,
+                       out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}", z_label)
     write_table(results, config, out_dir / f"{stem}_stellar_table.txt")
 
 

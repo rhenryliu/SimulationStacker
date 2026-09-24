@@ -105,7 +105,7 @@ treatment change is needed.
 |---|---|---|---|
 | `src/halo_transfer.py` | membership and aperture labels, per-halo bookkeeping, `collect_particles` (one pass over stars and gas), `transfer_field` (D and diagnostics), `p_of_scale` | — | — |
 | `compute_pk_stellar.py` | per simulation: one particle pass, then for each method × mass cut D and its spectra (numba estimator of `compute_pk_local.py`, identical to Pylians); validation (§4); `--variants`, `--overwrite`, `--max-chunks N` (smoke test, nothing saved) | CPU node | `<stem>_Pk_stellar_<variant>_<n>.npz` |
-| `make_pk_stellar.py` | Q for every s, method comparison at s = 0, S bands with ΔS, table; the global and local stars-only models as context | login | `<fig>_stellar_scales_<variant>_<tag>`, `_stellar_methods`, `_stellar_S_<variant>_<tag>`, `_stellar_table.txt` |
+| `make_pk_stellar.py` | Q for every s, method comparison at s = 0, S bands with ΔS (the Q-for-every-s and S-band figures once per mass cut), table; the local stars-only model as context in the figures, local and global in the table | login | `<fig>_stellar_scales_<variant>_<tag>`, `_stellar_methods`, `_stellar_S_<variant>_<tag>`, `_stellar_table.txt` |
 | `runINT_pk_stellar.sh` | `compute_pk_stellar.py`, one simulation per node; `SIMS`, `EXTRA`, `CONFIG` env vars | `salloc -N ≤ 4` | logs in `../Outputs_Perlmutter/` |
 
 Config (`stellar:` block; ignored by every other script): `methods`
@@ -118,8 +118,8 @@ Illustris-1, plasma for SIMBA, fixed FLAMINGO colours); in the per-simulation
 panel figures colour encodes s (`_scales_`) or the method (`_methods_`). Where no `_Pk_components_` file
 exists (z ≈ 0.26), `compute_pk_stellar.py` checks its estimator against the
 Pylians `P_total` of the `_Pk_dmo_` file, skips the negative-stellar-mass check
-when there is no Stars cache, and `make_pk_stellar.py` omits the global context
-curve and takes the baryon budget from the particle pass (PartType4 + gas; BH,
+when there is no Stars cache, and `make_pk_stellar.py` leaves the table's
+global column empty and takes the baryon budget from the particle pass (PartType4 + gas; BH,
 1e-4–3e-3 of the baryons, not included).
 
 Spectra file `<stem>_Pk_stellar_<variant>_<n>.npz` (variant `fof`, `ap1`,
@@ -168,12 +168,13 @@ spectra files. "moved" = stellar mass moved at s = 0.
 
 ## 5. Results snapshot (2026-09-24)
 
-Figures in `figures/2026-09/09-24/`: `pk_components_z05_stellar_scales_fof_M11.pdf`
-(Q for s = 0.75 … 0), `_stellar_methods.pdf` (every method and cut at s = 0),
-`_stellar_S_{fof,ap1,ap2}_M11.pdf` (S bands with ΔS), and
-`_stellar_table.txt`. "global" = all (cached) stars like the box-wide ionized
-gas; "local R=1" = all stars transported within a 1 Mpc/h sphere like the
-local ionized gas (make_pk_local's `stars` set).
+Figures in `figures/2026-09/09-24/`: `pk_components_z05_stellar_scales_fof_M{11,12,13}.pdf`
+(Q for s = 0.75 … 0, one per mass cut), `_stellar_methods.pdf` (every method
+and cut at s = 0), `_stellar_S_{fof,ap1,ap2}_M{11,12,13}.pdf` (S bands with
+ΔS, one per method and cut), and `_stellar_table.txt`. "global" = all (cached) stars like the box-wide ionized
+gas (table only; removed from the figures at the user's request, 2026-09-24);
+"local R=1" = all stars transported within a 1 Mpc/h sphere like the local
+ionized gas (make_pk_local's `stars` set; dash-dot in the figures).
 
 Stars moved at s = 0 (fraction of all true stars), membership, by cut:
 
@@ -238,8 +239,8 @@ Reading:
   Illustris-1, 28% SIMBA, 31% / 49% / 37% FLAMINGO; M*-weighted median of
   M*_h/M_ion,h 0.19 (TNG300-1) to 0.99 (fgas-8sigma).
 - **Winds** are excluded from the moved stars but included in the context
-  curves (global, local R=1), which move the cached Stars field: for
-  Illustris-1 those curves move ~8% more mass.
+  models (global, local R=1), which move the cached Stars field: for
+  Illustris-1 those models move ~8% more mass.
 - **Resolution:** transfers within ≲ 1–2 cells are invisible below the Nyquist
   frequency (FLAMINGO: 0.34 Mpc/h cells, k_Nyq = 9.2 h/Mpc), so the low-mass
   haloes' stars barely enter; this is a property of the grid, not the model.
@@ -327,8 +328,8 @@ per-halo conservation ≤ 2e-13; catalogue M*_h median 2e-8 (TNG300-1) and
 (largest for Illustris-1's apertures; ≤ 5e-4 % for TNG300-1 and FLAMINGO). Stars kept for lack of ionized
 gas: none in TNG/Illustris, ≤ 2.6e-4 of the stars in FLAMINGO.
 
-Figures in `figures/2026-09/09-24/`: `pk_stellar_z026_stellar_scales_fof_M11.pdf`,
-`_stellar_methods.pdf`, `_stellar_S_{fof,ap1,ap2}_M11.pdf`, `_stellar_table.txt`.
+Figures in `figures/2026-09/09-24/`: `pk_stellar_z026_stellar_scales_fof_M{11,12,13}.pdf`,
+`_stellar_methods.pdf`, `_stellar_S_{fof,ap1,ap2}_M{11,12,13}.pdf`, `_stellar_table.txt`.
 
 Q(s = 0) [%] at k ≈ 5 h/Mpc, z ≈ 0.26 (z ≈ 0.5 in brackets); cut ≥ 1e11
 unless noted:

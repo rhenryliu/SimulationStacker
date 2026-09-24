@@ -1,10 +1,11 @@
 # Matter power spectrum suppression by baryon component (unbound gas paper)
 
-**Status as of 2026-09-22.** Code in `scripts/unbound_gas/`, config
+**Status as of 2026-09-23.** Code in `scripts/unbound_gas/`, config
 `scripts/configs/unbound_gas/pk_components_z05.yaml`. Commits `435d9ea`
-(DMO downloads), `cc17c7e` (component pipeline) and the local-model commit
-(`compute_pk_local.py`, `make_pk_local.py`, `runINT_pk_local.sh`). Detailed working log:
-`NOTES/unbound_gas/` (untracked).
+(DMO downloads), `cc17c7e` (component pipeline) and `dda345e` (local model).
+All spectra and figures below exist for all six simulations; open items in §9.
+Detailed working log and pick-up guide:
+`NOTES/unbound_gas/session_log_2026-09-22_pk_suppression.md` (untracked).
 
 ## 1. Question and models
 
@@ -131,9 +132,14 @@ Nyquist frequency, identical k bins across files.
 
 ## 5. Caveats
 
-- **SIMBA is provisional.** `ElectronAbundance` appears to be n_e m_p/ρ rather
-  than n_e/n_H for ~65% of its gas; if so, most of SIMBA's "neutral gas" is
-  ionized. Under investigation (separate session).
+- **SIMBA is provisional.** A separate investigation (commit `0c514f9`,
+  `docs/unbound_gas/simba_electron_abundance_report.md`) found in the data
+  that dust-free SIMBA gas (~70%) stores `ElectronAbundance` as n_e m_p/ρ
+  rather than n_e/n_H; corrected, SIMBA's ionized share of the gas rises from
+  0.795 to 0.955. The pipeline and caches still use the old reading. A fix
+  leaves SIMBA's own S(k) unchanged (the total matter field does not depend
+  on the ionized/neutral split) but changes α₀, Q, ΔS and every moved model
+  for SIMBA; those rows must then be recomputed.
 - TNG300-1 / Illustris-1 3D Stars caches hold ~4e-5 less stellar mass than the
   current code builds (provenance unknown; effect on P_mm < 1e-4).
 - Fixed X_H = 0.76 makes ionized > gas in metal-enriched cells (5% of cells in
@@ -203,3 +209,19 @@ python unbound_gas/make_pk_local.py -p configs/unbound_gas/pk_components_z05.yam
 Measured cost: FLAMINGO component spectra ~27 min per variant (376 GB peak);
 local model ~6 min per 1000³ simulation (46 GB peak) and ~37 min per FLAMINGO
 variant (361 GB peak).
+
+## 9. Open items (2026-09-23)
+
+- **Ratio vs absolute panels.** The lower panel of `make_pk_alpha.py`'s
+  `_alpha` figure and the local `_Q_*` / `_split` figures still plot Q; the
+  S(k) figures with ΔS below are the preferred view. Whether to switch the
+  rest to ΔS is undecided.
+- **Gaussian width.** σ = R/√5 is used; σ = R is the alternative. To switch:
+  set `local.gaussian_sigma_factor`, temporarily restrict `local.kernels` to
+  `['gaussian']` (`--overwrite` recomputes every configured kernel), rerun
+  `compute_pk_local.py --overwrite`, restore `kernels`, re-plot.
+- **SIMBA** rows to be recomputed if the `ElectronAbundance` correction is
+  adopted (new ionized_gas cache under a new filename; then both
+  `compute_pk_*` scripts with `--overwrite` for m100n1024; drop the
+  "(provisional)" label in `make_pk_local.py`).
+- Paper figures and text for the new Results section and Discussion paragraph.

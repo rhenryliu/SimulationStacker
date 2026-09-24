@@ -36,6 +36,10 @@ are rows of ``SimulationStacker.loadHalos()``; -1 = no halo):
   most massive halo (``GroupMass``) that contains it (mass priority, periodic
   minimum-image distances). Every particle is modified at most once, and the
   labels are nested in the halo mass cut (``restrict_labels``).
+
+``transfer_maps_2d`` is the projected counterpart for stacked profiles: 2D
+maps of the ionized-gas mass added and the stellar mass removed at s = 0,
+binned like the cached 2D fields.
 """
 
 import glob
@@ -46,6 +50,7 @@ import warnings
 import h5py
 import numba
 import numpy as np
+from scipy.stats import binned_statistic_2d
 
 from loadIO import (load_caesar_particle_halos, load_flamingo_central_fof_ids,
                     load_flamingo_fof_ids, load_fof_group_ends, load_subset)
@@ -662,3 +667,121 @@ def transfer_field(store, name, halo_mass, mass_min, n_pixels, box, stars_field=
                                   mion=mion_h[rows])
         diag['mstar_h_all'] = mstar_h
     return grid, diag
+
+
+# ---------------------------------------------------------------------------
+# Projected (2D) transfer maps
+# ---------------------------------------------------------------------------
+
+_PROJECTION_AXES = {'xy': (0, 1), 'xz': (0, 2), 'yz': (1, 2)}
+
+
+def pixel_index_2d(pos, n_pixels, box, projection='yz'):
+    """Flat pixel index (ix * n + iy) of each particle on a projected 2D grid.
+
+    The binning of the cached 2D fields (``mapMaker.make_mass_field``: a
+    ``binned_statistic_2d`` sum over [0, box] with n x n bins, the right edge
+    in the last bin). The bin numbers come from that same scipy call, so a
+    ``bincount`` over this index reproduces its sum map exactly.
+
+    Args:
+        pos (np.ndarray): (N, 3) positions in [0, box] (wrapped).
+        n_pixels (int): Pixels per side.
+        box (float): Box size, in the units of ``pos``.
+        projection (str): 'xy', 'xz' or 'yz' (the two kept axes, in order).
+
+    Returns:
+        np.ndarray: Flat indices, shape (N,); int32 (int64 if n^2 needs it).
+
+    Raises:
+        ValueError: If a particle lies outside [0, box] (the cached fields
+            would drop it).
+    """
+    a, b = _PROJECTION_AXES[projection]
+    n = int(n_pixels)
+    dtype = np.int32 if n * n < 2 ** 31 else np.int64
+    if len(pos) == 0:
+        return np.zeros(0, dtype=dtype)
+    res = binned_statistic_2d(pos[:, a], pos[:, b], None, 'count', bins=[n, n],
+                              range=[[0, box], [0, box]])
+    ix, iy = np.divmod(res.binnumber, n + 2)  # bin numbers include the outlier bins
+    ix -= 1
+    iy -= 1
+    if ix.min() < 0 or ix.max() >= n or iy.min() < 0 or iy.max() >= n:
+        raise ValueError("particles outside [0, box]")
+    return (ix * n + iy).astype(dtype)
+
+
+def transfer_maps_2d(store, name, halo_mass, mass_min, n_pixels):
+    """Projected maps of one configuration's transfer at s = 0.
+
+    The 2D counterpart of ``transfer_field``: the same per-halo bookkeeping
+    (regions from the stored labels at the cut, f_h = M*_h / M_ion,h, haloes
+    without ionized gas keep their stars), binned like the cached 2D fields
+    (every stored block needs a 'pix' index from ``pixel_index_2d``). The
+    projected transfer field is added - removed, so for any stellar scale s
+    (t = 1 - s) the maps follow exactly:
+
+        ionized_gas(s) = ionized_gas + t * added ,
+        total(s)       = total + t * (added - removed) .
+
+    Args:
+        store (dict): From ``collect_particles``, with 'pix' in every block.
+        name (str): Variant name (key of the stored labels).
+        halo_mass (np.ndarray): GroupMass per halo row (Msun/h).
+        mass_min (float): Halo mass cut (Msun/h).
+        n_pixels (int): Pixels per side of the grid 'pix' refers to.
+
+    Returns:
+        tuple: (added, removed, diag): the ionized-gas mass added and the
+        stellar mass removed, float64 (n, n) in Msun/h per pixel, both >= 0;
+        diag holds the bookkeeping and conservation numbers.
+    """
+    n_halo = len(halo_mass)
+    n = int(n_pixels)
+    mstar_h = np.zeros(n_halo)
+    mion_h = np.zeros(n_halo)
+    for blk in store['Stars']:
+        mstar_h += halo_totals(restrict_labels(blk['labels'][name], halo_mass, mass_min),
+                               blk['mass'], n_halo)
+    for blk in store['gas']:
+        mion_h += halo_totals(restrict_labels(blk['labels'][name], halo_mass, mass_min),
+                              blk['mass'], n_halo)
+    f, active, kept = transfer_factors(mstar_h, mion_h)
+
+    maps, per_halo = {}, {}
+    for p_type, key in (('Stars', 'removed'), ('gas', 'added')):
+        flat = np.zeros(n * n)
+        h = np.zeros(n_halo)
+        for blk in store[p_type]:
+            lab = restrict_labels(blk['labels'][name], halo_mass, mass_min)
+            sel = lab >= 0
+            sel[sel] = active[lab[sel]]
+            w = blk['mass'][sel].astype(np.float64)
+            if p_type == 'gas':
+                w *= f[lab[sel]]
+            h += np.bincount(lab[sel], weights=w, minlength=n_halo)
+            flat += np.bincount(blk['pix'][sel], weights=w, minlength=n * n)
+        maps[key] = flat.reshape(n, n)
+        per_halo[key] = h
+
+    moved = float(mstar_h[active].sum())
+    ms = mstar_h[active]
+    cons = np.abs(per_halo['added'][active] - ms) / ms if active.any() else np.zeros(1)
+    rem = np.abs(per_halo['removed'][active] - ms) / ms if active.any() else np.zeros(1)
+    sum_added = float(maps['added'].sum())
+    sum_removed = float(maps['removed'].sum())
+    diag = dict(
+        n_haloes_selected=int((halo_mass >= mass_min).sum()),
+        n_haloes_active=int(active.sum()),
+        n_haloes_kept_noion=int(kept.sum()),
+        mstar_moved=moved,
+        mstar_kept_noion=float(mstar_h[kept].sum()),
+        sum_added=sum_added,
+        sum_removed=sum_removed,
+        sum_added_rel=(sum_added - moved) / moved if moved > 0 else 0.0,
+        sum_removed_rel=(sum_removed - moved) / moved if moved > 0 else 0.0,
+        max_halo_cons=float(cons.max()),
+        max_halo_removed=float(rem.max()),
+    )
+    return maps['added'], maps['removed'], diag

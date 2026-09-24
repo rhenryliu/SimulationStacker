@@ -8,9 +8,13 @@ tests in `tests/test_halo_transfer.py`; small additions to `src/mapMaker.py`
 readers). z ≈ 0.5 committed as `30a6e34`; spectra exist for all six
 simulations (§5). z ≈ 0.26 (FLAMINGO z = 0.30) added the same day for five
 simulations, SIMBA excluded (§9; config `configs/unbound_gas/pk_stellar_z026.yaml`).
+The bottom panel of the `_stellar_S_` figures shows the lensing f_gas(θ) of
+`lensing/beam_compensated_ratio_v2.py` under the same transfer (§10;
+`compute_stellar_maps.py`, `stack_stellar_maps.py`, `lensing:` config blocks).
 Companion to `pk_suppression_components.md` (the global and
-local models, unchanged). Working log:
-`NOTES/unbound_gas/session_log_2026-09-23_pk_stellar_transfer.md` (untracked).
+local models, unchanged). Working logs:
+`NOTES/unbound_gas/session_log_2026-09-23_pk_stellar_transfer.md` and
+`session_log_2026-09-24_stellar_lensing_observable.md` (untracked).
 
 ## 1. Question and model
 
@@ -103,15 +107,20 @@ treatment change is needed.
 
 | script | does | runs on | output |
 |---|---|---|---|
-| `src/halo_transfer.py` | membership and aperture labels, per-halo bookkeeping, `collect_particles` (one pass over stars and gas), `transfer_field` (D and diagnostics), `p_of_scale` | — | — |
+| `src/halo_transfer.py` | membership and aperture labels, per-halo bookkeeping, `collect_particles` (one pass over stars and gas), `transfer_field` (D and diagnostics), `p_of_scale`; `pixel_index_2d`, `transfer_maps_2d` (the 2D maps A, B of §10) | — | — |
 | `compute_pk_stellar.py` | per simulation: one particle pass, then for each method × mass cut D and its spectra (numba estimator of `compute_pk_local.py`, identical to Pylians); validation (§4); `--variants`, `--overwrite`, `--max-chunks N` (smoke test, nothing saved) | CPU node | `<stem>_Pk_stellar_<variant>_<n>.npz` |
-| `make_pk_stellar.py` | Q for every s, method comparison at s = 0, S bands with ΔS (the Q-for-every-s and S-band figures once per mass cut), table; the local stars-only model as context in the figures, local and global in the table | login | `<fig>_stellar_scales_<variant>_<tag>`, `_stellar_methods`, `_stellar_S_<variant>_<tag>`, `_stellar_table.txt` |
+| `make_pk_stellar.py` | Q for every s, method comparison at s = 0, S bands with the lensing f_gas(θ) below (§10; `--bottom dS` restores the earlier ΔS panel) (the Q-for-every-s and S-band figures once per mass cut), tables; the local stars-only model as context in the figures, local and global in the table | login | `<fig>_stellar_scales_<variant>_<tag>`, `_stellar_methods`, `_stellar_S_<variant>_<tag>`, `_stellar_table.txt`, `_stellar_lensing_table.txt` |
 | `runINT_pk_stellar.sh` | `compute_pk_stellar.py`, one simulation per node; `SIMS`, `EXTRA`, `CONFIG` env vars | `salloc -N ≤ 4` | logs in `../Outputs_Perlmutter/` |
+| `compute_stellar_maps.py` | per simulation: one particle pass, then for each method × mass cut the 2D maps of the ionized gas added (A) and stars removed (B) at s = 0 on the lensing map grid (§10); `--variants`, `--overwrite`, `--max-chunks N` | CPU node | `<stem>_stellar_{added,removed}_<variant>_<tag>_<n>_yz.npy`, `<stem>_stellar_maps_<n>_yz.npz` (products/2D) |
+| `stack_stellar_maps.py` | ΔΣ stacks of the cached ionized_gas/total maps and of A, B on the lensing sample, in a process pool; `--max-halos N` (quick check, nothing saved) | CPU node (small boxes: login) | `<stem>_lensing_stellar_<sample_name>.npz` (products/2D) |
+| `runINT_stellar_maps.sh` | both of the above, one simulation per node; `SIMS`, `STAGES`, `EXTRA`, `CONFIG` | `salloc -N ≤ 4` | logs `stellar_maps-<job>_<sim>.out` |
 
 Config (`stellar:` block; ignored by every other script): `methods`
 (`membership`, `aperture`), `aperture_radii` (x, units of R200m),
 `halo_mass_min` (FoF GroupMass cuts, M⊙/h), `stellar_scales` (plots only).
-Optional `plot.z_label` titles the figures. Figures stop at k = 5 h/Mpc
+Optional `plot.z_label` titles the figures; `plot.exclude_sims` (matched like
+`--sims`) leaves simulations out of the figures but not the tables (z ≈ 0.5:
+SIMBA, for now). Figures stop at k = 5 h/Mpc
 (`--kmax`), have grid lines, and colour the simulations as the lensing P(k)
 suppression figure (`lensing/plot_pk_suppression.py`: twilight for TNG300-1 /
 Illustris-1, plasma for SIMBA, fixed FLAMINGO colours); in the per-simulation
@@ -287,6 +296,24 @@ SLURM_JOB_ID=<id> SLURM_JOB_NUM_NODES=4 CONFIG=configs/unbound_gas/pk_stellar_z0
 python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_stellar_z026.yaml
 ```
 
+Lensing panel (§10), per redshift (`CONFIG` as above for z ≈ 0.26; SIMBA only
+at z ≈ 0.5):
+
+```bash
+salloc -q interactive -C cpu -N 4 -t 1:45:00 -A desi --no-shell
+SLURM_JOB_ID=<id> SLURM_JOB_NUM_NODES=4 \
+    SIMS="L1_m9 fgas-8sigma Jet_fgas-4sigma TNG300-1 Illustris-1 m100n1024" \
+    bash unbound_gas/runINT_stellar_maps.sh
+python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_components_z05.yaml
+cd ../tests && pytest test_stellar_maps.py -v       # 19 synthetic tests, ~25 s
+```
+
+Another stacking sample: set `lensing.overrides` (e.g.
+`{halo_abundance_target: 2.0e-4}`) and a new `lensing.sample_name` in the
+config, then run only the stacks (`STAGES=stack`; the maps are reused) and
+`make_pk_stellar.py`. The earlier ΔS bottom panel: `make_pk_stellar.py
+--bottom dS`.
+
 ## 8. Open items (2026-09-24)
 
 - Which configuration(s) go in the paper: membership ≥ 1e11 as the baseline
@@ -302,6 +329,10 @@ python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_stellar_z026.yam
 - z ≈ 0.26 has no global or local context curves and no SIMBA (user decisions
   2026-09-24): computing them needs the missing ionized-gas and component
   caches (§9).
+- Lensing panel (§10): the stacked sample is the lensing SHAM sample for now
+  (user decision 2026-09-24, may change: `lensing.overrides`); only
+  ionized_gas/total (a baryon/total variant would need one more stack per
+  simulation, the maps are reused); SIMBA provisional as above.
 
 ## 9. z ≈ 0.26 (FLAMINGO z = 0.30)
 
@@ -359,3 +390,147 @@ changes by ≤ 3.3%. Everything found at z ≈ 0.5 holds:
 Cost: FLAMINGO 72–74 min per variant (223–226 GB), TNG300-1 74 min (264 GB),
 Illustris-1 17 min (123 GB); allocation 58827894, 4 nodes, 1 h 31 min.
 
+
+## 10. The lensing observable under the transfer (bottom panel of the S-band figures)
+
+The bottom panel of every `_stellar_S_<variant>_<tag>` figure shows the
+beam-free simulation curve of `lensing/beam_compensated_ratio_v2.py`, the
+stacked ionized-gas to total mass ratio
+
+    f(θ) = ⟨ΔΣ[ionized_gas]⟩(θ) / ⟨ΔΣ[total]⟩(θ) × Ω_m/Ω_b ,
+
+a ratio of halo means of the compensated ΔΣ filter (`filters.delta_sigma_kernel`)
+on the cached 2D maps (0.2′ pixels, yz projection, θ = 1–6′ in 9 steps), and
+how it changes under the **same box-wide transfer** as the top panel (every
+host halo above the figure's mass cut, the figure's method). The filter is a
+sum of map × kernel, so it is linear in the map. With A = the ionized-gas
+mass added and B = the stellar mass removed at s = 0 (2D maps), N and T the
+halo-mean ΔΣ of the cached ionized_gas and total maps, and t = 1 − s,
+
+    f(s) = [N + t ΔΣ_A] / [T + t (ΔΣ_A − ΔΣ_B)] × Ω_m/Ω_b      (exact),
+
+so one (A, B) pair per configuration gives every s (f is a ratio, not linear
+in s). The panel shows s = 1 (solid, markers) and s = 0 (dashed) with the band
+between, and the lensing script's beam-compensated measurement
+(`../data/beam_compensated/beam_compensated_ionized_gas_total_z{0.5,0.26}.npz`,
+black squares). The simulation curves carry no error bands (user decision).
+
+Definitions (user decisions 2026-09-24):
+
+| item | choice |
+|---|---|
+| stacked sample | the lensing script's, **fixed for every s** (the same observed galaxies): SHAM on `SubhaloMStar` among subhaloes with parent GroupMass ≤ 5e14 M⊙/h (`stackMap` default), abundance 5e-4 (z ≈ 0.5) / 1e-3 (h/Mpc)³ (z ≈ 0.26); stacked at `SubhaloPos` |
+| transfer | exactly the P(k) one (§1–2): per configuration, A = Σ f_h m_ion,i and B = Σ m*_j over the active haloes, from the same particle pass and bookkeeping |
+| grid, redshift | the lensing config's (`lensing.config`): z = 0.5 / 0.26 for TNG300-1 and Illustris-1 (not 0.2613: the map grid depends on z), FLAMINGO 0.5 / 0.3; nPixels as `SimulationStacker.makeMap` |
+| binning | the cached 2D fields' `binned_statistic_2d` sum (each kept particle's pixel from the same scipy call, `halo_transfer.pixel_index_2d`) |
+| Ω_b | snapshot header, else the lensing script's fallback (Illustris-1: 0.0456) |
+| simulations | as the top panel: six computed at z ≈ 0.5, five at z ≈ 0.26 (no SIMBA); SIMBA is left out of the z ≈ 0.5 figures for now (`plot.exclude_sims`, user decision 2026-09-24), its numbers stay in the tables |
+
+Config (`lensing:` block in `pk_components_z05.yaml` / `pk_stellar_z026.yaml`):
+`config` (the lensing noBeam config: settings, redshifts, sample), `data`,
+`sample_name` (output tag) and `overrides` (any stacking setting, e.g.
+`halo_abundance_target`). The maps do not depend on the sample, so another
+sample needs only the stacking step; each sample's stacks sit in their own
+file, and `make_pk_stellar.py` refuses stacks whose stored settings differ
+from the config's.
+
+Files (products/2D, new): `<stem>_stellar_added_<variant>_<tag>_<n>_yz.npy`,
+`<stem>_stellar_removed_<variant>_<tag>_<n>_yz.npy` (float64, M⊙/h per pixel;
+18 per simulation), `<stem>_stellar_maps_<n>_yz.npz` (bookkeeping),
+`<stem>_lensing_stellar_<sample_name>.npz` (θ, N, T, per configuration ΔΣ_A
+and ΔΣ_B halo means and scatter, Ω_b, Ω_m, halo rows, settings, checks).
+
+### Validation
+
+All 54 configurations at z ≈ 0.5 (six simulations × 9); z ≈ 0.26 below.
+
+| check (what it tests) | result |
+|---|---|
+| the sample selected here + `stack_on_array` vs the lensing script's `stackMap`, cached ionized_gas and total maps (same haloes, order, map; s = 1 reproduces the lensing curve) | 0 (identical; the script refuses to save otherwise) |
+| explicitly built maps ionized_gas + A/2 and total + (A − B)/2 stacked vs the linear combination (s = 0.5, fof ≥ 1e11) | ≤ 3.0e-14 |
+| Σ A / moved − 1, Σ B / moved − 1 (2D mass conservation) | ≤ 5.5e-15, ≤ 1.1e-15 |
+| per-halo conservation of the weights | ≤ 1.3e-11 |
+| moved stellar mass and active haloes vs the 3D run (`_Pk_stellar_` files) | identical (0, 0) in every configuration |
+| cached 2D Stars map − B, negative mass / moved | TNG300-1 −6.4e-5, Illustris-1 −8.4e-6, SIMBA −3e-10, FLAMINGO ≤ −3.9e-4 |
+| pytest `tests/test_stellar_maps.py` (19 synthetic tests) | pass |
+
+- The negative residual is float32 rounding of the stored positions, not lost
+  mass: on one chunk each, float32 wrapped positions put 1.2–1.5e-4 (TNG300-1)
+  and 5.0e-4 (FLAMINGO) of the stellar mass one pixel (0.2′) away from its
+  float64 pixel, which bounds it; A is shifted the same way. Irrelevant for ΔΣ
+  at 1–6′. The cached 2D Stars maps include TNG/Illustris winds, which B does not.
+- Tests: the 2D pixel index reproduces `binned_statistic_2d` bit for bit
+  (edges included); A and B equal the binned particle weights and share
+  `transfer_field`'s bookkeeping; the stacked sample equals `stack_on_array`'s
+  own selection (three branches); stacking the changed maps equals `f_of_scale`
+  of the separate stacks (s = 1, 0.5, 0).
+
+### Results (z ≈ 0.5)
+
+Figures `figures/2026-09/09-24/pk_components_z05_stellar_S_{fof,ap1,ap2}_M{11,12,13}.pdf`
+(bottom panel), numbers in `_stellar_lensing_table.txt` (f at every θ for s = 1
+and s = 0, and the relative change). A one-time PNG set of all figures of both
+redshifts is in `figures/2026-09/09-24/png/` (200 dpi). Data (beam-compensated): 0.32 ± 0.06 at
+1′, 0.46 ± 0.31 at 6′.
+
+f(s = 1) and Δf = f(s = 0) − f(s = 1), at θ = 1′ / 6′:
+
+| sim (haloes stacked) | f 1′ | f 6′ | fof ≥1e11 | fof ≥1e13 | 1 R200m ≥1e11 | 2 R200m ≥1e11 |
+|---|---|---|---|---|---|---|
+| TNG300-1 (4,307) | 0.517 | 0.899 | +0.093 / +0.065 | +0.077 / +0.056 | +0.071 / +0.056 | +0.048 / +0.061 |
+| Illustris-1 (210) | 0.131 | 0.708 | +0.150 / +0.126 | +0.101 / +0.110 | +0.118 / +0.102 | +0.049 / +0.126 |
+| SIMBA-100 (500; prov.; tables only) | 0.290 | 0.658 | +0.116 / +0.081 | +0.083 / +0.064 | +0.086 / +0.055 | +0.051 / +0.070 |
+| FLAMINGO L1_m9 (157,910) | 0.302 | 0.799 | +0.128 / +0.109 | +0.101 / +0.089 | +0.101 / +0.094 | +0.056 / +0.103 |
+| fgas-8sigma (157,910) | 0.163 | 0.671 | +0.127 / +0.119 | +0.096 / +0.096 | +0.103 / +0.101 | +0.045 / +0.112 |
+| Jet_fgas-4sigma (157,910) | 0.221 | 0.668 | +0.116 / +0.103 | +0.087 / +0.081 | +0.093 / +0.088 | +0.049 / +0.097 |
+
+Reading:
+
+- **Converting the stars raises f everywhere**, most at small θ: by +0.09 to
+  +0.15 at 1′ (membership ≥ 1e11), i.e. +18% (TNG300-1) to +115% (Illustris-1,
+  whose inner gas fraction is lowest), 1.5–2.5 × the data error there; by +0.06
+  to +0.13 (+7 to +18%) at 6′, well inside the data error.
+- **Method ranking at small θ is the reverse of P(k):** at 1′ the 2 R200m
+  apertures change f least (+0.05) and membership most; at 6′ the methods agree
+  to within ~0.03. Presumably (not checked) the larger the region, the more of the
+  added gas lands outside the inner apertures; P(k), in contrast, grows with
+  how far the mass moves.
+- **Mass cut:** haloes ≥ 1e13 give 65–85% of the ≥ 1e11 change at 1′ (P(k):
+  ~90% at k ≈ 5); the stacked galaxies' own, lower-mass haloes matter more here.
+- The s = 1 curves are the lensing figure's (identical stacks).
+
+### Results (z ≈ 0.26; FLAMINGO z = 0.30)
+
+Same analysis with `pk_stellar_z026.yaml` (lensing config
+`mass_ratio_noBeam_z026.yaml`: abundance 1e-3 (h/Mpc)³, TNG300-1/Illustris-1
+stacked at z = 0.26 on the 4822² / 1752² grids, FLAMINGO at 0.3 on 14015²; no
+SIMBA). Validation over the 45 configurations as at z ≈ 0.5: stackMap identity
+0; explicit s = 0.5 ≤ 3.6e-14; Σ A, Σ B vs moved ≤ 1.1e-14; per-halo ≤ 2e-13;
+moved mass and active haloes identical to the 3D run; no 2D Stars caches at
+these snapshots, so no negative-stellar check. Figures
+`pk_stellar_z026_stellar_S_*`, table `pk_stellar_z026_stellar_lensing_table.txt`.
+Data: 0.29 ± 0.05 at 1′, 0.86 ± 0.29 at 6′.
+
+| sim (haloes stacked) | f 1′ | f 6′ | fof ≥1e11 | fof ≥1e13 | 1 R200m ≥1e11 | 2 R200m ≥1e11 |
+|---|---|---|---|---|---|---|
+| TNG300-1 (8,615) | 0.290 | 0.837 | +0.063 / +0.073 | +0.041 / +0.063 | +0.044 / +0.063 | +0.030 / +0.062 |
+| Illustris-1 (421) | 0.069 | 0.318 | +0.114 / +0.149 | +0.053 / +0.126 | +0.086 / +0.114 | +0.038 / +0.092 |
+| FLAMINGO L1_m9 (315,821) | 0.173 | 0.689 | +0.097 / +0.120 | +0.056 / +0.100 | +0.075 / +0.106 | +0.039 / +0.104 |
+| fgas-8sigma (315,821) | 0.098 | 0.495 | +0.103 / +0.132 | +0.053 / +0.109 | +0.081 / +0.114 | +0.035 / +0.107 |
+| Jet_fgas-4sigma (315,821) | 0.132 | 0.538 | +0.093 / +0.114 | +0.047 / +0.092 | +0.073 / +0.098 | +0.036 / +0.095 |
+
+The picture is the same as at z ≈ 0.5, with two differences: the lower-mass
+sample (twice the abundance) makes ≥ 1e13 haloes matter less at 1′ (45–65% of
+the ≥ 1e11 change), and the absolute change at 6′ (+0.06 to +0.15) now matches
+or exceeds that at 1′ (+0.06 to +0.11). Relative to f(s = 1): +22% (TNG300-1)
+to +165% (Illustris-1) at 1′, +9 to +47% at 6′; 1.2–2.2 × the data error at 1′.
+
+Cost (both redshifts): FLAMINGO ~70 min per variant on one node (particle
+pass 48 min, pixel index 2.5 min, 9 configurations ~15 min, stacks 100 s at
+z ≈ 0.5 / 180 s at 0.3 on 23 processes); TNG300-1 ~70 min (pass 28 min, pixel
+index 9.5 min for ~4e9 particles, configurations 1.5–5 min each, stacks 24 s);
+Illustris-1 ~17 min; SIMBA 4 min. Peak memory (sacct MaxRSS): TNG300-1
+247–293 GB (the pass keeps ~4e9 gas particles), FLAMINGO 98–111 GB,
+Illustris-1 ~105 GB, stacks ≤ 76 GB.
+Allocations: 58832867 (smoke), 58832967 (z ≈ 0.5, and z ≈ 0.26 Illustris-1),
+58834395 (z ≈ 0.26).

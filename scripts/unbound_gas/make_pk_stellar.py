@@ -31,12 +31,26 @@ Outputs in <fig_path>/YYYY-MM/MM-DD/ (fig_name from the config):
   <fig_name>_stellar_methods.<ext>
                                   Q(k) at s = 0 for every method and mass cut
   <fig_name>_stellar_S_<variant>_<tag>.<ext>
-                                  S(k) from s = 1 to s = 0 for all simulations
-                                  with dS below (layout of make_pk_alpha's
-                                  _alpha figure), one per method variant and
-                                  mass cut (--band-tag, default every cut)
+                                  S(k) from s = 1 to s = 0 for all simulations,
+                                  one per method variant and mass cut
+                                  (--band-tag, default every cut); below it the
+                                  lensing f_gas(theta) under the same transfer
+                                  (--bottom lensing, the default with a
+                                  `lensing` config block) or dS on a shared k
+                                  axis (--bottom dS, the earlier figure)
   <fig_name>_stellar_table.txt    budgets, Q and dS at pk.k_table, large-scale
                                   Q, and every validation number
+  <fig_name>_stellar_lensing_table.txt
+                                  f_gas(theta) at s = 1 and s = 0 and the
+                                  lensing validation numbers (--bottom lensing)
+
+The lensing panel is the beam-free simulation curve of
+lensing/beam_compensated_ratio_v2.py, f = <DSigma[ionized_gas]>/<DSigma[total]>
+* Omega_m/Omega_b on its fixed halo sample, with the maps changed by the same
+box-wide transfer as the top panel (t = 1 - s):
+f(s) = [N + t A] / [T + t (A - B)] * Omega_m/Omega_b (stacks from
+stack_stellar_maps.py; the beam-compensated data points of the lensing script
+as black squares).
 
 Figures stop at k = 5 h/Mpc (--kmax), have grid lines, and colour the
 simulations as the lensing P(k) suppression figure (lensing/plot_pk_suppression.py);
@@ -45,11 +59,14 @@ in the per-simulation panel figures colour encodes s or the method instead.
 Without a components spectra file (e.g. z ~ 0.26, configs/unbound_gas/pk_stellar_z026.yaml)
 the global context curve is omitted and the baryon budget comes from the
 particle pass; without local-model spectra the local curve is omitted. An
-optional plot.z_label titles the figures.
+optional plot.z_label titles the figures; simulations in plot.exclude_sims
+(matched like --sims) are left out of the figures but kept in the tables.
 
 Run from the scripts/ directory (light; login node is fine):
     python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_components_z05.yaml
     python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_stellar_z026.yaml
+    # the earlier dS bottom panel (e.g. into a separate file name)
+    python unbound_gas/make_pk_stellar.py -p ... --bottom dS --suffix dS
 """
 
 import argparse
@@ -63,6 +80,8 @@ import numpy as np
 import make_pk_alpha as mpa  # plot style, colours and the global-model algebra
 import make_pk_local as mpl  # local-model spectra and the SIMBA label
 from compute_pk_stellar import mass_tag, variants_of
+from compute_stellar_maps import (f_of_scale, lensing_settings, lensing_sim, sample_settings,
+                                  stack_path)
 from pk_common import load_config, select_sims, sim_label, spectra_path
 
 import halo_transfer as ht
@@ -125,8 +144,51 @@ def tag_label(tag: str) -> str:
     return rf"$M_{{\rm FoF}}\geq10^{{{tag[1:]}}}\,h^{{-1}}M_\odot$"
 
 
-def analyse(entry: dict, config: dict) -> dict:
-    """Stellar-transfer quantities (and context models) for one simulation."""
+def lensing_result(entry: dict, config: dict, scales: list):
+    """Lensing f_gas(theta) for every configuration and s (stack_stellar_maps.py output).
+
+    Returns:
+        dict or None: 'theta', 'n_haloes', 'z', 'checks' and per configuration
+        (variant, tag) the ratio f[s] and the map bookkeeping; None if the
+        simulation is not in the lensing config or has no stacks.
+
+    Raises:
+        ValueError: If the stacks were made with other settings than the
+            config's ``lensing`` block now gives (rerun stack_stellar_maps.py).
+    """
+    lens = lensing_settings(config)
+    lsim, z = lensing_sim(lens, entry)
+    if lsim is None:
+        return None
+    path = stack_path(entry, lens['sample_name'])
+    if not path.exists():
+        print(f"no lensing stacks for {sim_label(entry)} ({path.name})")
+        return None
+    with np.load(path) as f:
+        if str(f['settings']) != sample_settings(lens['stack'], z):
+            raise ValueError(f"{path} was stacked with other settings than the config's "
+                             "lensing block gives; rerun stack_stellar_maps.py")
+        N, T, factor = f['N_mean'], f['T_mean'], float(f['factor'])
+        out = dict(theta=f['theta_arcmin'], n_haloes=int(f['n_haloes']), z=float(f['z']),
+                   sample_name=str(f['sample_name']), cfg={},
+                   checks={k: (str(f[k]) if k == 'explicit_config' else float(f[k]))
+                           for k in ('check_stackmap_N', 'check_stackmap_T', 'explicit_config',
+                                     'explicit_check_N', 'explicit_check_T') if k in f.files})
+        for c in f['configs']:
+            v, tag = str(c).split('__')
+            A, B = f[f"A_mean__{c}"], f[f"B_mean__{c}"]
+            pre = f"mapdiag__{v}__{tag}__"
+            out['cfg'][(v, tag)] = dict(
+                f={s: f_of_scale(N, T, A, B, s, factor) for s in scales},
+                mapdiag={k[len(pre):]: float(f[k]) for k in f.files if k.startswith(pre)})
+    return out
+
+
+def analyse(entry: dict, config: dict, lensing: bool = False) -> dict:
+    """Stellar-transfer quantities (and context models) for one simulation.
+
+    With ``lensing``, also the lensing f_gas(theta) (``lensing_result``) as 'lens'.
+    """
     scales = [float(s) for s in config['stellar']['stellar_scales']]
     dmo = np.load(spectra_path(entry, 'dmo'))
     comp_path = spectra_path(entry, 'components')
@@ -198,6 +260,7 @@ def analyse(entry: dict, config: dict) -> dict:
             mc = float(f['mstar_cache'])
             res['mstar_cache'] = mc if np.isfinite(mc) else res['mstar_box'] + res['mwind_box']
             res['mbaryon'] = res['mstar_box'] + res['mwind_box'] + float(f['mgas_box'])
+    res['lens'] = lensing_result(entry, config, scales) if lensing else None
     return res
 
 
@@ -292,20 +355,63 @@ def fig_methods(results: list, s: float, kmax: float, path: Path, z_label=None) 
     h = [plt.Line2D([], [], color=VARIANT_COLOUR[nm]) for nm in names] + \
         [plt.Line2D([], [], color='gray', ls=ls) for ls in TAG_STYLE[:len(tags)]] + hc
     lab = [variant_label(nm) for nm in names] + [tag_label(t) for t in tags] + lc
-    axes.flat[0].legend(h, lab, fontsize=8, loc='lower left', title=rf'$s={s:g}$', title_fontsize=9)
+    title = r'selected stars $\to$ ionized gas' if s == 0.0 else rf'$s={s:g}$'
+    axes.flat[0].legend(h, lab, fontsize=8, loc='lower left', title=title, title_fontsize=9)
     _finish_grid(fig, axes, len(results), r'$P_{\rm mm}(s)/P_{\rm mm} - 1\;[\%]$', path, z_label)
 
 
+def _lensing_panel(ax, have: list, colours: list, variant: str, tag: str, lens_data,
+                   xmax: float) -> None:
+    """f_gas(theta) at s = 1 (solid, markers) and the lowest s (dashed), with the data."""
+    missing = []
+    for r, col in zip(have, colours):
+        L = r.get('lens')
+        if L is None or (variant, tag) not in L['cfg']:
+            missing.append(r['label'])
+            continue
+        fs = L['cfg'][(variant, tag)]['f']
+        s_lo = min(fs)
+        th = L['theta']
+        ax.plot(th, fs[1.0], color=col, lw=2, marker='o', ms=4)
+        ax.plot(th, fs[s_lo], color=col, lw=1.5, ls='--')
+        ax.fill_between(th, fs[1.0], fs[s_lo], color=col, alpha=0.2, lw=0)
+    if missing:
+        print(f"  {variant} {tag}: no lensing stacks for {', '.join(missing)} (bottom panel)")
+    h = [plt.Line2D([], [], color='gray', lw=2, marker='o', ms=4),
+         plt.Line2D([], [], color='gray', lw=1.5, ls='--')]
+    lab = ['simulation', r'selected stars $\to$ ionized gas']
+    if lens_data is not None:
+        h.append(ax.errorbar(lens_data['theta'], lens_data['f'], yerr=lens_data['err'], fmt='s',
+                             color='k', ms=6, capsize=2, zorder=5))
+        lab.append(r'DESI $\times$ ACT $\times$ HSC (beam-corrected)')
+    ax.axhline(1.0, color='k', lw=1)
+    ax.grid(True, which='major', color='0.8', lw=0.8)
+    ax.set_axisbelow(True)
+    ax.set_xlim(0.0, xmax)
+    ax.set_xlabel(r'$\theta\;[\mathrm{arcmin}]$')
+    ax.set_ylabel(r'$f_{\rm gas}(\theta)$')
+    ax.legend(h, lab, loc='best', framealpha=0.85, fontsize=10)
+
+
 def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
-               z_label=None) -> None:
-    """S(k) from the simulation (s = 1) to all selected stars moved (s = 0), dS below."""
+               z_label=None, bottom: str = 'dS', lens_data=None, lens_xmax: float = 6.5) -> None:
+    """S(k) from the simulation (s = 1) to all selected stars moved (s = 0).
+
+    Below: the lensing f_gas(theta) under the same transfer (bottom='lensing';
+    ``_lensing_panel``, own theta axis) or dS on the shared k axis (bottom='dS',
+    the earlier figure).
+    """
     have = [r for r in results if (variant, tag) in r['cfg']]
     if not have:
         print(f"no {variant} {tag} spectra; skipping {path.name}")
         return
     colours = [sim_colour(r) for r in have]
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True,
-                                   gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.05))
+    if bottom == 'dS':
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True,
+                                       gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.05))
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10.5),
+                                       gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.28))
     for r, col in zip(have, colours):
         d = r['cfg'][(variant, tag)]
         sel = r['k'] <= kmax
@@ -314,20 +420,26 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
         ax1.plot(k, r['S0'][sel], color=col, lw=2, label=r['label'])
         ax1.plot(k, d['S'][s_lo][sel], color=col, lw=1.5, ls='--')
         ax1.fill_between(k, r['S0'][sel], d['S'][s_lo][sel], color=col, alpha=0.2, lw=0)
-        ax2.plot(k, d['dS'][s_lo][sel], color=col, lw=2)
+        if bottom == 'dS':
+            ax2.plot(k, d['dS'][s_lo][sel], color=col, lw=2)
     ax1.axhline(1.0, color='k', lw=1)
     _style_axis(ax1)
-    _style_axis(ax2)
+    if bottom == 'dS':
+        _style_axis(ax2)
     _k_range(ax1, have, kmax)
     ax1.set_ylabel(r'$S(k) = P_{\rm mm}/P_{\rm DMO}$')
     ax1.legend(loc='lower left', framealpha=0.85)
     title = f"stars moved to ionized gas: {variant_label(variant)}, {tag_label(tag)}"
-    ax1.set_title(f"{z_label}; {title}" if z_label else title, fontsize=13)
-    ax2.axhline(0.0, color='k', lw=1)
-    ax2.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
-    ax2.set_ylabel(r'$\Delta S = S(s{=}0) - S$')
-    ax2.plot([], [], color='gray', lw=2, label=r'simulation (solid, top); $s=0$ (dashed top, solid bottom)')
-    ax2.legend(loc='lower left', framealpha=0.85, fontsize=10)
+    ax1.set_title(f"{z_label}\n{title}" if z_label else title, fontsize=13)
+    if bottom == 'dS':
+        ax2.axhline(0.0, color='k', lw=1)
+        ax2.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
+        ax2.set_ylabel(r'$\Delta S = S(s{=}0) - S$')
+        ax2.plot([], [], color='gray', lw=2, label=r'simulation (solid, top); $s=0$ (dashed top, solid bottom)')
+        ax2.legend(loc='lower left', framealpha=0.85, fontsize=10)
+    else:
+        ax1.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
+        _lensing_panel(ax2, have, colours, variant, tag, lens_data, lens_xmax)
     fig.savefig(path, bbox_inches='tight')
     plt.close(fig)
     print(f"saved {path}")
@@ -419,6 +531,67 @@ def write_table(results: list, config: dict, path: Path) -> None:
     print(f"saved {path}")
 
 
+def write_lensing_table(results: list, config: dict, path: Path) -> None:
+    """f_gas(theta) at s = 1 and at the lowest s, and the lensing validation numbers."""
+    lens = lensing_settings(config)
+    L = ["# Lensing observable under the halo-level stellar transfer (stack_stellar_maps.py).",
+         "# f(theta; s) = <DSigma[ionized_gas + t A]> / <DSigma[total + t (A - B)]> * Omega_m/Omega_b,",
+         "#   t = 1 - s; A, B = ionized gas added / stars removed at s = 0 (compute_stellar_maps.py).",
+         f"# Stacked sample (fixed for every s): '{lens['sample_name']}', settings of {lens['config_path']}"
+         + (f" with overrides {config['lensing'].get('overrides')}" if config['lensing'].get('overrides') else ""),
+         "# Configurations as in the P(k) table: <variant>/<tag>."]
+    if config['plot'].get('z_label'):
+        L.insert(1, f"# Redshift: {config['plot']['z_label']}")
+    for r in results:
+        Ls = r.get('lens')
+        L.append(f"\n## {r['label']}")
+        if Ls is None:
+            L.append("(no lensing stacks)")
+            continue
+        confs = sorted(Ls['cfg'], key=lambda c: (list(VARIANT_COLOUR).index(c[0])
+                                                 if c[0] in VARIANT_COLOUR else 9, float(c[1][1:])))
+        L.append(f"# z = {Ls['z']:g}; {Ls['n_haloes']:,} haloes stacked")
+        if not confs:
+            L.append("(no transfer stacks)")
+            continue
+        s_lo = min(Ls['cfg'][confs[0]]['f'])
+        names = ['s=1'] + [f"{c[0]}/{c[1]}" for c in confs]
+        for qty in ('f', 'rel'):
+            L.append(f"# f(s={s_lo:g})" if qty == 'f' else f"# f(s={s_lo:g}) / f(s=1) - 1 [%]")
+            L.append(f"{'theta':>7s} " + " ".join(f"{nm:>8s}" for nm in names))
+            f1 = Ls['cfg'][confs[0]]['f'][1.0]
+            for i, th in enumerate(Ls['theta']):
+                vals = [Ls['cfg'][c]['f'][s_lo][i] for c in confs]
+                if qty == 'f':
+                    row = [f1[i]] + vals
+                    L.append(f"{th:7.3f} " + " ".join(f"{v:8.4f}" for v in row))
+                else:
+                    row = [100 * (v / f1[i] - 1.0) for v in vals]
+                    L.append(f"{th:7.3f} {'':>8s} " + " ".join(f"{v:+8.2f}" for v in row))
+        L.append("# validation")
+        ch = Ls['checks']
+        if 'check_stackmap_N' in ch:
+            L.append(f"#   stack_on_array (this sample) vs stackMap (lensing path): N {ch['check_stackmap_N']:.1e}, "
+                     f"T {ch['check_stackmap_T']:.1e}")
+        if 'explicit_check_N' in ch:
+            L.append(f"#   explicit maps at s = 0.5 ({ch['explicit_config']}) vs linear combination: "
+                     f"N {ch['explicit_check_N']:.1e}, T {ch['explicit_check_T']:.1e}")
+        for c in confs:
+            md = Ls['cfg'][c]['mapdiag']
+            if not md:
+                continue
+            parts = [f"sum A/moved-1 {md['sum_added_rel']:+.1e}", f"sum B/moved-1 {md['sum_removed_rel']:+.1e}",
+                     f"per-halo {md['max_halo_cons']:.1e}"]
+            if 'moved_vs_3d' in md:
+                parts.append(f"moved vs 3D run {md['moved_vs_3d']:+.1e}, active haloes {int(md['active_vs_3d']):+d}")
+            if 'neg_star_mass' in md:
+                parts.append(f"neg. stars (2D Stars - B) {md['neg_star_mass'] / max(md['mstar_moved'], 1e-30):+.1e} "
+                             f"({int(md['neg_star_pixels'])} pixels)")
+            L.append(f"#   {c[0]}/{c[1]}: " + "; ".join(parts))
+    path.write_text("\n".join(L) + "\n")
+    print(f"saved {path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('-p', '--path2config', required=True)
@@ -431,10 +604,26 @@ def main() -> None:
                         help="mass-cut tag of the stellar-scale figure, e.g. M11 (default: every cut)")
     parser.add_argument('--band-tag', default=None,
                         help="mass-cut tag of the S(k) band figures (default: every cut)")
+    parser.add_argument('--bottom', choices=['lensing', 'dS'], default=None,
+                        help="bottom panel of the S(k) band figures: the lensing f_gas(theta) "
+                             "(default with a 'lensing' config block) or dS (the earlier figure)")
     parser.add_argument('--suffix', default='')
     args = parser.parse_args()
 
     config = load_config(args.path2config)
+    bottom = args.bottom or ('lensing' if 'lensing' in config else 'dS')
+    if bottom == 'lensing' and 'lensing' not in config:
+        raise SystemExit(f"--bottom lensing needs a 'lensing' block in {args.path2config}")
+    lens_data, lens_xmax = None, 6.5
+    if bottom == 'lensing':
+        lens = lensing_settings(config)
+        lens_xmax = lens['stack']['max_radius'] * lens['stack']['rad_distance'] + 0.5
+        if lens['data'] and Path(lens['data']).exists():
+            with np.load(lens['data']) as dd:
+                lens_data = dict(theta=dd['theta_arcmin'], f=dd['R_compensated'],
+                                 err=dd['sigma_compensated'])
+        else:
+            print(f"no beam-compensated data at {lens['data']}; the lensing panel has no data points")
     plot_cfg = config['plot']
     now = datetime.now()
     out_dir = Path(plot_cfg['fig_path']) / now.strftime('%Y-%m') / now.strftime('%m-%d')
@@ -443,26 +632,37 @@ def main() -> None:
     ext = plot_cfg.get('fig_type', 'pdf')
     all_tags = [mass_tag(m) for m in sorted(float(m) for m in config['stellar']['halo_mass_min'])]
 
-    results = []
+    # plot.exclude_sims: simulations left out of the figures (kept in the tables)
+    excluded = set(plot_cfg.get('exclude_sims') or [])
+    results, fig_results = [], []
     for entry in select_sims(config, args.sims):
         if not any(spectra_path(entry, f"stellar_{v['name']}").exists() for v in variants_of(config)):
             print(f"no stellar-transfer spectra for {sim_label(entry)}; skipping")
             continue
-        results.append(analyse(entry, config))
+        results.append(analyse(entry, config, lensing=bottom == 'lensing'))
+        if {sim_label(entry), entry['name'], entry.get('feedback')} & excluded:
+            print(f"{sim_label(entry)}: left out of the figures (plot.exclude_sims), kept in the tables")
+        else:
+            fig_results.append(results[-1])
     if not results:
         raise SystemExit("no stellar-transfer spectra found")
+    if not fig_results:
+        raise SystemExit("every simulation is in plot.exclude_sims")
 
     s_min = min(float(s) for s in config['stellar']['stellar_scales'])
     z_label = plot_cfg.get('z_label')  # optional figure title, e.g. for z ~ 0.26
     for tag in ([args.scale_tag] if args.scale_tag else all_tags):
-        fig_scales(results, args.scale_variant, tag, args.kmax,
+        fig_scales(fig_results, args.scale_variant, tag, args.kmax,
                    out_dir / f"{stem}_stellar_scales_{args.scale_variant}_{tag}.{ext}", z_label)
-    fig_methods(results, s_min, args.kmax, out_dir / f"{stem}_stellar_methods.{ext}", z_label)
+    fig_methods(fig_results, s_min, args.kmax, out_dir / f"{stem}_stellar_methods.{ext}", z_label)
     for btag in ([args.band_tag] if args.band_tag else all_tags):
         for v in variants_of(config):
-            fig_S_band(results, v['name'], btag, args.kmax,
-                       out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}", z_label)
+            fig_S_band(fig_results, v['name'], btag, args.kmax,
+                       out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}", z_label,
+                       bottom=bottom, lens_data=lens_data, lens_xmax=lens_xmax)
     write_table(results, config, out_dir / f"{stem}_stellar_table.txt")
+    if bottom == 'lensing':
+        write_lensing_table(results, config, out_dir / f"{stem}_stellar_lensing_table.txt")
 
 
 if __name__ == '__main__':

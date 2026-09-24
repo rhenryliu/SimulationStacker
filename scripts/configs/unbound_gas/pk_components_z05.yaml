@@ -78,10 +78,30 @@ stellar:
   halo_mass_min: [1.0e11, 1.0e12, 1.0e13]    # FoF GroupMass cuts [Msun/h]
   stellar_scales: [1.0, 0.75, 0.5, 0.25, 0.0]
 
+# Lensing observable in the bottom panel of make_pk_stellar.py's _stellar_S_
+# figures: the beam-free simulation f_gas(theta) of
+# lensing/beam_compensated_ratio_v2.py under the same transfer. Read ONLY by
+# compute_stellar_maps.py, stack_stellar_maps.py and make_pk_stellar.py.
+# The stacking settings, redshifts and halo sample come from `config` (a
+# lensing noBeam config); `overrides` replaces any of them (e.g.
+# halo_abundance_target) and `sample_name` tags the stacked output, so stacks
+# of other samples coexist (the transfer maps do not depend on the sample).
+# `data`: the beam-compensated measurement written by the lensing script.
+lensing:
+  config: configs/lensing/mass_ratio_noBeam_z05.yaml
+  data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.5.npz
+  sample_name: 'lens'
+  overrides: {}
+
 plot:
   fig_path: '../figures/'
   fig_name: 'pk_components_z05'
   fig_type: 'pdf'
+  z_label: '$z \simeq 0.5$'      # figure title (make_pk_stellar.py only)
+  # Simulations left out of make_pk_stellar.py's figures (its tables keep
+  # them), matched like its --sims (label, name or feedback). SIMBA is left
+  # out for now (user decision 2026-09-24); delete the line to restore it.
+  exclude_sims: ['m100n1024']
 
 # ---------------------------------------------------------------------------
 # Simulations. `n_pixels` is the 3D grid (voxels per side) of the cached fields.

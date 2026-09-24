@@ -36,6 +36,10 @@ Outputs in <fig_path>/YYYY-MM/MM-DD/ (fig_name from the config):
   <fig_name>_stellar_table.txt    budgets, Q and dS at pk.k_table, large-scale
                                   Q, and every validation number
 
+Figures stop at k = 5 h/Mpc (--kmax), have grid lines, and colour the
+simulations as the lensing P(k) suppression figure (lensing/plot_pk_suppression.py);
+in the per-simulation panel figures colour encodes s or the method instead.
+
 Without a components spectra file (e.g. z ~ 0.26, configs/unbound_gas/pk_stellar_z026.yaml)
 the global context curve is omitted and the baryon budget comes from the
 particle pass; without local-model spectra the local curve is omitted. An
@@ -64,6 +68,48 @@ import halo_transfer as ht
 VARIANT_COLOUR = {'fof': 'C0', 'ap1': 'C1', 'ap2': 'C2'}
 TAG_STYLE = ['-', '--', ':']
 
+# Simulation colours of the lensing P(k) suppression figure
+# (lensing/plot_pk_suppression.py, after the lensing paper figures): suite group
+# i takes colourmap ['plasma', 'twilight'][i] sampled on linspace(0.2, 0.85, n)
+# over the group's simulations (SIMBA: m100n1024; IllustrisTNG: TNG300-1,
+# Illustris-1), and the FLAMINGO variants have fixed colours. Copied rather
+# than imported: importing that script would override this script's rcParams.
+_SUITE_COLOURS = {
+    'SIMBA': ('plasma', ['m100n1024']),
+    'IllustrisTNG': ('twilight', ['TNG300-1', 'Illustris-1']),
+}
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
+
+def sim_colour(r: dict):
+    """Colour of a simulation, as in the lensing P(k) suppression figure."""
+    if r['sim_type'] == 'FLAMINGO':
+        return _FLAMINGO_COLOURS.get(r['feedback'], 'k')
+    cmap_name, names = _SUITE_COLOURS[r['sim_type']]
+    cols = matplotlib.colormaps[cmap_name](np.linspace(0.2, 0.85, len(names)))  # type: ignore
+    return cols[names.index(r['name'])] if r['name'] in names else 'k'
+
+
+def _style_axis(ax) -> None:
+    """Log k axis with the lensing figure's grid lines."""
+    ax.set_xscale('log')
+    ax.grid(True, which='major', color='0.8', lw=0.8)
+    ax.grid(True, which='minor', axis='x', color='0.9', lw=0.5)
+    ax.set_axisbelow(True)
+
+
+def _k_range(ax, results: list, kmax: float) -> None:
+    """Shared k range: from just below the smallest k plotted to exactly kmax.
+
+    Set once after all panels are drawn (a limit set earlier would freeze the
+    shared axis before the larger boxes' low-k points are plotted).
+    """
+    ax.set_xlim(min(float(r['k'][0]) for r in results) / 1.2, kmax)
+
 
 def variant_label(name: str) -> str:
     """Legend label of a method variant."""
@@ -90,7 +136,8 @@ def analyse(entry: dict, config: dict) -> dict:
     if not np.allclose(dmo['k'], k, rtol=1e-10):
         raise ValueError(f"k bins differ between the DMO and components spectra of {sim_label(entry)}")
     P_dmo = dmo['P_dmo']
-    res = dict(label=mpl.label_of(entry), sim_type=entry['sim_type'], k=k, P_dmo=P_dmo,
+    res = dict(label=mpl.label_of(entry), sim_type=entry['sim_type'], name=entry['name'],
+               feedback=entry.get('feedback'), k=k, P_dmo=P_dmo,
                nmodes=ref['Nmodes'], kF=2 * np.pi / float(ref['box_mpc']), scales=scales,
                mstar_cache=np.nan, mbaryon=np.nan, budget_from_particles=comp is None,
                Q_global=None, dS_global=None, cfg={})
@@ -217,8 +264,9 @@ def fig_scales(results: list, variant: str, tag: str, kmax: float, path: Path,
             ax.plot(r['k'][sel], 100 * d['Q'][s][sel], color=c, lw=1.8, label=rf'$s={s:g}$')
         _context(ax, r, sel)
         ax.axhline(0.0, color='gray', lw=0.8)
-        ax.set_xscale('log')
+        _style_axis(ax)
         ax.set_title(r['label'], fontsize=13)
+    _k_range(axes.flat[0], have, kmax)
     h, lab = axes.flat[0].get_legend_handles_labels()
     hc, lc = _context_legend(have)
     axes.flat[0].legend(h + hc, lab + lc, fontsize=9, loc='lower left',
@@ -240,8 +288,9 @@ def fig_methods(results: list, s: float, kmax: float, path: Path, z_label=None) 
                     ax.plot(r['k'][sel], 100 * d['Q'][s][sel], color=VARIANT_COLOUR[nm], ls=ls, lw=1.6)
         _context(ax, r, sel)
         ax.axhline(0.0, color='gray', lw=0.8)
-        ax.set_xscale('log')
+        _style_axis(ax)
         ax.set_title(r['label'], fontsize=13)
+    _k_range(axes.flat[0], results, kmax)
     hc, lc = _context_legend(results)
     h = [plt.Line2D([], [], color=VARIANT_COLOUR[nm]) for nm in names] + \
         [plt.Line2D([], [], color='gray', ls=ls) for ls in TAG_STYLE[:len(tags)]] + hc
@@ -257,7 +306,7 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
     if not have:
         print(f"no {variant} {tag} spectra; skipping {path.name}")
         return
-    colours = mpa.colours_for(have)
+    colours = [sim_colour(r) for r in have]
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True,
                                    gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.05))
     for r, col in zip(have, colours):
@@ -272,7 +321,9 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
         if r['dS_global'] is not None:
             ax2.plot(k, r['dS_global'][sel], color=col, lw=1, ls=':')
     ax1.axhline(1.0, color='k', lw=1)
-    ax1.set_xscale('log')
+    _style_axis(ax1)
+    _style_axis(ax2)
+    _k_range(ax1, have, kmax)
     ax1.set_ylabel(r'$S(k) = P_{\rm mm}/P_{\rm DMO}$')
     ax1.legend(loc='lower left', framealpha=0.85)
     title = f"stars moved to ionized gas: {variant_label(variant)}, {tag_label(tag)}"
@@ -379,7 +430,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('-p', '--path2config', required=True)
     parser.add_argument('--sims', nargs='*', default=None)
-    parser.add_argument('--kmax', type=float, default=10.0)
+    parser.add_argument('--kmax', type=float, default=5.0,
+                        help="largest k plotted [h/Mpc] (default 5)")
     parser.add_argument('--scale-variant', default='fof',
                         help="method variant of the stellar-scale figure (default fof)")
     parser.add_argument('--scale-tag', default=None,

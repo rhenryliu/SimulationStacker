@@ -111,7 +111,11 @@ treatment change is needed.
 Config (`stellar:` block; ignored by every other script): `methods`
 (`membership`, `aperture`), `aperture_radii` (x, units of R200m),
 `halo_mass_min` (FoF GroupMass cuts, M⊙/h), `stellar_scales` (plots only).
-Optional `plot.z_label` titles the figures. Where no `_Pk_components_` file
+Optional `plot.z_label` titles the figures. Figures stop at k = 5 h/Mpc
+(`--kmax`), have grid lines, and colour the simulations as the lensing P(k)
+suppression figure (`lensing/plot_pk_suppression.py`: twilight for TNG300-1 /
+Illustris-1, plasma for SIMBA, fixed FLAMINGO colours); in the per-simulation
+panel figures colour encodes s (`_scales_`) or the method (`_methods_`). Where no `_Pk_components_` file
 exists (z ≈ 0.26), `compute_pk_stellar.py` checks its estimator against the
 Pylians `P_total` of the `_Pk_dmo_` file, skips the negative-stellar-mass check
 when there is no Stars cache, and `make_pk_stellar.py` omits the global context

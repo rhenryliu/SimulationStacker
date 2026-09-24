@@ -28,7 +28,9 @@ fields are then built and measured one configuration at a time.
 
 Spectra use the numba estimator of compute_pk_local.py (identical to
 Pylians: same k bins, mode counting, TSC deconvolution); the estimator's
-P_mm is checked against the Pylians P_total of the components file.
+P_mm is checked against the Pylians P_total of the components file, or of the
+DMO spectra file where no components file exists (z ~ 0.26). Without a
+cached Stars field the negative-stellar-mass check is skipped.
 
 Validation written to every file (see the docs for thresholds): total mass
 conservation of D on the grid; per-halo conservation of the particle
@@ -61,7 +63,7 @@ import numpy as np
 import scipy.fft as sfft
 
 from compute_pk_local import cross_power
-from pk_common import (COMPONENTS, box_size_mpc, load_config, load_field,
+from pk_common import (COMPONENTS, box_size_mpc, field_path, load_config, load_field,
                        save_npz_atomic, select_sims, sim_label, spectra_path)
 
 import halo_transfer as ht
@@ -131,8 +133,12 @@ def run_sim(entry: dict, config: dict, only, overwrite: bool, max_chunks) -> Non
     print(f"  particle pass in {time.time() - t0:.0f} s; true stars {tot['mstar']:.4e}, "
           f"winds {tot['mwind']:.3e}, ionized gas {tot['mion']:.4e} Msun/h")
 
-    # ---- original spectrum with the numba estimator, checked against Pylians
-    comp = np.load(spectra_path(entry, 'components'))
+    # ---- original spectrum with the numba estimator, checked against Pylians.
+    # The Pylians reference is P_total of the components file, or of the DMO
+    # spectra file where no components file exists (e.g. at z ~ 0.26).
+    comp_path = spectra_path(entry, 'components')
+    ref_kind = 'components' if comp_path.exists() else 'dmo'
+    comp = np.load(spectra_path(entry, ref_kind))
     t0 = time.time()
     F = np.empty((2, n, n, n // 2 + 1), dtype=np.complex64)
     field = load_field(entry, 'total')
@@ -143,12 +149,20 @@ def run_sim(entry: dict, config: dict, only, overwrite: bool, max_chunks) -> Non
     k, nmodes, P = cross_power(F[:1], F[:1], box_mpc, [inv], [inv])
     P_mm = P[0, 0]
     if len(comp['k']) != len(k) or not np.allclose(comp['k'], k, rtol=1e-10):
-        raise RuntimeError("k bins differ from the Pylians components file")
+        raise RuntimeError(f"k bins differ from the Pylians {ref_kind} spectra file")
     dev = float(np.max(np.abs(P_mm / comp['P_total'] - 1.0)))
-    print(f"  P_mm in {time.time() - t0:.0f} s; max rel diff vs Pylians P_total = {dev:.2e}")
+    print(f"  P_mm in {time.time() - t0:.0f} s; max rel diff vs Pylians P_total "
+          f"({ref_kind} file) = {dev:.2e}")
     if dev > 1e-4:
         raise RuntimeError(f"estimator disagrees with Pylians (max rel diff {dev:.2e})")
-    mstar_cache = float(comp['means'][COMPONENTS.index('Stars')]) * n ** 3
+    # Cached Stars mass (includes TNG/Illustris winds): from the components
+    # file, else from the Stars cache when it exists (read below), else NaN.
+    has_stars_cache = field_path(entry['sim_type'], entry['name'], entry['snapshot'],
+                                 entry.get('feedback'), 'Stars', n).exists()
+    mstar_cache = (float(comp['means'][COMPONENTS.index('Stars')]) * n ** 3
+                   if ref_kind == 'components' else np.nan)
+    if not has_stars_cache:
+        print("  no Stars cache: the negative-stellar-mass check is skipped")
 
     cat_mstar = None
     if any(v['method'] == 'membership' for v in variants):
@@ -159,6 +173,7 @@ def run_sim(entry: dict, config: dict, only, overwrite: bool, max_chunks) -> Non
     explicit_done = False
     for v in variants:
         res = dict(k=k, Nmodes=nmodes, P_mm=P_mm, max_rel_diff_vs_pylians=dev,
+                   pylians_reference=ref_kind,
                    mean_total=mean_total, mass_total=mean_total * n ** 3,
                    box_mpc=box_mpc, n_pixels=n, variant=v['name'], method=v['method'],
                    x=v['x'], halo_mass_min=np.array(cuts),
@@ -170,7 +185,10 @@ def run_sim(entry: dict, config: dict, only, overwrite: bool, max_chunks) -> Non
             tag = mass_tag(mcut)
             t1 = time.time()
             first = i == 0
-            stars = load_field(entry, 'Stars') if first else None
+            stars = load_field(entry, 'Stars') if first and has_stars_cache else None
+            if stars is not None and not np.isfinite(mstar_cache):
+                mstar_cache = float(np.sum(stars, dtype=np.float64))
+                res['mstar_cache'] = mstar_cache
             D, diag = ht.transfer_field(store, v['name'], gmass, mcut, n, box,
                                         stars_field=stars, keep_halo_table=first)
             del stars

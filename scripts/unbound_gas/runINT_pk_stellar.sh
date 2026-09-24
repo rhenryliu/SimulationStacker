@@ -16,6 +16,9 @@
 #       bash unbound_gas/runINT_pk_stellar.sh
 # Extra arguments for compute_pk_stellar.py go in $EXTRA, e.g.
 #   EXTRA="--max-chunks 2" (smoke test, nothing saved) or EXTRA="--variants fof".
+# Another config (e.g. z ~ 0.26) via $CONFIG:
+#   CONFIG=configs/unbound_gas/pk_stellar_z026.yaml SIMS="TNG300-1 Illustris-1" \
+#       salloc -q interactive -C cpu -N 2 -t 2:00:00 -A desi bash unbound_gas/runINT_pk_stellar.sh
 #
 # Finished method variants (one file each) are skipped unless --overwrite.
 
@@ -31,7 +34,7 @@ export NUMBA_NUM_THREADS=128
 # reads like a failure in the logs -- raise the cap to match.
 export NUMEXPR_MAX_THREADS=128
 
-CONFIG=configs/unbound_gas/pk_components_z05.yaml
+CONFIG=${CONFIG:-configs/unbound_gas/pk_components_z05.yaml}
 SIMS=${SIMS:-"L1_m9 fgas-8sigma Jet_fgas-4sigma TNG300-1 Illustris-1 m100n1024"}
 EXTRA=${EXTRA:-""}
 NODES=${SLURM_JOB_NUM_NODES:-1}
@@ -40,7 +43,7 @@ LOGDIR=../Outputs_Perlmutter
 mkdir -p "$LOGDIR"
 
 echo "########## P(k) stellar transfer (interactive) ##########"
-echo "allocation : job $JOB, $NODES node(s); sims: $SIMS; extra: $EXTRA"
+echo "allocation : job $JOB, $NODES node(s); config: $CONFIG; sims: $SIMS; extra: $EXTRA"
 
 run_sim () {
     local s=$1

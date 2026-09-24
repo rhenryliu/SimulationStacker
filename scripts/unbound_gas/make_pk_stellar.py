@@ -36,8 +36,14 @@ Outputs in <fig_path>/YYYY-MM/MM-DD/ (fig_name from the config):
   <fig_name>_stellar_table.txt    budgets, Q and dS at pk.k_table, large-scale
                                   Q, and every validation number
 
+Without a components spectra file (e.g. z ~ 0.26, configs/unbound_gas/pk_stellar_z026.yaml)
+the global context curve is omitted and the baryon budget comes from the
+particle pass; without local-model spectra the local curve is omitted. An
+optional plot.z_label titles the figures.
+
 Run from the scripts/ directory (light; login node is fine):
     python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_components_z05.yaml
+    python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_stellar_z026.yaml
 """
 
 import argparse
@@ -75,21 +81,28 @@ def analyse(entry: dict, config: dict) -> dict:
     """Stellar-transfer quantities (and context models) for one simulation."""
     scales = [float(s) for s in config['stellar']['stellar_scales']]
     dmo = np.load(spectra_path(entry, 'dmo'))
-    comp = np.load(spectra_path(entry, 'components'))
-    k = comp['k']
+    comp_path = spectra_path(entry, 'components')
+    # Without a components file (e.g. z ~ 0.26) there is no global context curve,
+    # and the baryon budget comes from the particle pass (see below).
+    comp = np.load(comp_path) if comp_path.exists() else None
+    ref = comp if comp is not None else dmo
+    k = ref['k']
     if not np.allclose(dmo['k'], k, rtol=1e-10):
         raise ValueError(f"k bins differ between the DMO and components spectra of {sim_label(entry)}")
     P_dmo = dmo['P_dmo']
-    n = int(comp['n_pixels'])
-    means = comp['means']
-    w = means / means.sum()
-    P0g = mpa.p_of(w, comp['P'])
-    Pg = mpa.p_of(mpa.weights_move(w, [mpa.I_ST], 'ionized'), comp['P'])
     res = dict(label=mpl.label_of(entry), sim_type=entry['sim_type'], k=k, P_dmo=P_dmo,
-               nmodes=comp['Nmodes'], kF=2 * np.pi / float(comp['box_mpc']), scales=scales,
-               mstar_cache=float(means[mpa.I_ST]) * n ** 3,
-               mbaryon=float(means[1:].sum()) * n ** 3,
-               Q_global=Pg / P0g - 1.0, dS_global=(Pg - P0g) / P_dmo, cfg={})
+               nmodes=ref['Nmodes'], kF=2 * np.pi / float(ref['box_mpc']), scales=scales,
+               mstar_cache=np.nan, mbaryon=np.nan, budget_from_particles=comp is None,
+               Q_global=None, dS_global=None, cfg={})
+    if comp is not None:
+        n = int(comp['n_pixels'])
+        means = comp['means']
+        w = means / means.sum()
+        P0g = mpa.p_of(w, comp['P'])
+        Pg = mpa.p_of(mpa.weights_move(w, [mpa.I_ST], 'ionized'), comp['P'])
+        res.update(mstar_cache=float(means[mpa.I_ST]) * n ** 3,
+                   mbaryon=float(means[1:].sum()) * n ** 3,
+                   Q_global=Pg / P0g - 1.0, dS_global=(Pg - P0g) / P_dmo)
     try:
         loc = mpl.analyse(entry, config)['local'].get(('tophat', 1.0, 'ionized', 'stars'))
     except (FileNotFoundError, KeyError):
@@ -130,6 +143,12 @@ def analyse(entry: dict, config: dict) -> dict:
             dsum = diag['sn_S1'] + diag['sn_S2'] - diag['sn_S3']
             d['dPsn_rel'] = res['box_mpc'] ** 3 * dsum / res['mass_total'] ** 2 / P_mm[-1]
             res['cfg'][(v['name'], tag)] = d
+        if res['budget_from_particles']:
+            # PartType4 mass: the Stars cache when it was read, else stars + winds
+            # from the particle pass; baryons = PartType4 + gas (BH not included).
+            mc = float(f['mstar_cache'])
+            res['mstar_cache'] = mc if np.isfinite(mc) else res['mstar_box'] + res['mwind_box']
+            res['mbaryon'] = res['mstar_box'] + res['mwind_box'] + float(f['mgas_box'])
     return res
 
 
@@ -145,7 +164,9 @@ def _panel_grid(n: int):
     return fig, axes
 
 
-def _finish_grid(fig, axes, n, ylabel, path):
+def _finish_grid(fig, axes, n, ylabel, path, z_label=None):
+    if z_label:
+        fig.suptitle(z_label, fontsize=16)
     for ax in axes.flat[n:]:
         ax.set_visible(False)
     for ax in axes[-1]:
@@ -159,14 +180,28 @@ def _finish_grid(fig, axes, n, ylabel, path):
 
 
 def _context(ax, r, sel, which='Q'):
-    ax.plot(r['k'][sel], 100 * r[f'{which}_global'][sel] if which == 'Q' else r[f'{which}_global'][sel],
-            color='k', ls=':', lw=1.2)
+    if r[f'{which}_global'] is not None:
+        ax.plot(r['k'][sel], 100 * r[f'{which}_global'][sel] if which == 'Q' else r[f'{which}_global'][sel],
+                color='k', ls=':', lw=1.2)
     if r[f'{which}_local'] is not None:
         ax.plot(r['k'][sel], 100 * r[f'{which}_local'][sel] if which == 'Q' else r[f'{which}_local'][sel],
                 color='gray', ls='-.', lw=1.2)
 
 
-def fig_scales(results: list, variant: str, tag: str, kmax: float, path: Path) -> None:
+def _context_legend(results):
+    """Legend handles and labels of the context curves present in any result."""
+    h, lab = [], []
+    if any(r['Q_global'] is not None for r in results):
+        h.append(plt.Line2D([], [], color='k', ls=':'))
+        lab.append('all stars, global')
+    if any(r['Q_local'] is not None for r in results):
+        h.append(plt.Line2D([], [], color='gray', ls='-.'))
+        lab.append(r'all stars, local $R=1$')
+    return h, lab
+
+
+def fig_scales(results: list, variant: str, tag: str, kmax: float, path: Path,
+               z_label=None) -> None:
     """Q(k) = P_mm(s)/P_mm - 1 for every stellar scale s, one panel per simulation."""
     have = [r for r in results if (variant, tag) in r['cfg']]
     if not have:
@@ -185,14 +220,13 @@ def fig_scales(results: list, variant: str, tag: str, kmax: float, path: Path) -
         ax.set_xscale('log')
         ax.set_title(r['label'], fontsize=13)
     h, lab = axes.flat[0].get_legend_handles_labels()
-    h += [plt.Line2D([], [], color='k', ls=':'), plt.Line2D([], [], color='gray', ls='-.')]
-    lab += ['all stars, global', r'all stars, local $R=1$']
-    axes.flat[0].legend(h, lab, fontsize=9, loc='lower left',
+    hc, lc = _context_legend(have)
+    axes.flat[0].legend(h + hc, lab + lc, fontsize=9, loc='lower left',
                         title=f"{variant_label(variant)}, {tag_label(tag)}", title_fontsize=9)
-    _finish_grid(fig, axes, len(have), r'$P_{\rm mm}(s)/P_{\rm mm} - 1\;[\%]$', path)
+    _finish_grid(fig, axes, len(have), r'$P_{\rm mm}(s)/P_{\rm mm} - 1\;[\%]$', path, z_label)
 
 
-def fig_methods(results: list, s: float, kmax: float, path: Path) -> None:
+def fig_methods(results: list, s: float, kmax: float, path: Path, z_label=None) -> None:
     """Q(k) at one stellar scale for every method variant and mass cut."""
     fig, axes = _panel_grid(len(results))
     tags = sorted({t for r in results for (_, t) in r['cfg']}, key=lambda t: float(t[1:]))
@@ -208,16 +242,16 @@ def fig_methods(results: list, s: float, kmax: float, path: Path) -> None:
         ax.axhline(0.0, color='gray', lw=0.8)
         ax.set_xscale('log')
         ax.set_title(r['label'], fontsize=13)
+    hc, lc = _context_legend(results)
     h = [plt.Line2D([], [], color=VARIANT_COLOUR[nm]) for nm in names] + \
-        [plt.Line2D([], [], color='gray', ls=ls) for ls in TAG_STYLE[:len(tags)]] + \
-        [plt.Line2D([], [], color='k', ls=':'), plt.Line2D([], [], color='gray', ls='-.')]
-    lab = [variant_label(nm) for nm in names] + [tag_label(t) for t in tags] + \
-        ['all stars, global', r'all stars, local $R=1$']
+        [plt.Line2D([], [], color='gray', ls=ls) for ls in TAG_STYLE[:len(tags)]] + hc
+    lab = [variant_label(nm) for nm in names] + [tag_label(t) for t in tags] + lc
     axes.flat[0].legend(h, lab, fontsize=8, loc='lower left', title=rf'$s={s:g}$', title_fontsize=9)
-    _finish_grid(fig, axes, len(results), r'$P_{\rm mm}(s)/P_{\rm mm} - 1\;[\%]$', path)
+    _finish_grid(fig, axes, len(results), r'$P_{\rm mm}(s)/P_{\rm mm} - 1\;[\%]$', path, z_label)
 
 
-def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path) -> None:
+def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path,
+               z_label=None) -> None:
     """S(k) from the simulation (s = 1) to all selected stars moved (s = 0), dS below."""
     have = [r for r in results if (variant, tag) in r['cfg']]
     if not have:
@@ -235,18 +269,20 @@ def fig_S_band(results: list, variant: str, tag: str, kmax: float, path: Path) -
         ax1.plot(k, d['S'][s_lo][sel], color=col, lw=1.5, ls='--')
         ax1.fill_between(k, r['S0'][sel], d['S'][s_lo][sel], color=col, alpha=0.2, lw=0)
         ax2.plot(k, d['dS'][s_lo][sel], color=col, lw=2)
-        ax2.plot(k, r['dS_global'][sel], color=col, lw=1, ls=':')
+        if r['dS_global'] is not None:
+            ax2.plot(k, r['dS_global'][sel], color=col, lw=1, ls=':')
     ax1.axhline(1.0, color='k', lw=1)
     ax1.set_xscale('log')
     ax1.set_ylabel(r'$S(k) = P_{\rm mm}/P_{\rm DMO}$')
     ax1.legend(loc='lower left', framealpha=0.85)
-    ax1.set_title(f"stars moved to ionized gas: {variant_label(variant)}, {tag_label(tag)}",
-                  fontsize=13)
+    title = f"stars moved to ionized gas: {variant_label(variant)}, {tag_label(tag)}"
+    ax1.set_title(f"{z_label}; {title}" if z_label else title, fontsize=13)
     ax2.axhline(0.0, color='k', lw=1)
     ax2.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
     ax2.set_ylabel(r'$\Delta S = S(s{=}0) - S$')
     ax2.plot([], [], color='gray', lw=2, label=r'simulation (solid, top); $s=0$ (dashed top, solid bottom)')
-    ax2.plot([], [], color='gray', lw=1, ls=':', label='all stars like the global ionized gas')
+    if any(r['dS_global'] is not None for r in have):
+        ax2.plot([], [], color='gray', lw=1, ls=':', label='all stars like the global ionized gas')
     ax2.legend(loc='lower left', framealpha=0.85, fontsize=10)
     fig.savefig(path, bbox_inches='tight')
     plt.close(fig)
@@ -272,6 +308,8 @@ def write_table(results: list, config: dict, path: Path) -> None:
          "#   M<n> = FoF GroupMass >= 10^n Msun/h. 'global' / 'local1': all (cached) stars laid out",
          "#   like the box-wide ionized gas / moved within 1 Mpc/h (sphere) like the local ionized gas.",
          "# 'large-scale': mode-weighted mean over k <= 3 k_F."]
+    if config['plot'].get('z_label'):
+        L.insert(1, f"# Redshift: {config['plot']['z_label']}")
     for r in results:
         confs = sorted(r['cfg'], key=lambda c: (list(VARIANT_COLOUR).index(c[0])
                                                 if c[0] in VARIANT_COLOUR else 9, float(c[1][1:])))
@@ -283,6 +321,9 @@ def write_table(results: list, config: dict, path: Path) -> None:
         L.append(f"# budget [Msun/h]: true stars {r['mstar_box']:.4e}; wind particles {r['mwind_box']:.3e} "
                  f"({r['mwind_box'] / (r['mstar_box'] + r['mwind_box']):.4f} of PartType4); cached Stars "
                  f"{r['mstar_cache']:.4e}; stellar share of baryons (cache) {fstar:.4f}")
+        if r['budget_from_particles']:
+            L.append("# (no components spectra: 'cached Stars' is the Stars cache or, without one, all PartType4")
+            L.append("#  from the particle pass; baryons = PartType4 + gas, BH not included; 'global' column empty)")
         L.append(f"{'config':>9s} {'N_active':>9s} {'f_moved':>8s} {'f_kept':>8s} {'f_SF':>7s} "
                  f"{'f_p50':>7s} {'f_p90':>7s} {'f_p99':>7s} {'>1':>6s} {'f*(s=0)':>8s}")
         for c in confs:
@@ -368,12 +409,14 @@ def main() -> None:
 
     s_min = min(float(s) for s in config['stellar']['stellar_scales'])
     tag = args.scale_tag or lowest
+    z_label = plot_cfg.get('z_label')  # optional figure title, e.g. for z ~ 0.26
     fig_scales(results, args.scale_variant, tag, args.kmax,
-               out_dir / f"{stem}_stellar_scales_{args.scale_variant}_{tag}.{ext}")
-    fig_methods(results, s_min, args.kmax, out_dir / f"{stem}_stellar_methods.{ext}")
+               out_dir / f"{stem}_stellar_scales_{args.scale_variant}_{tag}.{ext}", z_label)
+    fig_methods(results, s_min, args.kmax, out_dir / f"{stem}_stellar_methods.{ext}", z_label)
     btag = args.band_tag or lowest
     for v in variants_of(config):
-        fig_S_band(results, v['name'], btag, args.kmax, out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}")
+        fig_S_band(results, v['name'], btag, args.kmax,
+                   out_dir / f"{stem}_stellar_S_{v['name']}_{btag}.{ext}", z_label)
     write_table(results, config, out_dir / f"{stem}_stellar_table.txt")
 
 

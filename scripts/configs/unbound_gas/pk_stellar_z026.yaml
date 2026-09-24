@@ -1,0 +1,84 @@
+# pk_stellar_z026.yaml
+# ---------------------
+# Halo-level stellar-to-ionized-gas transfer (unbound gas paper, P(k) section)
+# at z ~ 0.26: the same analysis as the `stellar:` block of
+# pk_components_z05.yaml, at the lensing low-z snapshots.
+#
+# Read by (run from the scripts/ directory):
+#   unbound_gas/compute_pk_stellar.py   -- transfer fields and spectra
+#   unbound_gas/make_pk_stellar.py      -- figures and table
+#   (launched with CONFIG=<this file> bash unbound_gas/runINT_pk_stellar.sh)
+#
+# Snapshots and DMO references follow configs/lensing/pk_dmo_z026.yaml, whose
+# run wrote the hydro `total`/`Stars` caches and the *_Pk_dmo_* spectra used
+# here (no *_Pk_components_* spectra exist at these snapshots, so the Pylians
+# check uses the DMO file's P_total and the global/local context curves are
+# omitted). FLAMINGO: snapshot 71 (z = 0.30), the only low-z snapshot with a
+# DMO counterpart. SIMBA is left out: its public DM-only run has no snapshot
+# near z = 0.27 (user decision 2026-09-24). Illustris-1 116 has no Stars
+# cache: its negative-stellar-mass check is skipped.
+
+pk:
+  threads: 128
+  k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
+
+stellar:
+  methods: ['membership', 'aperture']
+  aperture_radii: [1.0, 2.0]                 # x, in units of R200m
+  halo_mass_min: [1.0e11, 1.0e12, 1.0e13]    # FoF GroupMass cuts [Msun/h]
+  stellar_scales: [1.0, 0.75, 0.5, 0.25, 0.0]
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_stellar_z026'
+  fig_type: 'pdf'
+  z_label: '$z \simeq 0.26$ (FLAMINGO: $z = 0.30$)'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 80              # z = 0.2613 (TNG mini snapshot; all fields used exist)
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 80
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_080/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 116             # z = 0.2613
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 116
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_116/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71              # z = 0.30
+    redshift: 0.3
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 71
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

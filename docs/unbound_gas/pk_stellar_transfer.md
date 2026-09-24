@@ -5,8 +5,10 @@
 config block `stellar:` in `scripts/configs/unbound_gas/pk_components_z05.yaml`,
 tests in `tests/test_halo_transfer.py`; small additions to `src/mapMaker.py`
 (ionized-mass helper, behaviour unchanged) and `src/loadIO.py` (membership
-readers). Uncommitted at the time of writing. Spectra exist for all six
-simulations (§5). Companion to `pk_suppression_components.md` (the global and
+readers). z ≈ 0.5 committed as `30a6e34`; spectra exist for all six
+simulations (§5). z ≈ 0.26 (FLAMINGO z = 0.30) added the same day for five
+simulations, SIMBA excluded (§9; config `configs/unbound_gas/pk_stellar_z026.yaml`).
+Companion to `pk_suppression_components.md` (the global and
 local models, unchanged). Working log:
 `NOTES/unbound_gas/session_log_2026-09-23_pk_stellar_transfer.md` (untracked).
 
@@ -104,11 +106,17 @@ treatment change is needed.
 | `src/halo_transfer.py` | membership and aperture labels, per-halo bookkeeping, `collect_particles` (one pass over stars and gas), `transfer_field` (D and diagnostics), `p_of_scale` | — | — |
 | `compute_pk_stellar.py` | per simulation: one particle pass, then for each method × mass cut D and its spectra (numba estimator of `compute_pk_local.py`, identical to Pylians); validation (§4); `--variants`, `--overwrite`, `--max-chunks N` (smoke test, nothing saved) | CPU node | `<stem>_Pk_stellar_<variant>_<n>.npz` |
 | `make_pk_stellar.py` | Q for every s, method comparison at s = 0, S bands with ΔS, table; the global and local stars-only models as context | login | `<fig>_stellar_scales_<variant>_<tag>`, `_stellar_methods`, `_stellar_S_<variant>_<tag>`, `_stellar_table.txt` |
-| `runINT_pk_stellar.sh` | `compute_pk_stellar.py`, one simulation per node; `SIMS`, `EXTRA` env vars | `salloc -N ≤ 4` | logs in `../Outputs_Perlmutter/` |
+| `runINT_pk_stellar.sh` | `compute_pk_stellar.py`, one simulation per node; `SIMS`, `EXTRA`, `CONFIG` env vars | `salloc -N ≤ 4` | logs in `../Outputs_Perlmutter/` |
 
 Config (`stellar:` block; ignored by every other script): `methods`
 (`membership`, `aperture`), `aperture_radii` (x, units of R200m),
 `halo_mass_min` (FoF GroupMass cuts, M⊙/h), `stellar_scales` (plots only).
+Optional `plot.z_label` titles the figures. Where no `_Pk_components_` file
+exists (z ≈ 0.26), `compute_pk_stellar.py` checks its estimator against the
+Pylians `P_total` of the `_Pk_dmo_` file, skips the negative-stellar-mass check
+when there is no Stars cache, and `make_pk_stellar.py` omits the global context
+curve and takes the baryon budget from the particle pass (PartType4 + gas; BH,
+1e-4–3e-3 of the baryons, not included).
 
 Spectra file `<stem>_Pk_stellar_<variant>_<n>.npz` (variant `fof`, `ap1`,
 `ap2`; tag `M11`, `M12`, `M13` = log10 of the cut): `k`, `Nmodes`, `P_mm`
@@ -244,6 +252,9 @@ Reading:
   2-cell stripes) would carry small deficits like the TNG300-1/Illustris-1
   Stars caches' ~4e-5 and the ~400 inconsistent SIMBA void cells
   (companion doc §4–5); the FLAMINGO 2000³ rebuild was bit-identical.
+  Supporting (not conclusive): against the TNG300-1 snap-80 Stars cache, built
+  on 2026-09-23 with the 128-thread export, the negative-stellar residual is
+  −5e-6 of the moved mass (§9), against −3.5e-5 for the old snap-67 cache.
 
 ## 7. Reproduce
 
@@ -262,6 +273,15 @@ Measured cost (one node each; 9 configurations): FLAMINGO ~72 min per variant
 600 chunks, ~4e9 kept gas particles, 240 GB peak); Illustris-1 17 min
 (184 GB); SIMBA-100 5 min (121 GB). A smoke test: `EXTRA="--max-chunks 2"`.
 
+z ≈ 0.26 (§9):
+
+```bash
+SLURM_JOB_ID=<id> SLURM_JOB_NUM_NODES=4 CONFIG=configs/unbound_gas/pk_stellar_z026.yaml \
+    SIMS="Illustris-1 L1_m9 fgas-8sigma Jet_fgas-4sigma TNG300-1" \
+    bash unbound_gas/runINT_pk_stellar.sh
+python unbound_gas/make_pk_stellar.py -p configs/unbound_gas/pk_stellar_z026.yaml
+```
+
 ## 8. Open items (2026-09-24)
 
 - Which configuration(s) go in the paper: membership ≥ 1e11 as the baseline
@@ -274,3 +294,63 @@ Measured cost (one node each; 9 configurations): FLAMINGO ~72 min per variant
   rebuild of one cache at 256 vs 128 threads would settle it.
 - The SIMBA 1 R200m < membership inversion is not understood (CAESAR halo
   extent or centre definition are candidates).
+- z ≈ 0.26 has no global or local context curves and no SIMBA (user decisions
+  2026-09-24): computing them needs the missing ionized-gas and component
+  caches (§9).
+
+## 9. z ≈ 0.26 (FLAMINGO z = 0.30)
+
+Same analysis at the lensing low-z snapshots, config
+`configs/unbound_gas/pk_stellar_z026.yaml` (snapshots and DMO references as in
+`configs/lensing/pk_dmo_z026.yaml`, whose run wrote the hydro `total`/`Stars`
+caches and the `_Pk_dmo_` spectra used here):
+
+| sim | snapshot | z | DMO reference | notes |
+|---|---|---|---|---|
+| TNG300-1 | 80 | 0.2613 | TNG300-1-Dark 80 | a TNG mini snapshot; every field used exists and the FoF ordering holds (catalogue check below) |
+| Illustris-1 | 116 | 0.2613 | Illustris-1-Dark 116 | no Stars cache: negative-stellar check skipped |
+| FLAMINGO ×3 | 71 | 0.30 | L1_m9_DMO 71 | the only low-z snapshot with a DMO run (72, z = 0.25, is fiducial-only and has none) |
+
+Left out (user decisions, 2026-09-24): SIMBA (its public DM-only run has no
+snapshot near z = 0.27, so no S(k)); the global and local context curves (no
+component or local-model spectra exist at these snapshots).
+
+Validation (all 45 configurations): estimator vs the DMO file's Pylians
+P_total ≤ 1.2e-7; explicit field vs formula ≤ 8.4e-8; Σ D / moved ≤ 1e-10;
+per-halo conservation ≤ 2e-13; catalogue M*_h median 2e-8 (TNG300-1) and
+7e-7 (Illustris-1); negative stellar mass −6e-6 (TNG300-1), ≤ −1.9e-5
+(FLAMINGO); Poisson change ≤ 5e-5 of P(k_Nyq); large-scale Q ≤ 0.014%
+(largest for Illustris-1's apertures; ≤ 5e-4 % for TNG300-1 and FLAMINGO). Stars kept for lack of ionized
+gas: none in TNG/Illustris, ≤ 2.6e-4 of the stars in FLAMINGO.
+
+Figures in `figures/2026-09/09-24/`: `pk_stellar_z026_stellar_scales_fof_M11.pdf`,
+`_stellar_methods.pdf`, `_stellar_S_{fof,ap1,ap2}_M11.pdf`, `_stellar_table.txt`.
+
+Q(s = 0) [%] at k ≈ 5 h/Mpc, z ≈ 0.26 (z ≈ 0.5 in brackets); cut ≥ 1e11
+unless noted:
+
+| sim | membership | membership ≥1e13 | 1 R200m | 2 R200m | ΔS(k≈5), membership |
+|---|---|---|---|---|---|
+| TNG300-1 | −1.54 (−1.54) | −1.43 (−1.39) | −2.02 (−1.98) | −2.67 (−2.76) | −0.014 (−0.014) |
+| Illustris-1 | −3.97 (−3.49) | −3.65 (−3.09) | −4.55 (−4.14) | −6.45 (−6.34) | −0.027 (−0.026) |
+| FLAMINGO L1_m9 | −3.09 (−2.96) | −2.85 (−2.64) | −3.65 (−3.45) | −5.05 (−5.03) | −0.027 (−0.026) |
+| fgas-8sigma | −3.69 (−3.42) | −3.42 (−3.08) | −4.18 (−3.84) | −5.79 (−5.67) | −0.030 (−0.028) |
+| Jet_fgas-4sigma | −2.67 (−2.49) | −2.44 (−2.21) | −3.15 (−2.92) | −4.43 (−4.37) | −0.022 (−0.020) |
+
+Stars moved (membership ≥ 1e11 / ≥ 1e13): 0.988/0.422 (TNG300-1),
+0.940/0.353 (Illustris-1), 0.996/0.343, 0.996/0.323, 0.986/0.290 (FLAMINGO).
+Stellar share of the baryons (particle-pass budget): 0.0305, 0.0637 (PartType4
+incl. winds), 0.0596, 0.0659, 0.0622.
+
+Reading: the halo-level effect barely changes between z ≈ 0.5 and z ≈ 0.26.
+With the membership regions it grows by 0 (TNG300-1) to 14% (Illustris-1) at
+k ≈ 5 while the stellar mass grows by 7–11%. With the 2 R200m apertures it
+changes by ≤ 3.3%. Everything found at z ≈ 0.5 holds:
+- no large-scale offset;
+- ≥ 1e13 haloes give 91–93% of the effect at k ≈ 5;
+- Q(s = 0.5)/Q(s = 0) = 0.50;
+- the regions rank the same (1 R200m 1.1–1.3×, 2 R200m 1.6–1.7× membership).
+
+Cost: FLAMINGO 72–74 min per variant (223–226 GB), TNG300-1 74 min (264 GB),
+Illustris-1 17 min (123 GB); allocation 58827894, 4 nodes, 1 h 31 min.
+

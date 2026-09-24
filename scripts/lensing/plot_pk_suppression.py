@@ -17,9 +17,19 @@ Simulations are grouped by suite in the same order as
 configs/lensing/mass_ratio_noBeam_z05.yaml, so colours and labels match the
 lensing paper figures.
 
+Optional second redshift: if ``plot.z_label_lowz`` is set, every sim entry
+with a ``snapshot_lowz`` key also gets a dotted curve in its colour, read from
+the spectra file of that snapshot (made with configs/lensing/pk_dmo_z026.yaml),
+and a line-style legend replaces the redshift text once any dotted curve is
+drawn. A sim without
+``snapshot_lowz`` (its optional ``lowz_note`` says why) or without the
+spectra file is skipped with a printed note. Without ``z_label_lowz`` the
+figure is the z ~ 0.5-only one.
+
 Usage
 -----
     python lensing/plot_pk_suppression.py -p configs/lensing/pk_suppression_z05.yaml
+    python lensing/plot_pk_suppression.py -p configs/lensing/pk_suppression_z05_z026.yaml
 """
 
 import sys
@@ -30,6 +40,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import yaml
 
 sys.path.append('../src/')
@@ -119,6 +130,13 @@ def load_suppression(sim_type: str, sim: dict) -> tuple:
     return d['k'], d['P_total'] / d['P_dmo']
 
 
+def print_row(label: str, k: np.ndarray, S: np.ndarray) -> None:
+    """Print S(k) at the _K_PRINT wavenumbers (nearest k bin; '--' beyond Nyquist)."""
+    vals = [f"{S[np.argmin(np.abs(np.log(k / kp)))]:9.3f}" if kp <= k.max()
+            else f"{'--':>9s}" for kp in _K_PRINT]
+    print(f"{label:26s} " + ' '.join(vals))
+
+
 def main(path2config: str) -> None:
     """Plot S(k) for every simulation in the config and save the figure."""
     with open(path2config) as f:
@@ -139,16 +157,37 @@ def main(path2config: str) -> None:
     if isinstance(fig_types, str):
         fig_types = [fig_types]
 
+    # Optional dotted curves at a second (lower) redshift.
+    z_label      = plot_config.get('z_label', r'$z \simeq 0.5$')
+    z_label_lowz = plot_config.get('z_label_lowz')
+
     fig, ax = plt.subplots(figsize=(8, 5.5))
     print(f"{'simulation':26s} " + ' '.join(f"S(k={kp:g})" for kp in _K_PRINT))
+    n_lowz = 0  # dotted curves actually drawn
     for e in sim_entries(config):
         k, S = load_suppression(e['sim_type'], e['sim'])
         sel = k <= kmax
         ax.plot(k[sel], S[sel], color=e['colour'], lw=2.5, label=e['label'])
-        # Nearest k bin; '--' beyond the grid's Nyquist (as make_pk_alpha.py's table).
-        vals = [f"{S[np.argmin(np.abs(np.log(k / kp)))]:9.3f}" if kp <= k.max()
-                else f"{'--':>9s}" for kp in _K_PRINT]
-        print(f"{e['label']:26s} " + ' '.join(vals))
+        print_row(e['label'], k, S)
+
+        if z_label_lowz is None:
+            continue
+        sim = e['sim']
+        if 'snapshot_lowz' not in sim:
+            print(f"  (no dotted curve for {e['label']}: "
+                  f"{sim.get('lowz_note', 'no snapshot_lowz in config')})")
+            continue
+        sim_lowz = dict(sim, snapshot=sim['snapshot_lowz'])
+        try:
+            k_lz, S_lz = load_suppression(e['sim_type'], sim_lowz)
+        except FileNotFoundError as err:
+            print(f"  (no dotted curve for {e['label']}: {err})")
+            continue
+        sel = k_lz <= kmax
+        ax.plot(k_lz[sel], S_lz[sel], color=e['colour'], lw=2.5, ls=':')
+        n_lowz += 1
+        tag = f"z={sim['z_lowz']:g}" if 'z_lowz' in sim else f"snap {sim['snapshot_lowz']}"
+        print_row(f"  {tag}", k_lz, S_lz)
 
     ax.axhline(1.0, color='k', lw=1, ls='--')
     ax.set_xscale('log')
@@ -157,8 +196,17 @@ def main(path2config: str) -> None:
     ax.set_axisbelow(True)
     ax.set_xlabel(r'$k\;[h\,\mathrm{Mpc}^{-1}]$')
     ax.set_ylabel(r'$S(k) = P_{\rm hydro}(k)/P_{\rm DMO}(k)$')
-    ax.text(0.97, 0.95, r'$z \simeq 0.5$', transform=ax.transAxes, ha='right', va='top')
-    ax.legend(loc='lower left', framealpha=0.85)
+    sim_legend = ax.legend(loc='lower left', framealpha=0.85)
+    if n_lowz == 0:
+        ax.text(0.97, 0.95, z_label, transform=ax.transAxes, ha='right', va='top')
+    else:
+        # Line-style key: solid = z ~ 0.5, dotted = the second redshift. Placed
+        # in the empty band at small k, between S = 1 and the simulation legend.
+        ax.add_artist(sim_legend)
+        style_handles = [Line2D([], [], color='k', lw=2.5, ls='-', label=z_label),
+                         Line2D([], [], color='k', lw=2.5, ls=':', label=z_label_lowz)]
+        ax.legend(handles=style_handles, loc='upper left', bbox_to_anchor=(0.0, 0.80),
+                  framealpha=0.85)
     fig.tight_layout()
 
     for ext in fig_types:

@@ -1,0 +1,75 @@
+# Baryonic suppression of the matter power spectrum, S(k) = P_mm / P_DMO
+# (lensing/plot_pk_suppression.py), at z ~ 0.5 (solid) and z ~ 0.26 (dotted).
+# Presentation plot, not a paper figure. Same as pk_suppression_z05.yaml plus
+# the second redshift.
+#
+# Nothing is computed: the spectra come from the *_Pk_dmo_<n_pixels>.npz files
+# written by unbound_gas/compute_pk_components.py. z ~ 0.5: see
+# configs/unbound_gas/pk_components_z05.yaml; z ~ 0.26: see
+# configs/lensing/pk_dmo_z026.yaml (run by lensing/runCPU_pk_dmo_z026.sh).
+# Each sim is referenced to the DMO run with the same initial conditions at the
+# same redshift.
+#
+# z ~ 0.26 snapshots follow mass_ratio_noBeam_z026.yaml. FLAMINGO uses
+# snapshot 71 (z = 0.30): the only low-z snapshot with a DMO counterpart.
+# SIMBA has no dotted curve: no DMO snapshot exists near z = 0.27, and the
+# hydro run's own DM is not an equivalent reference.
+#
+# Suite groups and their order follow mass_ratio_noBeam_z05.yaml, so colours
+# and labels match the lensing paper figures (plasma / twilight / fixed
+# FLAMINGO colours, assigned by group index).
+
+pk:
+  kmax: 10.0   # largest k plotted [h/Mpc]; FLAMINGO stops at its Nyquist, 9.2
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_suppression_z05_z026'
+  fig_type: ['png', 'pdf']
+  dpi: 300
+  z_label: '$z \simeq 0.5$'                                 # solid curves
+  z_label_lowz: '$z \simeq 0.26$ (FLAMINGO: $z = 0.30$)'    # dotted curves
+
+# n_pixels: 3D grid (voxels per side) the spectra were measured on (both z).
+# snapshot_lowz / z_lowz: snapshot and redshift of the dotted curve.
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125          # z = 0.4904
+        feedback: 's50'
+        n_pixels: 1000
+        lowz_note: 'no DMO snapshot near z = 0.27 (public SIMBA DM-only run: z = 0.49, 0.10, 0)'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67           # z = 0.503
+        n_pixels: 1000
+        snapshot_lowz: 80
+        z_lowz: 0.2613
+      - name: 'Illustris-1'
+        snapshot: 103          # z = 0.503
+        n_pixels: 1000
+        snapshot_lowz: 116
+        z_lowz: 0.2613
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67           # z = 0.5
+        feedback: 'L1_m9'
+        n_pixels: 2000
+        snapshot_lowz: 71
+        z_lowz: 0.30
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 2000
+        snapshot_lowz: 71
+        z_lowz: 0.30
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000
+        snapshot_lowz: 71
+        z_lowz: 0.30

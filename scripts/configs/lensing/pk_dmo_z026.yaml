@@ -1,0 +1,81 @@
+# pk_dmo_z026.yaml
+# ----------------
+# Hydro and DMO power spectra at z ~ 0.26 for the dotted curves of the lensing
+# presentation plot lensing/plot_pk_suppression.py (S(k) = P_hydro / P_DMO).
+# Same schema as configs/unbound_gas/pk_components_z05.yaml, restricted to the
+# 'dmo' spectra: only the hydro `total` field and the DMO DM field are used.
+#
+# Read by (run from the scripts/ directory, driven by lensing/runCPU_pk_dmo_z026.sh):
+#   unbound_gas/build_dmo_field.py        -- 3D DM field of each DMO reference run
+#   unbound_gas/compute_pk_components.py  -- with --what dmo: P_total, P_DMO, cross
+#
+# Snapshots follow configs/lensing/mass_ratio_noBeam_z026.yaml. FLAMINGO has no
+# z = 0.26 snapshot with a DMO counterpart (snapshot 72, z = 0.25, exists only
+# for the fiducial hydro run), so snapshot 71 (z = 0.30) is used and labelled so.
+#
+# SIMBA m100n1024 is left out: the public DM-only run has snapshots at
+# z = 0.4904, 0.1025 and 0 only, so there is no DMO reference near the hydro
+# snapshot 136 (z = 0.2668). The hydro run's own DM is not an equivalent
+# reference and is not used.
+#
+# `redshift` is passed to SimulationStacker (pk_common.header_of); the mass
+# fields used here do not depend on it.
+
+pk:
+  threads: 128          # Pylians FFT/loop threads
+
+# ---------------------------------------------------------------------------
+# Simulations. `n_pixels` is the 3D grid (voxels per side), the same as at
+# z ~ 0.5. `dmo.path` is the DMO snapshot location relative to the data root.
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 80              # z = 0.2613
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 80            # z = 0.2613 (TNG mini snapshot)
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_080/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 116             # z = 0.2613
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 116           # z = 0.2613
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_116/'
+
+  # FLAMINGO at 2000^3, as at z ~ 0.5. All three variants share L1_m9_DMO.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71              # z = 0.30
+    redshift: 0.3
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 71
+      # Nested by the download, like snapshot 67; holds flamingo_0071.hdf5
+      # (virtual file, used for the header) and swift_snapshot_0071/.
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

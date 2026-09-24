@@ -1,0 +1,52 @@
+# Baryonic suppression of the matter power spectrum, S(k) = P_mm / P_DMO
+# (lensing/plot_pk_suppression.py). Presentation plot, not a paper figure.
+#
+# Nothing is computed: the spectra come from the *_Pk_dmo_<n_pixels>.npz files
+# written by unbound_gas/compute_pk_components.py (see
+# configs/unbound_gas/pk_components_z05.yaml for how they were made). Each sim
+# is referenced to the DMO run with the same initial conditions.
+#
+# Suite groups and their order follow mass_ratio_noBeam_z05.yaml, so colours
+# and labels match the lensing paper figures (plasma / twilight / fixed
+# FLAMINGO colours, assigned by group index).
+
+pk:
+  kmax: 10.0   # largest k plotted [h/Mpc]; FLAMINGO stops at its Nyquist, 9.2
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_suppression_z05'
+  fig_type: ['png', 'pdf']
+  dpi: 300
+
+# n_pixels: 3D grid (voxels per side) the spectra were measured on.
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 125          # z = 0.4904
+        feedback: 's50'
+        n_pixels: 1000
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67           # z = 0.503
+        n_pixels: 1000
+      - name: 'Illustris-1'
+        snapshot: 103          # z = 0.503
+        n_pixels: 1000
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 67           # z = 0.5
+        feedback: 'L1_m9'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000

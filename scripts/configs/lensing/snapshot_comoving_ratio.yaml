@@ -1,0 +1,29 @@
+# Simulation-only f_gas(R) at the two lensing snapshots, side by side on a
+# common comoving radial grid (lensing/snapshot_comoving_ratio.py).
+#
+# Simulations, snapshots, per-sim redshift overrides, SHAM abundance targets,
+# pixel sizes and particle/filter types all come from the noBeam configs below
+# (the same ones behind beam_compensated_z026.yaml and beam_compensated_z05.yaml).
+# One panel per entry, left to right.
+snapshots:
+  - no_beam_config: mass_ratio_noBeam_z026.yaml
+  - no_beam_config: mass_ratio_noBeam_z05.yaml
+
+# Radial grid and DSigma annulus width, in comoving Mpc/h and shared by both
+# snapshots. 0.4-2.3 cMpc/h is the z=0.5 paper range (1-6 arcmin); at z=0.26 it
+# spans ~1.9-10.8 arcmin. dr = 0.29 cMpc/h is the paper's 0.75 arcmin annulus at
+# z=0.5 (the same 0.75 arcmin would be only 0.16 cMpc/h at z=0.26).
+comoving:
+  min_radius: 0.4
+  max_radius: 2.3
+  num_radii: 9
+  dr: 0.29
+
+n_workers: 12  # processes, one per (snapshot, simulation) stack; 1 runs serially
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'z026_z05'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  plot_r200m: true  # per panel: dotted line at the first IllustrisTNG sim's mean comoving R200m

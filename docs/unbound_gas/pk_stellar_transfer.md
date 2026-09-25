@@ -329,6 +329,9 @@ config, then run only the stacks (`STAGES=stack`; the maps are reused) and
 - z ≈ 0.26 has no global or local context curves and no SIMBA (user decisions
   2026-09-24): computing them needs the missing ionized-gas and component
   caches (§9).
+- Follow-ups: the absolute stellar-fraction (f*) bands built on this transfer
+  are in `pk_fstar_transfer.md`; a physically motivated band is planned
+  (`NOTES/unbound_gas/handoff_physical_stellar_band.md`, untracked).
 - Lensing panel (§10): the stacked sample is the lensing SHAM sample for now
   (user decision 2026-09-24, may change: `lensing.overrides`); only
   ionized_gas/total (a baryon/total variant would need one more stack per

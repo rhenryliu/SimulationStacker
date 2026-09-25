@@ -209,3 +209,12 @@ Jobs (2026-09-24/25): 58854581 (smoke; SIMBA z ≈ 0.5, Illustris-1 both z),
   unless several targets are built in one pass.
 - Targets and the 1 R200m value (0.4) are the user's choices of 2026-09-24;
   SIMBA stays out of the figures while its ionized gas is provisional.
+- **Follow-up (separate task, not started, 2026-09-25):** a physically
+  motivated band. This band scales all stars of a region together, while the
+  poorly constrained component is the central galaxy's envelope + ICL, and its
+  ends lie outside the observed range for ≥ 1e13 haloes. A split of the stars
+  within R200m (≥ 1e13: ~17–35% central within 30 pkpc, ~23–33% envelope +
+  ICL, ~41–51% satellites) and a literature review (R200m stellar fraction of
+  the baryons unconstrained because of the gas beyond R500c; suggested ceiling
+  ~0.30) are in `NOTES/unbound_gas/`; options and context in
+  `NOTES/unbound_gas/handoff_physical_stellar_band.md` (untracked).

@@ -1,0 +1,88 @@
+# pk_fstar_z026.yaml
+# ------------------
+# Stellar-fraction bands at z ~ 0.26 (FLAMINGO z = 0.30): the same analysis as
+# pk_fstar_z05.yaml at the snapshots of pk_stellar_z026.yaml (no SIMBA), whose
+# s = 0 files provide the f* = 0 end.
+#
+# Read by: unbound_gas/compute_fstar.py, stack_fstar_maps.py, make_pk_fstar.py
+# (runINT_fstar.sh with CONFIG=<this file>). pk_stellar_z026.yaml is unchanged.
+
+pk:
+  threads: 128
+  k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
+
+stellar:
+  methods: ['membership', 'aperture']
+  aperture_radii: [1.0, 2.0]
+  halo_mass_min: [1.0e11, 1.0e12, 1.0e13]
+  stellar_scales: [1.0, 0.0]
+
+fstar:
+  targets:
+    fof: 0.5
+    ap1: 0.4
+    ap2: 0.25
+
+lensing:
+  config: configs/lensing/mass_ratio_noBeam_z026.yaml
+  data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.26.npz
+  sample_name: 'lens'
+  overrides: {}
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_fstar_z026'
+  fig_type: 'pdf'
+  z_label: '$z \simeq 0.26$ (FLAMINGO: $z = 0.30$)'
+
+# ---------------------------------------------------------------------------
+# Simulations: copied from pk_stellar_z026.yaml.
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 80              # z = 0.2613 (TNG mini snapshot; all fields used exist)
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 80
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_080/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 116             # z = 0.2613
+    redshift: 0.2613
+    n_pixels: 1000
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 116
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_116/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71              # z = 0.30
+    redshift: 0.3
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 71
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0071/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 71
+    redshift: 0.3
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

@@ -1,0 +1,115 @@
+# pk_fstar_z05.yaml
+# -----------------
+# Stellar-fraction bands (unbound gas paper, P(k) section) at z ~ 0.5: the
+# S(k) and lensing f_gas(theta) figures with the simulation (solid), all
+# selected stars converted to ionized gas (f* = 0, dashed; the s = 0 transfer
+# of pk_components_z05.yaml's `stellar:` block, whose files are reused) and a
+# stellar-fraction floor (dotted): every selected halo region whose star
+# fraction f* = M*/(M* + M_wind + M_gas + M_BH) is below the method's target
+# gains stars laid out like its stars, taken from its ionized gas.
+#
+# Read by (run from the scripts/ directory):
+#   unbound_gas/compute_fstar.py     -- floor fields, spectra and 2D maps
+#   unbound_gas/stack_fstar_maps.py  -- lensing stacks of the floor maps
+#   unbound_gas/make_pk_fstar.py     -- figures and table
+#   (runINT_fstar.sh runs the first two, one simulation per node)
+# pk_components_z05.yaml is unchanged and still reproduces the s figures.
+
+pk:
+  threads: 128
+  k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
+
+# The configurations (methods, apertures, mass cuts) of the s = 0 transfer;
+# the f* = 0 end reads its _Pk_stellar_ spectra and lensing stacks.
+stellar:
+  methods: ['membership', 'aperture']
+  aperture_radii: [1.0, 2.0]                 # x, in units of R200m
+  halo_mass_min: [1.0e11, 1.0e12, 1.0e13]    # FoF GroupMass cuts [Msun/h]
+  stellar_scales: [1.0, 0.0]
+
+# Stellar-fraction floor per method variant (fof = membership, ap1 = 1 R200m,
+# ap2 = 2 R200m apertures): each region's f* is raised to at least the target
+# (user decisions 2026-09-24). Winds count as gas, BH are included.
+fstar:
+  targets:
+    fof: 0.5
+    ap1: 0.4
+    ap2: 0.25
+
+# Same lensing observable, sample and data as pk_components_z05.yaml.
+lensing:
+  config: configs/lensing/mass_ratio_noBeam_z05.yaml
+  data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.5.npz
+  sample_name: 'lens'
+  overrides: {}
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_fstar_z05'
+  fig_type: 'pdf'
+  z_label: '$z \simeq 0.5$'
+  exclude_sims: ['m100n1024']   # SIMBA computed but left out of the figures (for now)
+
+# ---------------------------------------------------------------------------
+# Simulations: copied from pk_components_z05.yaml (same snapshots, grids, DMO).
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 67              # z = 0.503
+    n_pixels: 1000            # 205 ckpc/h voxels, k_Nyq = 15.3 h/Mpc
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 67
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_067/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 103             # z = 0.503
+    n_pixels: 1000            # 75 ckpc/h voxels, k_Nyq = 41.9 h/Mpc
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 103
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_103/'
+
+  - sim_type: 'SIMBA'
+    name: 'm100n1024'
+    snapshot: 125             # z = 0.4904
+    feedback: 's50'
+    n_pixels: 1000            # 100 ckpc/h voxels, k_Nyq = 31.4 h/Mpc
+    dmo:
+      # Public SIMBA DM-only run (simba.roe.ac.uk/simdata/m100n1024/dm/);
+      # its snapshot 009 is at z = 0.4904, the same as hydro snapshot 125.
+      name: 'm100n1024'
+      feedback: 'dm'
+      snapshot: 9
+      path: 'SIMBA/m100n1024/dm/snapshots/snap_m100n1024_009.hdf5'
+
+  # FLAMINGO at 2000^3 (341 ckpc/h voxels, k_Nyq = 9.2 h/Mpc), the grid of the
+  # existing float32 caches. All three variants share the L1_m9_DMO reference.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67              # z = 0.5
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 67
+      # Nested by the download; holds flamingo_0067.hdf5 (virtual file, used
+      # for the header) and swift_snapshot_0067/ (the 32 chunk files).
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

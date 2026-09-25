@@ -40,6 +40,12 @@ are rows of ``SimulationStacker.loadHalos()``; -1 = no halo):
 ``transfer_maps_2d`` is the projected counterpart for stacked profiles: 2D
 maps of the ionized-gas mass added and the stellar mass removed at s = 0,
 binned like the cached 2D fields.
+
+The stellar-fraction floor (``halo_baryons``, ``floor_coefficients``,
+``scaled_transfer_field``, ``scaled_transfer_maps_2d``) is the opposite
+direction with a per-halo amount: each region whose star fraction (true
+stars over all baryons) is below a target gains stars, laid out like its
+stars and taken from its ionized gas, up to the target.
 """
 
 import glob
@@ -63,7 +69,7 @@ except ImportError:
 
 NO_HALO = -1
 FLAMINGO_NO_GROUP = 2147483647  # FOFGroupIDs of particles in no group
-_PTYPE_INDEX = {'gas': 0, 'Stars': 4}
+_PTYPE_INDEX = {'gas': 0, 'Stars': 4, 'BH': 5}
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +161,7 @@ class MembershipLabeller:
         """Membership labels of one chunk's particles of a type.
 
         Args:
-            p_type (str): 'gas' or 'Stars'.
+            p_type (str): 'gas', 'Stars' or 'BH'.
             chunk (int): Chunk index (FLAMINGO membership file).
             global_start (int): Global index of the chunk's first particle of
                 the type (TNG/Illustris ordering; SIMBA has one chunk).
@@ -442,7 +448,7 @@ def _chunk_counts(path):
 
 
 def collect_particles(stacker, variants, halos, mass_min, max_chunks=None,
-                      block_size=100_000_000, verbose=True):
+                      block_size=100_000_000, verbose=True, baryons=False):
     """Read stars and gas once and keep those assigned to a halo by any variant.
 
     Args:
@@ -456,14 +462,18 @@ def collect_particles(stacker, variants, halos, mass_min, max_chunks=None,
         block_size (int): Kept particles are merged into blocks of about this
             size (fewer, larger TSC calls).
         verbose (bool): Print progress.
+        baryons (bool): Also keep the masses and labels (no positions) of the
+            assigned TNG/Illustris wind particles ('Winds') and black holes
+            ('BH'), for per-region baryon budgets (``halo_baryons``).
 
     Returns:
         dict: 'Stars' and 'gas' -> list of blocks; each block has 'pos'
         (float32, wrapped), 'mass' (float32 Msun/h: stellar mass, or
         ionized-gas mass for gas), 'labels' ({variant name: int32}), and for
-        gas 'm_gas' (float32 Msun/h) and 'sf' (bool, star-forming). Also
+        gas 'm_gas' (float32 Msun/h) and 'sf' (bool, star-forming). With
+        ``baryons``, also 'Winds' and 'BH' blocks ('mass', 'labels'). Also
         'totals': box sums over every particle read (true stars, winds, gas,
-        ionized gas, and sums of squared masses).
+        ionized gas, and sums of squared masses; with ``baryons`` also BH).
     """
     st = stacker
     box = float(st.header['BoxSize'])
@@ -481,11 +491,16 @@ def collect_particles(stacker, variants, halos, mass_min, max_chunks=None,
     sfr_key = 'StarFormationRates' if st.simType == 'FLAMINGO' else 'StarFormationRate'
     keys = {'Stars': ['Coordinates', 'Masses'] + (['GFM_StellarFormationTime']
                                                    if st.simType == 'IllustrisTNG' else []),
-            'gas': ['Coordinates'] + ionized_gas_keys(st.simType) + [sfr_key]}
+            'gas': ['Coordinates'] + ionized_gas_keys(st.simType) + [sfr_key],
+            'BH': ['Coordinates', 'Masses']}
+    read_types = ('Stars', 'gas', 'BH') if baryons else ('Stars', 'gas')
+    kept_types = read_types + ('Winds',) if baryons else read_types
 
     totals = {k: 0.0 for k in ('mstar', 'mwind', 'mgas', 'mion', 'm2_stars', 'm2_gas')}
-    out = {'Stars': [], 'gas': []}
-    pending = {'Stars': [], 'gas': []}
+    if baryons:
+        totals['mbh'] = 0.0
+    out = {p: [] for p in kept_types}
+    pending = {p: [] for p in kept_types}
 
     def flush(p_type):
         if pending[p_type]:
@@ -497,11 +512,11 @@ def collect_particles(stacker, variants, halos, mass_min, max_chunks=None,
             pending[p_type].clear()
 
     chunks = _chunks(st)[:max_chunks] if max_chunks else _chunks(st)
-    start = {'Stars': 0, 'gas': 0}
+    start = {p: 0 for p in read_types}
     t0 = time.time()
     for ic, (chunk, path) in enumerate(chunks):
         counts = _chunk_counts(path)
-        for p_type in ('Stars', 'gas'):
+        for p_type in read_types:
             n = int(counts[_PTYPE_INDEX[p_type]])
             g0 = start[p_type]
             start[p_type] += n
@@ -525,8 +540,21 @@ def collect_particles(stacker, variants, halos, mass_min, max_chunks=None,
                 totals['mstar'] += float(mass[star].sum())
                 totals['mwind'] += float(mass[~star].sum())
                 totals['m2_stars'] += float(np.sum(mass[star] ** 2))
-                keep = star & np.any([l_ >= 0 for l_ in labels.values()], axis=0)
+                assigned = np.any([l_ >= 0 for l_ in labels.values()], axis=0)
+                keep = star & assigned
                 blk = dict(pos=pos[keep], mass=mass[keep].astype(np.float32),
+                           labels={k_: l_[keep] for k_, l_ in labels.items()})
+                if baryons:
+                    # masses and labels only (never deposited): kept in small
+                    # per-chunk blocks, merged once at the end
+                    wind = ~star & assigned
+                    if wind.any():
+                        pending['Winds'].append(dict(mass=mass[wind].astype(np.float32),
+                                                     labels={k_: l_[wind] for k_, l_ in labels.items()}))
+            elif p_type == 'BH':
+                totals['mbh'] += float(mass.sum())
+                keep = np.any([l_ >= 0 for l_ in labels.values()], axis=0)
+                blk = dict(mass=mass[keep].astype(np.float32),
                            labels={k_: l_[keep] for k_, l_ in labels.items()})
             else:
                 mion = ionized_gas_masses(part, st)
@@ -785,3 +813,187 @@ def transfer_maps_2d(store, name, halo_mass, mass_min, n_pixels):
         max_halo_removed=float(rem.max()),
     )
     return maps['added'], maps['removed'], diag
+
+
+# ---------------------------------------------------------------------------
+# Stellar-fraction floor (per-halo scaled transfer)
+# ---------------------------------------------------------------------------
+
+def halo_baryons(store, name, halo_mass, mass_min):
+    """Baryonic mass per halo region of one configuration.
+
+    Needs a store from ``collect_particles(..., baryons=True)``.
+
+    Args:
+        store (dict): Particle store.
+        name (str): Variant name (key of the stored labels).
+        halo_mass (np.ndarray): GroupMass per halo row (Msun/h).
+        mass_min (float): Halo mass cut (Msun/h).
+
+    Returns:
+        dict: float64 arrays over halo rows (Msun/h): 'mstar' (true stars),
+        'mwind' (TNG/Illustris wind particles), 'mgas' (all gas), 'mion'
+        (ionized gas), 'mbh' (black holes) and 'mbaryon' (stars + winds +
+        gas + BH). Zero for haloes below the cut.
+    """
+    n = len(halo_mass)
+    spec = (('mstar', 'Stars', 'mass'), ('mion', 'gas', 'mass'), ('mgas', 'gas', 'm_gas'),
+            ('mwind', 'Winds', 'mass'), ('mbh', 'BH', 'mass'))
+    out = {}
+    for key, p_type, field in spec:
+        tot = np.zeros(n)
+        for blk in store[p_type]:
+            tot += halo_totals(restrict_labels(blk['labels'][name], halo_mass, mass_min),
+                               blk[field], n)
+        out[key] = tot
+    out['mbaryon'] = out['mstar'] + out['mwind'] + out['mgas'] + out['mbh']
+    return out
+
+
+def floor_coefficients(bary, f_target):
+    """Stars to add so that every region's star fraction is at least f_target.
+
+    With f*_h = M*_h / M_b,h (``halo_baryons``: true stars over stars + winds
+    + gas + BH), a region below the target gains dM_h = f_target M_b,h - M*_h
+    of stars, laid out like its stars and taken from its ionized gas in
+    proportion to the ionized mass; regions at or above the target are
+    unchanged (a floor). A region with less ionized gas than dM_h converts all
+    of it (capped); regions without stars (no stellar template) or without
+    ionized gas stay unchanged.
+
+    Args:
+        bary (dict): From ``halo_baryons``.
+        f_target (float): Target star fraction.
+
+    Returns:
+        tuple: (coef, info): coef_h = dM_h / M*_h (0 where unchanged), so the
+        change is coef_h m*_j on each star and -coef_h (M*_h / M_ion,h) m_ion,i
+        on each gas particle; info has 'dm' and the boolean arrays 'raised',
+        'capped', 'no_stars', 'no_ion' (over regions with baryons).
+    """
+    ms, mi, mb = bary['mstar'], bary['mion'], bary['mbaryon']
+    need = f_target * mb - ms
+    below = (mb > 0) & (need > 0)
+    no_stars = below & ~(ms > 0)
+    no_ion = below & (ms > 0) & ~(mi > 0)
+    raised = below & (ms > 0) & (mi > 0)
+    dm = np.zeros(len(ms))
+    dm[raised] = np.minimum(need[raised], mi[raised])
+    coef = np.zeros(len(ms))
+    coef[raised] = dm[raised] / ms[raised]
+    return coef, dict(dm=dm, raised=raised, capped=raised & (need > mi),
+                      no_stars=no_stars, no_ion=no_ion)
+
+
+def _scaled_weights(store, name, halo_mass, mass_min, coef, bary):
+    """Per-block weights of the scaled transfer: yields (p_type, block, sel, labels, w).
+
+    Stars gain w = coef_h m*_j; ionized gas loses coef_h (M*_h / M_ion,h)
+    m_ion,i, returned as a positive w (the removed mass).
+    """
+    ratio = np.zeros(len(halo_mass))
+    ok = bary['mion'] > 0
+    ratio[ok] = bary['mstar'][ok] / bary['mion'][ok]
+    for p_type in ('Stars', 'gas'):
+        for blk in store[p_type]:
+            lab = restrict_labels(blk['labels'][name], halo_mass, mass_min)
+            sel = lab >= 0
+            sel[sel] = coef[lab[sel]] > 0
+            ls = lab[sel]
+            w = blk['mass'][sel].astype(np.float64) * coef[ls]
+            if p_type == 'gas':
+                w *= ratio[ls]
+            yield p_type, blk, sel, ls, w
+
+
+def _floor_diag(bary, coef, info, f_target, per_halo):
+    """Bookkeeping of one floor configuration (shared by the 3D and 2D builds)."""
+    dm, raised, capped = info['dm'], info['raised'], info['capped']
+    ms, mb, mi = bary['mstar'], bary['mbaryon'], bary['mion']
+    has = mb > 0
+    moved = float(dm.sum())
+    r = raised
+    cons = [np.abs(per_halo[k][r] - dm[r]) / dm[r] if r.any() else np.zeros(1)
+            for k in ('Stars', 'gas')]
+    f_after = np.where(has, (ms + dm) / np.where(has, mb, 1.0), 0.0)
+    ok = r & ~capped
+    return dict(
+        f_target=float(f_target),
+        n_regions=int(has.sum()),
+        n_raised=int(r.sum()), n_capped=int(capped.sum()),
+        n_no_stars=int(info['no_stars'].sum()), n_no_ion=int(info['no_ion'].sum()),
+        mbaryon_regions=float(mb[has].sum()), mstar_regions=float(ms[has].sum()),
+        mwind_regions=float(bary['mwind'][has].sum()), mbh_regions=float(bary['mbh'][has].sum()),
+        mgas_regions=float(bary['mgas'][has].sum()), mion_regions=float(mi[has].sum()),
+        fstar_sim=float(ms[has].sum() / mb[has].sum()) if has.any() else np.nan,
+        fstar_after=float((ms[has] + dm[has]).sum() / mb[has].sum()) if has.any() else np.nan,
+        mstar_added=moved,
+        mstar_added_capped=float(dm[capped].sum()),
+        mbaryon_no_stars=float(mb[info['no_stars']].sum()),
+        mbaryon_no_ion=float(mb[info['no_ion']].sum()),
+        max_halo_cons_stars=float(cons[0].max()), max_halo_cons_gas=float(cons[1].max()),
+        max_removed_over_mion=float((dm[r] / mi[r]).max()) if r.any() else 0.0,
+        min_fstar_after_minus_target=float((f_after[ok] - f_target).min()) if ok.any() else 0.0,
+    )
+
+
+def scaled_transfer_field(store, name, halo_mass, mass_min, coef, info, bary, f_target,
+                          n_pixels, box):
+    """3D change field of the stellar-fraction floor: stars added minus ionized gas removed.
+
+    Args:
+        store (dict): From ``collect_particles(..., baryons=True)``.
+        name (str): Variant name.
+        halo_mass (np.ndarray): GroupMass per halo row (Msun/h).
+        mass_min (float): Halo mass cut (Msun/h).
+        coef, info: From ``floor_coefficients``.
+        bary (dict): From ``halo_baryons``.
+        f_target (float): The target (for the diagnostics).
+        n_pixels (int): Grid size per side.
+        box (float): Box size (kpc/h).
+
+    Returns:
+        tuple: (H, diag): H float64 (n, n, n) in Msun/h per cell (TSC, as the
+        cached fields), zero total mass; diag from ``_floor_diag`` plus the
+        grid sums.
+    """
+    n_halo = len(halo_mass)
+    grid = np.zeros((n_pixels,) * 3, dtype=np.float64)
+    per_halo = {'Stars': np.zeros(n_halo), 'gas': np.zeros(n_halo)}
+    for p_type, blk, sel, ls, w in _scaled_weights(store, name, halo_mass, mass_min, coef, bary):
+        per_halo[p_type] += np.bincount(ls, weights=w, minlength=n_halo)
+        deposit(grid, blk['pos'][sel], w if p_type == 'Stars' else -w, box)
+    diag = _floor_diag(bary, coef, info, f_target, per_halo)
+    moved = diag['mstar_added']
+    diag['sum_H'] = float(grid.sum(dtype=np.float64))
+    diag['sum_H_rel'] = diag['sum_H'] / moved if moved > 0 else 0.0
+    return grid, diag
+
+
+def scaled_transfer_maps_2d(store, name, halo_mass, mass_min, coef, info, bary, f_target,
+                            n_pixels):
+    """2D maps of the stellar-fraction floor: stars added and ionized gas removed.
+
+    Same weights as ``scaled_transfer_field``, binned like the cached 2D
+    fields (every block needs a 'pix' index from ``pixel_index_2d``). For the
+    lensing ratio, ionized_gas -> ionized_gas - gas_removed and
+    total -> total + stars_added - gas_removed.
+
+    Returns:
+        tuple: (stars_added, gas_removed, diag): float64 (n, n) in Msun/h per
+        pixel, both >= 0; diag from ``_floor_diag`` plus the map sums.
+    """
+    n_halo = len(halo_mass)
+    n = int(n_pixels)
+    maps = {'Stars': np.zeros(n * n), 'gas': np.zeros(n * n)}
+    per_halo = {'Stars': np.zeros(n_halo), 'gas': np.zeros(n_halo)}
+    for p_type, blk, sel, ls, w in _scaled_weights(store, name, halo_mass, mass_min, coef, bary):
+        per_halo[p_type] += np.bincount(ls, weights=w, minlength=n_halo)
+        maps[p_type] += np.bincount(blk['pix'][sel], weights=w, minlength=n * n)
+    diag = _floor_diag(bary, coef, info, f_target, per_halo)
+    moved = diag['mstar_added']
+    diag['sum_stars_added'] = float(maps['Stars'].sum())
+    diag['sum_gas_removed'] = float(maps['gas'].sum())
+    diag['sum_stars_rel'] = (diag['sum_stars_added'] - moved) / moved if moved > 0 else 0.0
+    diag['sum_gas_rel'] = (diag['sum_gas_removed'] - moved) / moved if moved > 0 else 0.0
+    return maps['Stars'].reshape(n, n), maps['gas'].reshape(n, n), diag

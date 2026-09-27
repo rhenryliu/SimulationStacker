@@ -2,15 +2,15 @@
 # ====================
 # Configuration for make_ratios3x2.py
 #
-# Produces a 3×2 figure of particle-type fraction profiles normalised by the
+# Produces a grid of particle-type fraction profiles normalised by the
 # cosmic baryon fraction (OmegaBaryon / OmegaMatter).
 #
-#   Top row    : TNG suite  (TNG50-1, TNG100-1, TNG300-1, Illustris-1)
-#   Bottom row : SIMBA suite
+#   Rows (one per suite, config order): IllustrisTNG, SIMBA, FLAMINGO
 #
-#   Col 0  : 3D spherical profiles        (radius in comoving kpc/h)
-#   Col 1  : 2D projected, cumulative     (radius in arcmin)
-#   Col 2  : 2D projected, CAP filter     (radius in arcmin)
+#   Columns (stack.columns): '3d'   = 3D spherical profiles (comoving kpc/h)
+#                            'col1' = 2D projected, cumulative (arcmin)
+#                            'col2' = 2D projected, CAP filter (arcmin)
+#   The paper figure shows all three columns.
 
 stack:
   # Redshift of the simulation snapshot targeted
@@ -66,6 +66,9 @@ stack:
   filter_type_col2:   'CAP'
   filter_type_2_col2: 'CAP'
 
+  # Columns drawn, left to right (default ['3d', 'col1', 'col2']).
+  columns: ['3d', 'col1', 'col2']
+
 
 plot:
   fig_path: '../figures/'
@@ -116,3 +119,24 @@ simulations:
       - name: 'm100n1024'
         snapshot: 125
         feedback: 's50'
+
+  # ----------------------------------------------------------------
+  # FLAMINGO suite — third row. feedback holds the variant directory name
+  # ('L1_m9' = fiducial). n_pixels: 2000 gives 341 ckpc/h voxels in the 3D
+  # column (1000 would give 681 ckpc/h, coarser than R200m); still coarser
+  # than TNG300-1's 205 ckpc/h at 1000.
+  # ----------------------------------------------------------------
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000

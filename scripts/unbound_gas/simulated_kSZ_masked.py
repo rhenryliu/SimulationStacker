@@ -24,7 +24,7 @@ sys.path.append('../src/')
 # from filter_utils import *
 # from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
-from utils import arcmin_to_comoving, comoving_to_arcmin
+from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from halos import select_massive_halos
 # Sibling module in this directory (Python puts the running script's own
 # directory on sys.path); must come after the '../src/' append above.
@@ -118,6 +118,9 @@ def main(path2config, verbose=True):
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
+    # Layout options; the defaults reproduce the original figure.
+    showSuptitle = plot_config.get('suptitle', True)
+    rowHeight = plot_config.get('row_height', 4.5)  # inches per row
 
     colourmaps = ['hot', 'cool']
     colourmaps = ['hsv', 'twilight', 'plasma']
@@ -126,7 +129,7 @@ def main(path2config, verbose=True):
     # columns. Deriving nRows from the config (rather than hardcoding it) keeps
     # the script working when a suite is commented out of the YAML.
     nRows = len(config['simulations'])
-    fig, axes = plt.subplots(nRows, 4, figsize=(18, 4.5 * nRows), sharex=True, sharey=True)
+    fig, axes = plt.subplots(nRows, 4, figsize=(18, rowHeight * nRows), sharex=True, sharey=True)
     axes = np.atleast_2d(axes)
     
     # Define mask configurations: [maskRadii=1, 2, 3, False]
@@ -187,6 +190,10 @@ def main(path2config, verbose=True):
                 
                 if verbose:
                     print(f"Processing simulation: {sim_name}")
+
+                # Legend label; differs from sim_name (used in the halo-mass
+                # table) only for FLAMINGO, whose TeX label is not plain text.
+                plot_label = None
                 
                 if sim_type_name == 'IllustrisTNG':
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
@@ -234,8 +241,10 @@ def main(path2config, verbose=True):
                                                 feedback=feedback)
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
-                    # '-' instead of '_' so the label renders under usetex
+                    # '-' instead of '_' so the table name is plain text
                     sim_name = f"FLAMINGO {feedback}".replace('_', '-')
+                    # The row label already names the suite.
+                    plot_label = flamingo_label(feedback, prefix=False)
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
@@ -266,7 +275,7 @@ def main(path2config, verbose=True):
                 v_c = 300000 / 299792458 # velocity over speed of light.
                 
                 profiles_plot = np.mean(profiles0, axis=1)
-                ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+                ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
                     upper = profiles_plot + profiles_err
@@ -329,9 +338,9 @@ def main(path2config, verbose=True):
                 secax = ax.secondary_yaxis('right',
                                            functions=(lambda y: y * k,
                                                      lambda y: y / k))
-                if row_idx == 0:
-                    secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
-                else:
+                # Label the secondary axis on the middle row only: the label
+                # is taller than a row, so per-row copies run into each other.
+                if row_idx == nRows // 2:
                     secax.set_ylabel(r'$\tau_{\rm CAP} = T_{kSZ}/T_{CMB}\;\; c/v_{rms}$')
             
             ax.set_yscale('log')
@@ -345,8 +354,10 @@ def main(path2config, verbose=True):
                 else:
                     ax.set_title('No Masking')
     
-    fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
-    fig.tight_layout(rect=(0.03, 0, 1, 0.97))  # Leave space on left for row labels and top for title
+    if showSuptitle:
+        fig.suptitle(f'Stacked kSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
+    # Leave space on the left for row labels and, if drawn, on top for the title.
+    fig.tight_layout(rect=(0.03, 0, 1, 0.97 if showSuptitle else 1))
 
     # Row labels, taken from the config so they cannot desync from the row
     # order, and centred on each row after tight_layout has fixed the layout.

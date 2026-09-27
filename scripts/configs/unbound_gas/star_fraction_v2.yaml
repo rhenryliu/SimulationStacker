@@ -1,6 +1,6 @@
 # star_fraction_v2.yaml
 # ---------------------
-# Configuration for star_fraction_v2.py.
+# Configuration for star_fraction_v2.py (paper Figure 1).
 # Produces a grouped bar chart with TWO bars per simulation:
 #   1. Global star fraction        -- Stars / (gas + Stars + BH) over the whole box.
 #   2. Within-R200m star fraction  -- same ratio, but summed only over 3-D spheres
@@ -65,3 +65,20 @@ simulations:
         snapshot: 103
       - name: 'Illustris-2'
         snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      # n_pixels overrides the global 1000 per simulation: at 1000 the FLAMINGO
+      # voxel (681 ckpc/h) is larger than the mean R200m, at 2000 it is 341.
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000

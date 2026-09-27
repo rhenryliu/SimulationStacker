@@ -1,15 +1,20 @@
 """make_ratios3x2.py
 ===================
-Generate a 3×2 figure of particle-type fraction profiles, normalised by the
+Generate a grid of particle-type fraction profiles, normalised by the
 cosmic baryon fraction (OmegaBaryon / OmegaMatter).
 
 Layout
 ------
-Rows:    top = TNG suite (TNG50, TNG100, TNG300, Illustris)
-         bottom = SIMBA suite
-Columns: col 0 = 3D spherical profiles  (radius in comoving kpc/h)
-         col 1 = 2D projected, cumulative filter  (radius in arcmin)
-         col 2 = 2D projected, CAP filter          (radius in arcmin)
+Rows:    one per simulation suite, in config order (IllustrisTNG, SIMBA,
+         FLAMINGO); the default config is TNG on top, SIMBA below.
+Columns: chosen by ``stack.columns`` (default ``['3d', 'col1', 'col2']``):
+         '3d'   = 3D spherical profiles        (radius in comoving kpc/h)
+         'col1' = 2D projected, filter_type_col1 (cumulative; arcmin)
+         'col2' = 2D projected, filter_type_col2 (CAP; arcmin)
+
+The 3D grid size may be set per simulation (``n_pixels`` next to ``name`` and
+``snapshot``), falling back to ``stack.n_pixels``; FLAMINGO needs ~2000 to
+approach the resolution the other suites get at 1000.
 
 Usage
 -----
@@ -33,7 +38,7 @@ import argparse
 # Project imports
 # ---------------------------------------------------------------------------
 sys.path.append('../src/')
-from utils import arcmin_to_comoving, comoving_to_arcmin
+from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from stacker import SimulationStacker
 from halos import select_massive_halos
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
@@ -57,12 +62,21 @@ matplotlib.rcParams.update({
     "legend.fontsize":  13,
 })
 
-# Colour maps used for TNG (col 0 of simulations list) and SIMBA (col 1).
-# _COLOURMAPS = ['hsv', 'twilight']
-_COLOURMAPS = ['twilight', 'hsv']
+# Colour maps used for the TNG and SIMBA suites.
+_COLOURMAPS = {'IllustrisTNG': 'twilight', 'SIMBA': 'hsv'}
 
-# Subplot panel labels in reading order.
-_PANEL_LABELS = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+# Fixed colours for the FLAMINGO feedback variants, keyed by feedback name.
+# Kept in sync with simulated_kSZ_masked.py so the same simulation is the same
+# colour across every figure in the paper.
+_FLAMINGO_COLOURS = {
+    'L1_m9':           '#B30000',  # dark red (fiducial)
+    'fgas-8sigma':     '#FF7F0E',  # orange
+    'Jet_fgas-4sigma': '#C71585',  # magenta
+}
+
+# Column kinds (see module docstring) and their titles; the 2D titles name
+# the filter set in the config.
+_DEFAULT_COLUMNS = ['3d', 'col1', 'col2']
 
 # Default OmegaBaryon for Illustris-1 (not stored in header).
 _OMEGA_BARYON_ILLUSTRIS_DEFAULT = 0.0456
@@ -84,7 +98,7 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
         Must contain ``name`` and ``snapshot``; SIMBA entries also need
         ``feedback``.
     sim_type_name : str
-        ``'IllustrisTNG'`` or ``'SIMBA'``.
+        ``'IllustrisTNG'``, ``'SIMBA'`` or ``'FLAMINGO'``.
     redshift : float
         Target simulation redshift.
 
@@ -115,6 +129,16 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
                                     feedback=feedback)
         OmegaBaryon = _OMEGA_BARYON_SIMBA_DEFAULT
         sim_label = f"{sim_name}_{feedback}"
+
+    elif sim_type_name == 'FLAMINGO':
+        # feedback holds the variant directory name ('L1_m9' = fiducial).
+        feedback = sim['feedback']
+        stacker = SimulationStacker(sim_name, snapshot, z=redshift,
+                                    simType=sim_type_name,
+                                    feedback=feedback)
+        OmegaBaryon = stacker.header['OmegaBaryon']
+        # The row's legend title already names the suite.
+        sim_label = flamingo_label(feedback, prefix=False)
 
     else:
         raise ValueError(f"Unknown simulation type: {sim_type_name!r}")
@@ -330,87 +354,77 @@ def plot_panel(ax, radii: np.ndarray, ratio: np.ndarray, err: np.ndarray,
                         color=colour, alpha=0.2)
 
 
-def configure_subplot(ax, row_idx: int, col_idx: int,
+def configure_subplot(ax, kind: str, title: str,
+                      is_top: bool, is_bottom: bool, is_left: bool,
                       pType: str, pType2: str,
                       R200m_kpch: float | None,
                       R200m_arcmin: float | None,
                       forward_arcmin, inverse_arcmin,
                       xlim_2d: float,
-                      suite_name: str, panel_label: str):
+                      panel_label: str):
     """Apply axis decorations to a single subplot panel.
 
     Parameters
     ----------
     ax : matplotlib.axes.Axes
-    row_idx, col_idx : int
-        Position in the 2×3 grid.
+    kind : str
+        ``'3d'`` for the 3D column (x in comoving kpc/h); anything else is a
+        2D column (x in arcmin).
+    title : str
+        Column title, drawn on the top row only.
+    is_top, is_bottom, is_left : bool
+        Position of the panel in the grid.
     pType, pType2 : str
         Particle type names used for y-axis label.
     R200m_kpch : float or None
         R200m (mean-overdensity radius) in comoving kpc/h for the vertical
-        reference line (col 0 only).
+        reference line (3D column only).
     R200m_arcmin : float or None
         R200m (mean-overdensity radius) in arcmin for the vertical reference
-        line (cols 1, 2 only).
+        line (2D columns only).
     forward_arcmin, inverse_arcmin : callable
         Conversion functions between arcmin and comoving kpc/h, used to add
-        a secondary x-axis on the top row (cols 1, 2).
+        a secondary x-axis on the top row (2D columns).
     xlim_2d : float
         Upper limit for the 2D x-axis (arcmin), already scaled by
         ``rad_distance`` and padded to avoid clipping any profile.
-    suite_name : str
-        Suite label used in the column 0 title (ignored for cols 1, 2).
     panel_label : str
         Subplot letter, e.g. ``'(a)'``.
     """
+    is_3d = kind == '3d'
+
     # --- Horizontal reference line at unity ---
     ax.axhline(1.0, color='k', ls='--', lw=2)
 
     # --- R200m vertical reference line (mean-overdensity radius) ---
-    if col_idx == 0 and R200m_kpch is not None:
+    if is_3d and R200m_kpch is not None:
         ax.axvline(R200m_kpch, color='gray', ls=':', lw=2, label=r'$R_{200\mathrm{m}}$')
-    elif col_idx > 0 and R200m_arcmin is not None:
+    elif not is_3d and R200m_arcmin is not None:
         ax.axvline(R200m_arcmin, color='gray', ls=':', lw=2, label=r'$R_{200\mathrm{m}}$')
 
     # --- Axis limits ---
-    ax.set_xlim(0.0, None if col_idx == 0 else xlim_2d)
+    ax.set_xlim(0.0, None if is_3d else xlim_2d)
     ax.grid(True)
 
     # --- Y axis label (left column only) ---
-    if col_idx == 0:
+    if is_left:
         ax.set_ylabel(
             rf'$\frac{{\mathrm{{{pType}}}}}{{\mathrm{{{pType2}}}}} \;/\; (\Omega_b / \Omega_m)$',
             fontsize=18,
         )
 
-    # --- X axis labels and secondary axis ---
-    col_titles = ['3D cumulative', '2D cumulative', '2D CAP']
-    if col_idx == 0:
-        # 3D column: x in comoving kpc/h
-        if row_idx == 1:
-            ax.set_xlabel('R [comoving kpc/h]', fontsize=18)
-            # ax.legend(loc='lower right')
-        else:
-            # Secondary x-axis on top row (also in comoving kpc/h, no conversion needed)
+    # --- X axis label (bottom row) and secondary axis + title (top row) ---
+    if is_bottom:
+        ax.set_xlabel('R [comoving kpc/h]' if is_3d else 'R [arcmin]', fontsize=18)
+    if is_top:
+        if is_3d:
+            # 3D column is already in comoving kpc/h: no conversion needed.
             secax = ax.secondary_xaxis('top')
-            secax.set_xlabel('R [comoving kpc/h]', fontsize=18)
-            # ax.set_title(f'{suite_name} — {col_titles[col_idx]}', fontsize=18)
-            ax.set_title(col_titles[col_idx], fontsize=18)
-    else:
-        # 2D columns: x in arcmin
-        if row_idx == 1:
-            ax.set_xlabel('R [arcmin]', fontsize=18)
-            # ax.legend(loc='lower right')
         else:
-            # Add secondary x-axis in comoving kpc/h on top row.
             secax = ax.secondary_xaxis('top',
                                        functions=(forward_arcmin, inverse_arcmin))
-            secax.set_xlabel('R [comoving kpc/h]', fontsize=18)
-            ax.set_title(col_titles[col_idx], fontsize=18)
-
-    # --- Column titles for top row ---
-    if row_idx == 0 and col_idx > 0:
-        pass  # title already set above
+        secax.set_xlabel('R [comoving kpc/h]', fontsize=18)
+        ax.set_title(title, fontsize=18)
 
     # --- Subplot panel label in top-left corner ---
     ax.text(0.03, 0.97, panel_label, transform=ax.transAxes,
@@ -423,7 +437,7 @@ def configure_subplot(ax, row_idx: int, col_idx: int,
 # ===========================================================================
 
 def main(path2config: str, ptype: str, verbose: bool = True):
-    """Generate the 3×2 particle-fraction ratio figure.
+    """Generate the particle-fraction ratio figure grid.
 
     Parameters
     ----------
@@ -498,37 +512,47 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     figType        = plot_cfg.get('fig_type', 'pdf')
     plot_error_bars = plot_cfg.get('plot_error_bars', True)
 
+    # Columns to draw, and the (filter, filter_2) pair of each 2D column.
+    columns = stack_cfg.get('columns', _DEFAULT_COLUMNS)
+    col_filters = {'col1': (ft_col1, ft2_col1), 'col2': (ft_col2, ft2_col2)}
+    unknown = [c for c in columns if c != '3d' and c not in col_filters]
+    if unknown:
+        raise ValueError(f"Unknown column kind(s) {unknown}; use '3d', 'col1' or 'col2'.")
+    col_titles = {'3d': '3D cumulative', 'col1': f'2D {ft_col1}', 'col2': f'2D {ft_col2}'}
+
     # ------------------------------------------------------------------
-    # Identify TNG and SIMBA simulation lists from config.
-    # Rows: TNG = row 0, SIMBA = row 1.
+    # One row per simulation suite, in config order.
     # ------------------------------------------------------------------
-    tng_sims   = None
-    simba_sims = None
+    suites = []
     for suite in config['simulations']:
-        if suite['sim_type'] == 'IllustrisTNG':
-            tng_sims   = suite['sims']
-            tng_cmap   = matplotlib.colormaps[_COLOURMAPS[0]]  # type: ignore
-            tng_colours = tng_cmap(np.linspace(0.2, 0.85, len(tng_sims)))
-        elif suite['sim_type'] == 'SIMBA':
-            simba_sims   = suite['sims']
-            simba_cmap   = matplotlib.colormaps[_COLOURMAPS[1]]  # type: ignore
-            simba_colours = simba_cmap(np.linspace(0.2, 0.85, len(simba_sims)))
-
-    if tng_sims is None or simba_sims is None:
-        raise ValueError("Config must contain both 'IllustrisTNG' and 'SIMBA' simulation entries.")
+        name = suite['sim_type']
+        sims = suite['sims']
+        if name == 'FLAMINGO':
+            fallback = matplotlib.colormaps['plasma'](np.linspace(0.2, 0.85, len(sims)))  # type: ignore
+            colours = [_FLAMINGO_COLOURS.get(s['feedback'], fallback[k])
+                       for k, s in enumerate(sims)]
+        elif name in _COLOURMAPS:
+            cmap = matplotlib.colormaps[_COLOURMAPS[name]]  # type: ignore
+            colours = cmap(np.linspace(0.2, 0.85, len(sims)))
+        else:
+            raise ValueError(f"Unknown simulation type: {name!r}")
+        suites.append((name, sims, colours))
+    nRows, nCols = len(suites), len(columns)
 
     # ------------------------------------------------------------------
-    # Create figure
+    # Create figure: 6 x 4.5 in per panel (as in the original 18 x 9 in 3x2
+    # grid), plus a strip on the right for the per-row legends.
     # ------------------------------------------------------------------
-    fig, axes = plt.subplots(2, 3, figsize=(18, 9), sharex='col', sharey='row')
+    legend_width = 2.8  # inches
+    fig_width = 6.0 * nCols + legend_width
+    fig, axes = plt.subplots(nRows, nCols, figsize=(fig_width, 4.5 * nRows),
+                             sharex='col', sharey='row', squeeze=False)
 
-    # R200m placeholders (set during the first processed sim in each suite).
-    R200m_kpch_tng   = None
-    R200m_kpch_simba = None
-    R200m_arcmin_tng   = None
-    R200m_arcmin_simba = None
+    # R200m per row, taken from the first sim processed in each suite.
+    R200m_kpch_per_row = [None] * nRows
+    R200m_arcmin_per_row = [None] * nRows
 
-    # Arcmin ↔ comoving kpc/h conversion functions (set after first TNG stacker).
+    # Arcmin <-> comoving kpc/h conversion functions (set after the first stacker).
     forward_arcmin  = None
     inverse_arcmin  = None
 
@@ -539,15 +563,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
 
     t0 = time.time()
 
-    # ------------------------------------------------------------------
-    # Loop over suites: row 0 = TNG, row 1 = SIMBA
-    # ------------------------------------------------------------------
-    suites = [
-        ('IllustrisTNG', tng_sims,   tng_colours,   0),
-        ('SIMBA',        simba_sims, simba_colours, 1),
-    ]
-
-    for sim_type_name, sims, colours, row_idx in suites:
+    for row_idx, (sim_type_name, sims, colours) in enumerate(suites):
         if verbose:
             print(f"\n{'='*60}")
             print(f"Suite: {sim_type_name}  (row {row_idx})")
@@ -556,16 +572,16 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         for j, sim in enumerate(sims):
             sim_name = sim['name']
             if verbose:
-                feedback_str = f"  feedback={sim.get('feedback')}" if sim_type_name == 'SIMBA' else ''
+                feedback_str = f"  feedback={sim.get('feedback')}" if 'feedback' in sim else ''
                 print(f"\n  [{j+1}/{len(sims)}] {sim_name}{feedback_str}")
 
             # ---- Instantiate stacker ----
             stacker, OmegaBaryon, cosmo, sim_label = setup_stacker(
                 sim, sim_type_name, redshift)
 
-            # ---- Arcmin ↔ kpc/h conversion ----
+            # ---- Arcmin <-> kpc/h conversion ----
             # Per-sim converters (this sim's own cosmology) convert the 2D
-            # stacking range to arcmin.  The global converters (first TNG sim)
+            # stacking range to arcmin.  The global converters (first sim)
             # drive the shared secondary top axis in configure_subplot.
             def _make_converters(c, z):
                 def _fwd(arcmin): return arcmin_to_comoving(arcmin, z, c)
@@ -575,78 +591,57 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             if forward_arcmin is None:
                 forward_arcmin, inverse_arcmin = fwd_sim, inv_sim
 
-            # ==============================================================
-            # Column 0 — 3D spherical profiles
-            # ==============================================================
-            if verbose:
-                print(f"    Computing 3D profiles...")
-            radii_3d, ratio_3d, err_3d, R200m_kpch = compute_3d_profile_ratio(
-                stacker, pType, pType2, params_3d, OmegaBaryon)
+            R200m_kpch = None
+            for col_idx, kind in enumerate(columns):
+                if kind == '3d':
+                    if verbose:
+                        print(f"    Computing 3D profiles...")
+                    # Per-simulation 3D grid size, falling back to the global one.
+                    params_sim = dict(params_3d,
+                                      n_pixels=int(sim.get('n_pixels', params_3d['n_pixels'])))
+                    radii, ratio, err, R200m_kpch = compute_3d_profile_ratio(
+                        stacker, pType, pType2, params_sim, OmegaBaryon)
+                else:
+                    ft, ft2 = col_filters[kind]
+                    if verbose:
+                        print(f"    Computing 2D profiles (filter={ft}/{ft2})...")
+                    radii, ratio, err = compute_2d_profile_ratio(
+                        stacker, pType, pType2, ft, ft2, params_2d, OmegaBaryon,
+                        params_3d['min_radius_3d'], params_3d['max_radius_3d'],
+                        params_3d['num_radii_3d'], inv_sim)
+                    # Track the largest plotted arcmin radius for the shared 2D x-limit.
+                    max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
 
-            # Cache R200m for vline decoration.
-            if sim_type_name == 'IllustrisTNG' and R200m_kpch_tng is None:
-                R200m_kpch_tng = R200m_kpch
-            if sim_type_name == 'SIMBA' and R200m_kpch_simba is None:
-                R200m_kpch_simba = R200m_kpch
+                plot_panel(axes[row_idx, col_idx], radii, ratio, err,
+                           sim_label, colours[j], plot_error_bars)
+                if verbose:
+                    # Plotted values, for quoting in the text. The 2D columns
+                    # share the 3D column's comoving radii (converted to arcmin).
+                    print(f"    [{col_titles[kind]}] R = {np.array2string(radii, precision=3)}")
+                    print(f"    [{col_titles[kind]}] ratio = {np.array2string(ratio, precision=4)}")
+                    print(f"    [{col_titles[kind]}] err = {np.array2string(err, precision=4)}")
 
-            plot_panel(axes[row_idx, 0], radii_3d, ratio_3d, err_3d,
-                       sim_label, colours[j], plot_error_bars)
-
-            # ==============================================================
-            # Column 1 — 2D cumulative profiles
-            # ==============================================================
-            if verbose:
-                print(f"    Computing 2D cumulative profiles (filter={ft_col1}/{ft2_col1})...")
-            radii_2d_cum, ratio_2d_cum, err_2d_cum = compute_2d_profile_ratio(
-                stacker, pType, pType2, ft_col1, ft2_col1, params_2d, OmegaBaryon,
-                params_3d['min_radius_3d'], params_3d['max_radius_3d'],
-                params_3d['num_radii_3d'], inv_sim)
-
-            # Track the largest plotted arcmin radius for the shared 2D x-limit.
-            max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii_2d_cum)))
-
-            # Cache R200m in arcmin.
-            if sim_type_name == 'IllustrisTNG' and R200m_arcmin_tng is None:
-                R200m_arcmin_tng = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
-            if sim_type_name == 'SIMBA' and R200m_arcmin_simba is None:
-                R200m_arcmin_simba = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
-
-            plot_panel(axes[row_idx, 1], radii_2d_cum, ratio_2d_cum, err_2d_cum,
-                       sim_label, colours[j], plot_error_bars)
-
-            # ==============================================================
-            # Column 2 — 2D CAP profiles
-            # ==============================================================
-            if verbose:
-                print(f"    Computing 2D CAP profiles (filter={ft_col2}/{ft2_col2})...")
-            radii_2d_cap, ratio_2d_cap, err_2d_cap = compute_2d_profile_ratio(
-                stacker, pType, pType2, ft_col2, ft2_col2, params_2d, OmegaBaryon,
-                params_3d['min_radius_3d'], params_3d['max_radius_3d'],
-                params_3d['num_radii_3d'], inv_sim)
-
-            # Track the largest plotted arcmin radius for the shared 2D x-limit.
-            max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii_2d_cap)))
-
-            plot_panel(axes[row_idx, 2], radii_2d_cap, ratio_2d_cap, err_2d_cap,
-                       sim_label, colours[j], plot_error_bars)
+            # Cache R200m (comoving and arcmin) for the vline decoration.
+            if R200m_kpch is not None and R200m_kpch_per_row[row_idx] is None:
+                R200m_kpch_per_row[row_idx] = R200m_kpch
+                R200m_arcmin_per_row[row_idx] = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
 
     # ------------------------------------------------------------------
     # Axis decorations
     # ------------------------------------------------------------------
-    suite_names = ['IllustrisTNG', 'SIMBA']
-    R200m_kpch_per_row   = [R200m_kpch_tng,   R200m_kpch_simba]
-    R200m_arcmin_per_row = [R200m_arcmin_tng, R200m_arcmin_simba]
-
     # Shared upper x-limit (arcmin) for the 2D columns, padded to avoid clipping.
     xlim_2d = max_arcmin_2d + 0.5
 
     panel_idx = 0
-    for row_idx, suite_name in enumerate(suite_names):
-        for col_idx in range(3):
+    for row_idx in range(nRows):
+        for col_idx, kind in enumerate(columns):
             configure_subplot(
                 ax=axes[row_idx, col_idx],
-                row_idx=row_idx,
-                col_idx=col_idx,
+                kind=kind,
+                title=col_titles[kind],
+                is_top=row_idx == 0,
+                is_bottom=row_idx == nRows - 1,
+                is_left=col_idx == 0,
                 pType=pType,
                 pType2=pType2,
                 R200m_kpch=R200m_kpch_per_row[row_idx],
@@ -654,8 +649,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 forward_arcmin=forward_arcmin,
                 inverse_arcmin=inverse_arcmin,
                 xlim_2d=xlim_2d,
-                suite_name=suite_name,
-                panel_label=_PANEL_LABELS[panel_idx],
+                panel_label=f'({chr(ord("a") + panel_idx)})',
             )
             panel_idx += 1
 
@@ -664,34 +658,25 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # -----------------------------------------------------------------------
     # Row labels placed as text on the leftmost axes so that shared-y axes do
     # not duplicate the y-label on every panel
-    axes[0, 0].annotate('IllustrisTNG', xy=(-0.25, 0.5), xycoords='axes fraction',
-                        ha='right', va='center', rotation=90, fontsize=14,
-                        fontweight='bold')
-    axes[1, 0].annotate('SIMBA', xy=(-0.25, 0.5), xycoords='axes fraction',
-                        ha='right', va='center', rotation=90, fontsize=14,
-                        fontweight='bold')
+    for row_idx, (sim_type_name, _, _) in enumerate(suites):
+        axes[row_idx, 0].annotate(sim_type_name, xy=(-0.25, 0.5), xycoords='axes fraction',
+                                  ha='right', va='center', rotation=90, fontsize=14,
+                                  fontweight='bold')
 
-    # -----------------------------------------------------------------------
-    # Legends positioned to the right of the figure
-    # -----------------------------------------------------------------------
-    # Collect handles and labels from the rightmost column for each row
-    handles_tng, labels_tng = axes[0, 2].get_legend_handles_labels()
-    handles_simba, labels_simba = axes[1, 2].get_legend_handles_labels()
-    
-    # Create legends on the right side: TNG on top, SIMBA on bottom
-    legend_tng = fig.legend(handles_tng, labels_tng, 
-                           loc='upper left', bbox_to_anchor=(0.89, 0.88),
-                           frameon=True, fontsize=13, title='IllustrisTNG',
-                           title_fontsize=14)
-    legend_simba = fig.legend(handles_simba, labels_simba,
-                             loc='upper left', bbox_to_anchor=(0.873, 0.48),
-                             frameon=True, fontsize=13, title='SIMBA',
-                             title_fontsize=14)
+    # Lay out the panels first, then put one legend per row (handles from its
+    # rightmost panel) in the strip to the right of that row.
+    fig.tight_layout(rect=[0, 0, 1 - legend_width / fig_width, 1]) # type: ignore
+    for row_idx, (sim_type_name, _, _) in enumerate(suites):
+        handles, labels = axes[row_idx, -1].get_legend_handles_labels()
+        bbox = axes[row_idx, -1].get_position()
+        fig.legend(handles, labels,
+                   loc='upper left', bbox_to_anchor=(bbox.x1 + 0.01, bbox.y1),
+                   frameon=True, fontsize=13, title=sim_type_name,
+                   title_fontsize=14)
 
     # ------------------------------------------------------------------
     # Save figure
     # ------------------------------------------------------------------
-    fig.tight_layout(rect=[0, 0, 0.90, 1]) # type: ignore
     out_path = figPath / f'{figName}_{pType}.{figType}'
     fig.savefig(out_path, dpi=300) # type: ignore
     plt.close(fig)
@@ -707,7 +692,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Generate 3×2 particle-fraction ratio figure.")
+        description="Generate the particle-fraction ratio figure grid.")
     parser.add_argument(
         '-p', '--path2config',
         type=str,

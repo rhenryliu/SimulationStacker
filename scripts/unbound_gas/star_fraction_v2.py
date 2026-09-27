@@ -49,6 +49,7 @@ import time
 sys.path.append('../src/')
 from stacker import SimulationStacker
 from halos import select_massive_halos
+from utils import flamingo_label
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
 
 sys.path.append('../../illustrisPython/')
@@ -217,16 +218,19 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                                 simType=sim_type_name,
                                                 feedback=feedback)
-                    # '-' instead of '_' so the label renders under usetex.
-                    label = f"FLAMINGO {feedback}".replace('_', '-')
+                    label = flamingo_label(feedback)
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
                 if verbose:
                     print(f"Processing simulation: {label}")
 
+                # Per-simulation 3D grid size, falling back to the global
+                # n_pixels (FLAMINGO needs 2000: at 1000 its 681 ckpc/h voxels
+                # are larger than R200m).
+                nPixels_sim = int(sim.get('n_pixels', nPixels))
                 global_frac, r200m_frac = star_fractions_for_sim(
-                    stacker, nPixels=nPixels, projection=projection,
+                    stacker, nPixels=nPixels_sim, projection=projection,
                     saveField=saveField, loadField=loadField,
                     halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
                     verbose=verbose,

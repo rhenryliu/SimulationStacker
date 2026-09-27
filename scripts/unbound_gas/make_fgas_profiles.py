@@ -52,7 +52,7 @@ import argparse
 # Project imports
 # ---------------------------------------------------------------------------
 sys.path.append('../src/')
-from utils import comoving_to_arcmin
+from utils import comoving_to_arcmin, flamingo_label
 from stacker import SimulationStacker
 from halos import select_halos
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
@@ -156,9 +156,8 @@ def setup_stacker(sim: dict, sim_type_name: str, redshift: float):
             OmegaBaryon = stacker.header['OmegaBaryon']
         except KeyError:
             OmegaBaryon = _OMEGA_BARYON_FLAMINGO_DEFAULT
-        # '-' instead of '_' so labels render under usetex (matches
-        # make_fgas_hod_ratio.py / beam_compensated_ratio_v2.py).
-        sim_label = f"FLAMINGO {feedback}".replace('_', '-')
+        # Must match the colour-lookup label built in main().
+        sim_label = flamingo_label(feedback)
 
     else:
         raise ValueError(f"Unknown simulation type: {sim_type_name!r}")
@@ -708,7 +707,7 @@ def main(path2config: str, verbose: bool = True):
                     f"_FLAMINGO_COLOURS. Add it there to maintain "
                     f"consistent colours."
                 )
-            label = f"FLAMINGO {feedback}".replace('_', '-')
+            label = flamingo_label(feedback)
             sim_colours[label] = _FLAMINGO_COLOURS[feedback]
         else:
             raise ValueError(

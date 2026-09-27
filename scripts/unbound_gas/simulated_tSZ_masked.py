@@ -24,7 +24,7 @@ sys.path.append('../src/')
 # from filter_utils import *
 # from SZstacker import SZMapStacker # type: ignore
 from stacker import SimulationStacker
-from utils import arcmin_to_comoving, comoving_to_arcmin
+from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from halos import select_massive_halos
 
 sys.path.append('../../illustrisPython/')
@@ -114,15 +114,28 @@ def main(path2config, verbose=True):
     plotErrorBars = plot_config.get('plot_error_bars', True)
     figName = plot_config.get('fig_name', 'default_figure')
     figType = plot_config.get('fig_type', 'pdf')
+    # Layout options; the defaults reproduce the original figure.
+    showSuptitle = plot_config.get('suptitle', True)
+    rowHeight = plot_config.get('row_height', 4.5)  # inches per row
 
-    colourmaps = ['hot', 'cool']
-    colourmaps = ['hsv', 'twilight', 'plasma']
+    # Colour map per suite, keyed by name so that suites sharing a row keep
+    # their own colours. Same maps as the old per-row choice for configs that
+    # list SIMBA, IllustrisTNG, FLAMINGO in that order.
+    suite_colourmaps = {'SIMBA': 'hsv', 'IllustrisTNG': 'twilight', 'FLAMINGO': 'plasma'}
 
     # One row per simulation suite in the config, in config order, four mask
     # columns. Deriving nRows from the config (rather than hardcoding it) keeps
-    # the script working when a suite is commented out of the YAML.
-    nRows = len(config['simulations'])
-    fig, axes = plt.subplots(nRows, 4, figsize=(18, 4.5 * nRows), sharex=True, sharey=True)
+    # the script working when a suite is commented out of the YAML. A suite
+    # may set 'row' to share a row with another suite.
+    suite_rows = [sim_type.get('row', k) for k, sim_type in enumerate(config['simulations'])]
+    nRows = max(suite_rows) + 1
+    if sorted(set(suite_rows)) != list(range(nRows)):
+        raise ValueError(f"Suite rows must cover 0..{nRows - 1} without gaps: {suite_rows}")
+    # Row labels: from the config if given, else the suite names in each row.
+    row_labels = plot_config.get('row_labels') or [
+        ' + '.join(st['sim_type'] for st, r in zip(config['simulations'], suite_rows) if r == row)
+        for row in range(nRows)]
+    fig, axes = plt.subplots(nRows, 4, figsize=(18, rowHeight * nRows), sharex=True, sharey=True)
     axes = np.atleast_2d(axes)
     
     # Define mask configurations: [maskRadii=1, 2, 3, False]
@@ -146,12 +159,13 @@ def main(path2config, verbose=True):
             else:
                 print(f"\n=== Processing column {col_idx + 1}: No masking ===")
         
-        # Loop over simulation types (rows)
-        for row_idx, sim_type in enumerate(config['simulations']):
+        # Loop over simulation suites (each drawn in its row)
+        for suite_idx, sim_type in enumerate(config['simulations']):
             sim_type_name = sim_type['sim_type']
+            row_idx = suite_rows[suite_idx]
             ax = axes[row_idx, col_idx]
             
-            colourmap = matplotlib.colormaps[colourmaps[row_idx]] # type: ignore
+            colourmap = matplotlib.colormaps[suite_colourmaps.get(sim_type_name, 'plasma')] # type: ignore
             
             if sim_type_name == 'IllustrisTNG':
                 TNG_sims = sim_type['sims']
@@ -179,6 +193,10 @@ def main(path2config, verbose=True):
                 
                 if verbose:
                     print(f"Processing simulation: {sim_name}")
+
+                # Legend label; overridden only for FLAMINGO, whose TeX label
+                # differs from the plain-text name.
+                plot_label = None
                 
                 if sim_type_name == 'IllustrisTNG':
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
@@ -239,8 +257,13 @@ def main(path2config, verbose=True):
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii)
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
-                    # '-' instead of '_' so the label renders under usetex
+                    # '-' instead of '_' so the name is plain text
                     sim_name = f"FLAMINGO {feedback}".replace('_', '-')
+                    # A FLAMINGO-only row's label already names the suite.
+                    only_flamingo = all(st['sim_type'] == 'FLAMINGO'
+                                        for st, r in zip(config['simulations'], suite_rows)
+                                        if r == row_idx)
+                    plot_label = flamingo_label(feedback, prefix=not only_flamingo)
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
@@ -249,7 +272,7 @@ def main(path2config, verbose=True):
                 v_c = 300000 / 299792458 # velocity over speed of light.
                 
                 profiles_plot = np.mean(profiles0, axis=1)
-                ax.plot(radii0 * radDistance, profiles_plot, label=sim_name, color=colours[j], lw=2, marker='o')
+                ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
                     upper = profiles_plot + profiles_err
@@ -334,14 +357,15 @@ def main(path2config, verbose=True):
                 else:
                     ax.set_title('No Masking')
     
-    fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
-    fig.tight_layout(rect=(0.03, 0, 1, 1))  # Leave space on left for row labels and top for title
+    if showSuptitle:
+        fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
+    fig.tight_layout(rect=(0.03, 0, 1, 1))  # Leave space on left for row labels
 
     # Row labels, taken from the config so they cannot desync from the row
     # order, and centred on each row after tight_layout has fixed the layout.
-    for row_idx, sim_type in enumerate(config['simulations']):
+    for row_idx, row_label in enumerate(row_labels):
         bbox = axes[row_idx, 0].get_position()
-        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), sim_type['sim_type'],
+        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), row_label,
                  fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)

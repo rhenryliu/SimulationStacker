@@ -21,11 +21,17 @@ plot:
   fig_type: 'pdf'
   plot_error_bars: true
   yscale: 'linear'
+  # Paper layout: no figure title, rows slightly shorter than the 4.5 in default.
+  suptitle: false
+  row_height: 3.8
 
 
 
+# Two rows: SIMBA-100 shares the top row with Illustris/IllustrisTNG (row: 0),
+# FLAMINGO has the bottom row (row: 1).
 simulations:
   - sim_type: 'SIMBA'
+    row: 0
     sims:
       # - name: 'm50n512'
       #   snapshot: 125
@@ -46,6 +52,7 @@ simulations:
         snapshot: 125
         feedback: 's50'
   - sim_type: 'IllustrisTNG'
+    row: 0
     sims:
       - name: 'TNG100-1'
         snapshot: 67
@@ -58,6 +65,7 @@ simulations:
       # - name: 'Illustris-2'
       #   snapshot: 103
   - sim_type: 'FLAMINGO'
+    row: 1
     sims:
       # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
       # Snapshot 67 is z=0.5, matching stack.redshift above.

@@ -275,7 +275,33 @@ def arcmin_to_comoving(theta_arcmin, z, cosmo=Planck18):
 
     # Convert Mpc -> kpc/h
     return (L_com.to(u.kpc) * cosmo.h).value
-    
+
+
+# Display names of the FLAMINGO feedback variants for the unbound gas paper,
+# keyed by variant directory name ('L1_m9' is the fiducial run). Written for
+# text.usetex=True: underscores escaped, the sigma as a math-mode minus sign.
+_FLAMINGO_TEX_NAMES = {
+    'L1_m9':           r'L1\_m9',
+    'fgas-8sigma':     r'fgas$-8\sigma$',
+    'Jet_fgas-4sigma': r'Jet\_fgas$-4\sigma$',
+}
+
+
+def flamingo_label(feedback, prefix=True):
+    """Return the TeX legend label of a FLAMINGO feedback variant.
+
+    Args:
+        feedback (str): Variant directory name, e.g. 'L1_m9' or 'fgas-8sigma'.
+            Unknown names fall back to the raw name with underscores escaped.
+        prefix (bool, optional): If True, prepend 'FLAMINGO ' so the label
+            identifies the suite in panels that mix suites. Defaults to True.
+
+    Returns:
+        str: Label for use with text.usetex=True, e.g. r'FLAMINGO fgas$-8\\sigma$'.
+    """
+    name = _FLAMINGO_TEX_NAMES.get(feedback, feedback.replace('_', r'\_'))
+    return f'FLAMINGO {name}' if prefix else name
+
 
 def bins_from_geomean_monotonic(r_desired, bins0=None, pick='mid'):
     """

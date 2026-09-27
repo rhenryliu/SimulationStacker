@@ -24,6 +24,9 @@ plot:
   fig_name: 'profiles_xy_masked_flamingo'
   fig_type: 'pdf'
   plot_error_bars: true
+  # Paper layout: no figure title, rows slightly shorter than the 4.5 in default.
+  suptitle: false
+  row_height: 3.8
 
 
 

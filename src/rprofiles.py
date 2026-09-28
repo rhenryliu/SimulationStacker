@@ -1,8 +1,8 @@
 """r-profile computation via periodic FFT aperture filtering.
 
-Implements Task 1 of ``docs/cross_correlation_notes.md`` as specified in
-``docs/r_profiles_task1_spec.md``: the filtered cross-correlation
-coefficients
+Implements Task 1 of ``docs/cross_corr/archive/cross_correlation_notes.md`` as
+specified in ``docs/cross_corr/archive/r_profiles_task1_spec.md``: the filtered
+cross-correlation coefficients
 
     r_XY(R; F) = Y_XY / sqrt(Y_XX * Y_YY),
 

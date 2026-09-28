@@ -1,13 +1,13 @@
 """Theory-side filtered amplitudes: the P(k) -> Y(R) chain.
 
-Implements the harmonic-space route of ``docs/cross_correlation_notes.md``
-Sec. 5.3 for Task 4: a non-linear matter power spectrum from halofit, projected
-to two dimensions, integrated against the analytic aperture kernels of
-:mod:`kernels`.
+Implements the harmonic-space route of
+``docs/cross_corr/archive/cross_correlation_notes.md`` Sec. 5.3 for Task 4: a
+non-linear matter power spectrum from halofit, projected to two dimensions,
+integrated against the analytic aperture kernels of :mod:`kernels`.
 
-Projection convention (see ``docs/filter_specification.md``): for validating
-against a periodic simulation box the projection is the full box depth, for
-which
+Projection convention (see ``docs/cross_corr/filter_specification.md``): for
+validating against a periodic simulation box the projection is the full box
+depth, for which
 
     P_2D(k_perp) = P_3D(k_perp) / L,
 

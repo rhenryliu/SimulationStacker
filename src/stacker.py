@@ -764,7 +764,7 @@ class SimulationStacker(object):
                 # generic branch below would silently fall back to
                 # filters.upsilon's defaults (dr=0.5, r0=1.0, pixel_size=1.0),
                 # which is a different filter from the one specified in
-                # docs/filter_specification.md.
+                # docs/cross_corr/filter_specification.md.
                 profile = []
                 for rad in radii:
                     # TODO: pixel_size unit conversions!! Important

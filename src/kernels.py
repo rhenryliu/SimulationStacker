@@ -1,8 +1,8 @@
 """Analytic harmonic-space aperture kernels for the filtered amplitudes.
 
-Implements Sec. 5.3 of ``docs/cross_correlation_notes.md``: every filter used
-in this programme is linear, so each filtered amplitude is a single integral
-of the projected power spectrum against an analytic kernel,
+Implements Sec. 5.3 of ``docs/cross_corr/archive/cross_correlation_notes.md``:
+every filter used in this programme is linear, so each filtered amplitude is a
+single integral of the projected power spectrum against an analytic kernel,
 
     Y(R) = int (k dk / 2 pi) P_2D(k) W(k; R).
 
@@ -26,7 +26,7 @@ measured Y carries an extra factor of ``1/pixArea`` relative to the integral
 above.  This cancels in every cross-correlation coefficient, but must be
 restored explicitly when validating theory against measurement --
 :func:`normalize_to_pipeline` does that, and
-``docs/filter_specification.md`` records the convention.
+``docs/cross_corr/filter_specification.md`` records the convention.
 
 All radii and wavenumbers must share reciprocal units: pass ``k`` in
 ``1/arcmin`` with radii in arcmin, or ``k`` in ``h/Mpc`` with radii in Mpc/h.

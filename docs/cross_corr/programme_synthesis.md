@@ -192,7 +192,7 @@ One caution about that comparison, raised in review and not yet acted on: the fi
 The measured quantity is $x(R)$, a filtered real-space ratio. The thing you want is $S(k)$, the power suppression. Three steps:
 
 1. **Within a simulation the algebra is exact.** Because $\delta_t = f_m \delta_m + f_b \delta_b$ is a linear field identity and the filters are linear, the same relation holds for the filtered amplitudes: $Y_{tt}/Y_{mm} = (f_m + f_b x)^2 + f_b^2 (1-r_{bm}^2)\,Y_{bb}/Y_{mm}$, written out in §III.E. The second term is measured to be below $3\times10^{-3}$, so in practice $Y_{tt}/Y_{mm} = (f_m+f_b x)^2$.
-2. **Getting from hydro to DMO** needs one assumption, that the hydrodynamic CDM auto-spectrum matches the gravity-only total-matter spectrum. That back-reaction is a known 1 to 2 per cent effect and is booked, not measured, because no DMO run is on disk.
+2. **Getting from hydro to DMO** needs one assumption, that the hydrodynamic CDM auto-spectrum matches the gravity-only total-matter spectrum. That back-reaction was booked at 1 to 2 per cent rather than measured until DMO references came on disk; as of 2026-09-27 it is measured at $z\approx0.5$ to within $\pm2.5$ per cent (`records/round3a_record.md`).
 3. **Getting from $R$ to $k$** needs the window formalism or a cross-suite regression. This is where the filter choice re-enters, since a narrow window distorts less. Measured: the window-smearing residual is $+0.8$ to $+1.7$ per cent for $\Delta\Sigma$ against $+1.9$ to $+2.9$ for $\Upsilon$ and the $Y$ transform.
 
 The payoff of the whole design is the $f_b$ weighting. Since $S = (f_m + f_b x)^2$ with $f_b \approx 0.157$,
@@ -434,7 +434,7 @@ Jackknife errors are an order of magnitude below the cross-run scatter, so unlik
 
 | assumption | size | note |
 |---|---|---|
-| $P_{mm}^{\rm hydro\,CDM}/P_{mm}^{\rm DMO} = 1$ | 1 to 2% | no DMO run on disk; over a day to download. Known wrong, booked |
+| $P_{mm}^{\rm hydro\,CDM}/P_{mm}^{\rm DMO} = 1$ | 1 to 2% booked; within ±2.5% measured at $z\approx0.5$ (as of 2026-09-27, `records/round3a_record.md`) | DMO references on disk since 2026-09-24; unmeasured at $z\approx0.26$ |
 | $r_{bm}\approx1$ in the suppression mapping | $2.9\times10^{-3}$ on $P_{tt}/P_{mm}$ | measured across all filters, runs and redshifts |
 | pixelization of the $0.75'$ annulus | 1.7 to 2.2% | the annulus spans 3.75 pixels at production resolution; this is the floor on any harmonic-space theory prediction against this measurement |
 | halofit non-linear accuracy | 4.6 to 6.7% | Route A only; Route B needs no theory spectrum |

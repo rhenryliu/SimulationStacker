@@ -2,10 +2,8 @@
 
 > **Status, 2026-09-27: superseded in part.** §1's Gate B verdict and target
 > field are replaced by `decisions.md` D-05 (reopened) and D-10 (provisional
-> filter set). §2's R₀ = 1′ conflicts with D-10's Υ(R₀ = 2′) cross-check;
-> unresolved. §9's "no DMO run on disk" is out of date: usable DMO references
-> for all four runs have been on scratch since 2026-09-24. The conventions in
-> §2–8 are current.
+> filter set). §2's R₀ = 1′ is confirmed as the Υ cross-check (D-10,
+> 2026-09-27). The conventions in §2–9 are current.
 
 Phase 0, item 1 of `archive/cross_correlation_notes.md` Sec. 8: the single source
 of truth for the filter definitions, the discretization, and the normalization
@@ -234,7 +232,7 @@ Recorded so they are booked rather than forgotten.
 
 | approximation | status | size |
 |---|---|---|
-| `P_mm^hydro-CDM / P_mm^DMO = 1` | adopted; no DMO run on disk | 1-2 per cent (van Daalen 2011, Chisari 2018) |
+| `P_mm^hydro-CDM / P_mm^DMO = 1` | adopted; measured at z ≈ 0.5 (as of 2026-09-27, `records/round3a_record.md`) | within ±2.5 per cent over 0.5 ≤ k ≤ 7 h/Mpc at z ≈ 0.5; unmeasured at z ≈ 0.26 |
 | halofit returns total matter, the pipeline's `m` is CDM | measured, not assumed | up to 8.9 per cent on `Y_mm` (ΔΣ, TNG300-1) |
 | `n_s`, `sigma8` from published cosmologies | no header carries them | literature values, see `theory.SIMULATION_COSMOLOGIES` |
 | no beam anywhere | deliberate; the r's are intrinsic field properties | beam forward-modelling stays in the f_gas machinery |

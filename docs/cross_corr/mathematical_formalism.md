@@ -759,7 +759,7 @@ $$
 \tag{62}
 $$
 
-that is, that the CDM in the hydrodynamic run clusters as the total matter does in the gravity-only run. This is violated at the 1 to 2 per cent level, because baryons pushed out of haloes drag on the dark-matter potential, and it is currently adopted rather than measured, since no DMO run is on disk. With (62), $S = P^{\rm hydro}_{tt}/P^{\rm hydro}_{mm}$, and (56), (57), (60) and (61) become statements about $S$ directly. **This is the only assumption in §9 that is neither exact nor measured.**
+that is, that the CDM in the hydrodynamic run clusters as the total matter does in the gravity-only run. This is violated at the 1 to 2 per cent level, because baryons pushed out of haloes drag on the dark-matter potential, and it was adopted rather than measured until DMO references came on disk in 2026-09; as of 2026-09-27 it is measured at $z\approx0.5$ to lie within $\pm2.5$ per cent of unity for all four runs over $0.5\le k\le7\,h/$Mpc (`records/round3a_record.md`, Stage 4). With (62), $S = P^{\rm hydro}_{tt}/P^{\rm hydro}_{mm}$, and (56), (57), (60) and (61) become statements about $S$ directly. **This is the only assumption in §9 that is not exact; it is measured at $z\approx0.5$ and not yet at $z\approx0.26$.**
 
 ### 9.6 The lossy step: from $x_{\mathcal F}(R)$ to $x(k)$
 
@@ -874,7 +874,7 @@ which depends on $\hat W_R$ and therefore does not transfer between filters. It 
 | 10 | mediation, $C=1$ | (46), (47) | **not assumed**; the filtered $C$ departs from 1 by about 5 per cent, and whether that is mediation failure or the window term of (48) is untested |
 | 11 | window smearing in $C_{\mathcal{F}}$ | (48) | present even under exact mediation; untested |
 | 12 | $r_{bm}\approx1$ in the suppression map | (56), (61) | $\le2.9\times10^{-3}$, measured |
-| 13 | back-reaction $P^{\rm hydro\,CDM}_{mm}=P^{\rm DMO}_{tt}$ | (62) | 1 to 2 per cent, adopted not measured |
+| 13 | back-reaction $P^{\rm hydro\,CDM}_{mm}=P^{\rm DMO}_{tt}$ | (62) | measured at $z\approx0.5$: within $\pm2.5$ per cent over $0.5\le k\le7\,h/$Mpc (as of 2026-09-27, `records/round3a_record.md`); unmeasured at $z\approx0.26$ |
 | 14 | window smearing in $x$ | (63) | $+0.8$ to $+2.9$ per cent, filter-dependent |
 | 15 | filtering and $S(x)$ do not commute | (65) | $f_b^2\mathrm{Var}(x)\sim2.5\times10^{-4}$ |
 | 16 | electron is not a mass-budget complement | (67) | structural; $S(x_e)$ is meaningless |

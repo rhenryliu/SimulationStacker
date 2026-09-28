@@ -11,6 +11,7 @@ Columns: chosen by ``stack.columns`` (default ``['3d', 'col1', 'col2']``):
          '3d'   = 3D spherical profiles        (radius in comoving kpc/h)
          'col1' = 2D projected, filter_type_col1 (cumulative; arcmin)
          'col2' = 2D projected, filter_type_col2 (CAP; arcmin)
+         'col3' = 2D projected, filter_type_col3 (DSigma; arcmin)
 
 The 3D grid size may be set per simulation (``n_pixels`` next to ``name`` and
 ``snapshot``), falling back to ``stack.n_pixels``; FLAMINGO needs ~2000 to
@@ -77,6 +78,7 @@ _FLAMINGO_COLOURS = {
 # Column kinds (see module docstring) and their titles; the 2D titles name
 # the filter set in the config.
 _DEFAULT_COLUMNS = ['3d', 'col1', 'col2']
+_FILTER_TITLES = {'cumulative': 'cumulative', 'CAP': 'CAP', 'DSigma': r'$\Delta\Sigma$'}
 
 # Default OmegaBaryon for Illustris-1 (not stored in header).
 _OMEGA_BARYON_ILLUSTRIS_DEFAULT = 0.0456
@@ -495,11 +497,13 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         'subtract_mean': subtract_mn,
     }
 
-    # Filter types for columns 1 (cumulative) and 2 (CAP).
+    # Filter types for columns 1 (cumulative), 2 (CAP) and 3 (DSigma).
     ft_col1  = stack_cfg.get('filter_type_col1',   'cumulative')
     ft2_col1 = stack_cfg.get('filter_type_2_col1', 'cumulative')
     ft_col2  = stack_cfg.get('filter_type_col2',   'CAP')
     ft2_col2 = stack_cfg.get('filter_type_2_col2', 'CAP')
+    ft_col3  = stack_cfg.get('filter_type_col3',   'DSigma')
+    ft2_col3 = stack_cfg.get('filter_type_2_col3', 'DSigma')
 
     # --- Plotting parameters ---
     now       = datetime.now()
@@ -514,11 +518,13 @@ def main(path2config: str, ptype: str, verbose: bool = True):
 
     # Columns to draw, and the (filter, filter_2) pair of each 2D column.
     columns = stack_cfg.get('columns', _DEFAULT_COLUMNS)
-    col_filters = {'col1': (ft_col1, ft2_col1), 'col2': (ft_col2, ft2_col2)}
+    col_filters = {'col1': (ft_col1, ft2_col1), 'col2': (ft_col2, ft2_col2),
+                   'col3': (ft_col3, ft2_col3)}
     unknown = [c for c in columns if c != '3d' and c not in col_filters]
     if unknown:
-        raise ValueError(f"Unknown column kind(s) {unknown}; use '3d', 'col1' or 'col2'.")
-    col_titles = {'3d': '3D cumulative', 'col1': f'2D {ft_col1}', 'col2': f'2D {ft_col2}'}
+        raise ValueError(f"Unknown column kind(s) {unknown}; use '3d', 'col1', 'col2' or 'col3'.")
+    col_titles = {'3d': '3D cumulative'}
+    col_titles.update({k: f'2D {_FILTER_TITLES.get(ft, ft)}' for k, (ft, _) in col_filters.items()})
 
     # ------------------------------------------------------------------
     # One row per simulation suite, in config order.
@@ -540,12 +546,15 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     nRows, nCols = len(suites), len(columns)
 
     # ------------------------------------------------------------------
-    # Create figure: 6 x 4.5 in per panel (as in the original 18 x 9 in 3x2
-    # grid), plus a strip on the right for the per-row legends.
+    # Create figure: plot.panel_width x plot.panel_height per panel (default
+    # 6 x 4.5 in, as in the original 18 x 9 in 3x2 grid), plus a strip on the
+    # right for the per-row legends.
     # ------------------------------------------------------------------
+    panel_width  = plot_cfg.get('panel_width', 6.0)   # inches
+    panel_height = plot_cfg.get('panel_height', 4.5)  # inches
     legend_width = 2.8  # inches
-    fig_width = 6.0 * nCols + legend_width
-    fig, axes = plt.subplots(nRows, nCols, figsize=(fig_width, 4.5 * nRows),
+    fig_width = panel_width * nCols + legend_width
+    fig, axes = plt.subplots(nRows, nCols, figsize=(fig_width, panel_height * nRows),
                              sharex='col', sharey='row', squeeze=False)
 
     # R200m per row, taken from the first sim processed in each suite.

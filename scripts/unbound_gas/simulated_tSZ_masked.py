@@ -100,6 +100,15 @@ def main(path2config, verbose=True):
     maxRadius = stack_config.get('max_radius', 6.0)
     nRadii = stack_config.get('num_radii', 11)
 
+    # Halo selection. The defaults are stackMap's own (mass cut), so configs
+    # without these keys keep their sample; use_subhalos: true selects SHAM.
+    selection_kwargs = dict(
+        use_subhalos=stack_config.get('use_subhalos', False),
+        halo_abundance_target=stack_config.get('halo_abundance_target', 5e-4),
+        halo_mass_avg=stack_config.get('halo_mass_avg', 10 ** (13.22)),
+        halo_mass_upper=stack_config.get('halo_mass_upper', 5 * 10 ** (14)),
+    )
+
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
 
@@ -205,7 +214,8 @@ def main(path2config, verbose=True):
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii,
+                                                         **selection_kwargs)
 
                     try:
                         OmegaBaryon = stacker.header['OmegaBaryon']
@@ -235,7 +245,8 @@ def main(path2config, verbose=True):
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii,
+                                                         **selection_kwargs)
                     
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     sim_name = sim_name_show
@@ -254,7 +265,8 @@ def main(path2config, verbose=True):
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii,
+                                                         **selection_kwargs)
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
                     # '-' instead of '_' so the name is plain text

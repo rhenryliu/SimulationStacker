@@ -10,7 +10,8 @@
 #   Columns (stack.columns): '3d'   = 3D spherical profiles (comoving kpc/h)
 #                            'col1' = 2D projected, cumulative (arcmin)
 #                            'col2' = 2D projected, CAP filter (arcmin)
-#   The paper figure shows all three columns.
+#                            'col3' = 2D projected, DSigma filter (arcmin)
+#   The paper figure shows all four columns.
 
 stack:
   # Redshift of the simulation snapshot targeted
@@ -66,13 +67,21 @@ stack:
   filter_type_col2:   'CAP'
   filter_type_2_col2: 'CAP'
 
+  # Column 3: DSigma filter (0.75 arcmin annulus, the stackMap default), on
+  # the same beam-convolved maps as columns 1 and 2
+  filter_type_col3:   'DSigma'
+  filter_type_2_col3: 'DSigma'
+
   # Columns drawn, left to right (default ['3d', 'col1', 'col2']).
-  columns: ['3d', 'col1', 'col2']
+  columns: ['3d', 'col1', 'col2', 'col3']
 
 
 plot:
   fig_path: '../figures/'
   fig_name: 'ratios_3x2_yz'    # output file will be named <fig_name>_<particle_type>.pdf
+  # Narrower panels so four columns keep the figure about as wide as three did.
+  panel_width: 4.6
+  panel_height: 4.0
   fig_type: 'pdf'
   plot_error_bars: true
 

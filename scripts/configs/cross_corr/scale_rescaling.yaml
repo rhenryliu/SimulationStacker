@@ -1,0 +1,35 @@
+# Comoving versus physical scale test of x_F(R) = Y_bm/Y_mm (Uros, 2026-09-27).
+#
+# For each run, plots the z ~ 0.5 and z ~ 0.26 curves (FLAMINGO's low-z
+# snapshot is z = 0.30) against arcmin, comoving Mpc/h and physical Mpc/h, and
+# scans the one-parameter family s = R_com (1+z)^beta for the rescaling under
+# which the two curves overlap best (beta = 0 comoving, beta = -1 physical).
+#
+# Post-processing only: reads the round-two data/cross_corr_C/calibration_*.npz
+# (both snapshots of every run) and computes nothing on the maps.  The R_nl
+# candidate needs CAMB and the snapshot headers on scratch.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/plot_scale_rescaling.py -p configs/cross_corr/scale_rescaling.yaml
+
+filter: 'DSigma'           # D-10 fiducial
+
+# Apertures plotted and entering the overlap metric, arcmin.  The saved grid
+# runs 1'-9.75'; set the upper end to 6.0 to restrict to the observational range.
+radius_range_arcmin: [1.0, 9.75]
+
+# beta scan for s = R_com (1+z)^beta.
+beta_min: -4.0
+beta_max: 4.0
+beta_step: 0.01
+n_overlap_grid: 50         # log-spaced points the two curves are compared on
+min_overlap_factor: 2.0    # a beta counts only if the overlap spans >= this factor in s
+
+# Runs, in plotting order; each label must have exactly two snapshots on disk.
+runs: ['TNG300-1', 'L1_m9_fiducial', 'L1_m9_Jet_fgas-4sigma', 'L1_m9_fgas-8sigma']
+
+plot:
+  npz_path: '../data/cross_corr_C/'
+  fig_path: '../figures/'
+  fig_name: 'scale_rescaling'

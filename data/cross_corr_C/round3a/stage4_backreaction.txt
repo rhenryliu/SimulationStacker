@@ -1,0 +1,57 @@
+==============================================================================
+Round 3A, Stage 4: back-reaction and the suppression chain, z ~ 0.5 (3D)
+==============================================================================
+
+[acceptance] bookkeeping: P_tt = f_m^2 P_mm + 2 f_m f_b P_bm + f_b^2 P_bb against the stored total, max relative difference for k <= 5 h/Mpc:
+  TNG300-1     1.3e-07   (f_b = 0.15733, k_Nyq = 15.3 h/Mpc)
+  FLA fid      2.8e-08   (f_b = 0.15955, k_Nyq = 9.2 h/Mpc)
+  FLA Jet      4.1e-08   (f_b = 0.15955, k_Nyq = 9.2 h/Mpc)
+  FLA fgas-8σ  2.6e-08   (f_b = 0.15955, k_Nyq = 9.2 h/Mpc)
+
+[O-14] back-reaction B(k) = P_mm^hydro / P_DMO       k =      0.5     1.0     2.0     3.0     5.0     7.0
+  TNG300-1                                   1.001   1.005   1.011   1.010   0.995   0.977
+  FLA fid                                    1.005   1.010   1.017   1.018   1.013   1.012
+  FLA Jet                                    1.003   1.002   1.000   0.994   0.981   0.975
+  FLA fgas-8σ                                1.004   1.005   1.002   0.995   0.982   0.979
+
+[chain] S_true = P_tt^hydro/P_DMO; S_int = P_tt/P_mm (what the estimator targets); (f_m + f_b x)^2 from the 3D x
+  TNG300-1     S_true                         0.998   0.992   0.975   0.951   0.892   0.849
+  TNG300-1     S_int                          0.996   0.987   0.964   0.941   0.897   0.869
+  TNG300-1     (fm+fb x)^2                    0.996   0.987   0.964   0.940   0.895   0.867
+  TNG300-1     S_int/S_true-1                -0.001  -0.005  -0.011  -0.010  +0.005  +0.023
+  FLA fid      S_true                         0.994   0.978   0.939   0.906   0.862   0.852
+  FLA fid      S_int                          0.989   0.968   0.923   0.890   0.851   0.842
+  FLA fid      (fm+fb x)^2                    0.989   0.968   0.923   0.889   0.851   0.841
+  FLA fid      S_int/S_true-1                -0.005  -0.010  -0.016  -0.018  -0.013  -0.012
+  FLA Jet      S_true                         0.971   0.927   0.875   0.842   0.805   0.796
+  FLA Jet      S_int                          0.967   0.924   0.875   0.847   0.821   0.816
+  FLA Jet      (fm+fb x)^2                    0.967   0.924   0.874   0.846   0.820   0.816
+  FLA Jet      S_int/S_true-1                -0.003  -0.002  +0.000  +0.006  +0.019  +0.025
+  FLA fgas-8σ  S_true                         0.980   0.936   0.870   0.833   0.806   0.809
+  FLA fgas-8σ  S_int                          0.976   0.932   0.869   0.838   0.820   0.827
+  FLA fgas-8σ  (fm+fb x)^2                    0.976   0.931   0.868   0.837   0.820   0.826
+  FLA fgas-8σ  S_int/S_true-1                -0.004  -0.005  -0.002  +0.005  +0.018  +0.022
+
+[Eq. 67] baryon mass weights and per-component x_i = P_{i,DM}/P_DM,DM at k = 1, 3, 5 h/Mpc:
+  TNG300-1     weights: ionized 0.955, neutral 0.017, stars 0.028, BH 0.0002
+               k=  1: x_ion 0.927  x_neu 0.440  x_star 2.320  x_BH 2.104  ->  x_b 0.959; x_b/x_ion 1.034
+               k=  3: x_ion 0.738  x_neu 0.500  x_star 3.338  x_BH 3.075  ->  x_b 0.808; x_b/x_ion 1.095
+               k=  5: x_ion 0.544  x_neu 0.749  x_star 4.438  x_BH 4.238  ->  x_b 0.658; x_b/x_ion 1.210
+  FLA fid      weights: ionized 0.915, neutral 0.027, stars 0.055, BH 0.0028
+               k=  1: x_ion 0.831  x_neu 0.884  x_star 1.986  x_BH 1.785  ->  x_b 0.899; x_b/x_ion 1.081
+               k=  3: x_ion 0.500  x_neu 0.918  x_star 2.772  x_BH 2.416  ->  x_b 0.641; x_b/x_ion 1.283
+               k=  5: x_ion 0.301  x_neu 1.082  x_star 3.630  x_BH 3.184  ->  x_b 0.513; x_b/x_ion 1.704
+  FLA Jet      weights: ionized 0.917, neutral 0.022, stars 0.058, BH 0.0029
+               k=  1: x_ion 0.691  x_neu 0.787  x_star 1.739  x_BH 1.788  ->  x_b 0.757; x_b/x_ion 1.095
+               k=  3: x_ion 0.370  x_neu 0.770  x_star 2.322  x_BH 2.377  ->  x_b 0.498; x_b/x_ion 1.345
+               k=  5: x_ion 0.225  x_neu 0.904  x_star 2.991  x_BH 3.089  ->  x_b 0.408; x_b/x_ion 1.814
+  FLA fgas-8σ  weights: ionized 0.909, neutral 0.028, stars 0.061, BH 0.0028
+               k=  1: x_ion 0.700  x_neu 0.833  x_star 1.919  x_BH 1.803  ->  x_b 0.781; x_b/x_ion 1.115
+               k=  3: x_ion 0.303  x_neu 0.823  x_star 2.655  x_BH 2.402  ->  x_b 0.466; x_b/x_ion 1.538
+               k=  5: x_ion 0.177  x_neu 0.978  x_star 3.466  x_BH 3.110  ->  x_b 0.407; x_b/x_ion 2.304
+
+[P9] 3D x(k) against the 2D maps' x(k), max |dx| over 0.3 <= k <= 5 h/Mpc (threshold 0.02):
+  TNG300-1     0.0054
+  FLA fid      0.0017
+  FLA Jet      0.0022
+  FLA fgas-8σ  0.0030

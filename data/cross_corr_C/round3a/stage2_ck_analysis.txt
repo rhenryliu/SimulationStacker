@@ -1,0 +1,169 @@
+==============================================================================
+Round 3A, Stage 2: C(k) and the window/mediation split
+==============================================================================
+
+---------------- z ≈ 0.5 ----------------
+
+[acceptance] regression vs round two (worst relative diff) and exact-C_F closure vs committed C_F:
+  TNG300-1     regression 8.5e-14 (pass True); C_F closure 4.7e-13
+  FLA fid      regression 5.6e-13 (pass True); C_F closure 3.1e-12
+  FLA Jet      regression 6.7e-13 (pass True); C_F closure 1.3e-12
+  FLA fgas-8σ  regression 7.0e-13 (pass True); C_F closure 2.5e-12
+
+[acceptance] binned route vs exact route for M_F (independent code paths; every filter, gas and convention), worst |dM| over usable bins; threshold 0.002 for the stored kernels, 0.005 for the derived filters:
+  TNG300-1     Sigma/DSigma/DoG 5.8e-04 (PASS); Upsilon/Y transform 2.3e-03 (PASS)
+  FLA fid      Sigma/DSigma/DoG 2.5e-04 (PASS); Upsilon/Y transform 8.9e-04 (PASS)
+  FLA Jet      Sigma/DSigma/DoG 3.9e-04 (PASS); Upsilon/Y transform 8.5e-04 (PASS)
+  FLA fgas-8σ  Sigma/DSigma/DoG 3.6e-04 (PASS); Upsilon/Y transform 8.1e-04 (PASS)
+
+[acceptance] pre-registered closure: binned-route C_F against the committed C_F over 1'-9.75' (baryons, Convention C), threshold 0.005; the split itself uses the exact route:
+  TNG300-1     Sigma/DSigma 8.2e-04 (PASS); Upsilon/Y transform 3.7e-03 (PASS)
+  FLA fid      Sigma/DSigma 4.5e-04 (PASS); Upsilon/Y transform 2.1e-03 (PASS)
+  FLA Jet      Sigma/DSigma 3.5e-04 (PASS); Upsilon/Y transform 1.3e-03 (PASS)
+  FLA fgas-8σ  Sigma/DSigma 7.9e-04 (PASS); Upsilon/Y transform 2.5e-03 (PASS)
+
+[P1] DSigma, baryons, Convention C, R = 1'.  f_W = ln W/ln C (window >= 0.8, mediation <= 0.2).  C(k) over DSigma(1')'s k05-k95 = 1.80-7.37 h/Mpc:
+  TNG300-1     C 1.1144 = W 1.0279 x M 1.0841; f_W +0.25; C(k) in range: mean 1.072, max |C-1| 0.119
+  FLA fid      C 1.1053 = W 1.0513 x M 1.0514; f_W +0.50; C(k) in range: mean 1.046, max |C-1| 0.050
+  FLA Jet      C 1.1380 = W 1.0528 x M 1.0809; f_W +0.40; C(k) in range: mean 1.082, max |C-1| 0.093
+  FLA fgas-8σ  C 1.1660 = W 1.0563 x M 1.1039; f_W +0.36; C(k) in range: mean 1.103, max |C-1| 0.118
+
+[O-01] M_F and W_F over the data range, DSigma, baryons, Convention C:
+  R               1.000         1.625         2.250         3.500         4.750         6.000
+  TNG300-1    M         1.0841        1.0484        1.0427        1.0293        1.0116        1.0084
+              W         1.0279        0.9986        0.9873        0.9906        0.9917        0.9931
+  FLA fid     M         1.0514        1.0418        1.0369        1.0262        1.0126        1.0048
+              W         1.0513        1.0182        0.9979        0.9840        0.9848        0.9881
+  FLA Jet     M         1.0809        1.0822        1.0837        1.0773        1.0597        1.0439
+              W         1.0528        1.0257        1.0065        0.9895        0.9858        0.9868
+  FLA fgas-8σ M         1.1039        1.1089        1.1074        1.0893        1.0654        1.0443
+              W         1.0563        1.0419        1.0201        0.9912        0.9824        0.9812
+
+[O-01] At R = 1' (DoG: smallest sigma1), baryons: C / W / M by filter and convention (FLA fid | TNG300-1)
+  DSigma             C:1.105/1.051/1.051 | T:1.106/1.049/1.055 | C:1.114/1.028/1.084 | T:1.113/1.026/1.085
+  Sigma              C:0.932/0.921/1.012 | T:0.942/0.932/1.010 | C:0.923/0.920/1.004 | T:0.934/0.933/1.001
+  Upsilon_R0=1       C:0.914/0.887/1.030 | T:0.927/0.900/1.030 | C:0.885/0.879/1.008 | T:0.901/0.896/1.005
+  Upsilon_R0=2       C:0.849/0.830/1.023 | T:0.866/0.850/1.019 | C:0.944/0.907/1.041 | T:0.951/0.921/1.033
+  Ytransform_Rmax=4  C:0.899/0.880/1.021 | T:0.912/0.895/1.019 | C:0.901/0.893/1.009 | T:0.914/0.910/1.005
+  Ytransform_Rmax=5  C:0.902/0.887/1.018 | T:0.915/0.901/1.015 | C:0.904/0.898/1.006 | T:0.917/0.914/1.003
+  Ytransform_Rmax=6  C:0.906/0.892/1.016 | T:0.918/0.906/1.014 | C:0.906/0.901/1.006 | T:0.919/0.917/1.002
+  Ytransform_Rmax=9  C:0.913/0.901/1.014 | T:0.925/0.914/1.012 | C:0.911/0.907/1.004 | T:0.923/0.922/1.001
+  DoG_q=2            C:1.096/1.053/1.040 | T:1.098/1.050/1.046 | C:1.172/1.072/1.093 | T:1.166/1.065/1.094
+  DoG_q=1.5          C:1.084/1.044/1.038 | T:1.088/1.041/1.045 | C:1.179/1.071/1.101 | T:1.175/1.065/1.103
+
+[O-01] Electrons, DSigma, Convention C at 1': C / W / M
+  TNG300-1     1.1564 / 1.0329 / 1.1196
+  FLA fid      1.1938 / 1.0829 / 1.1025
+  FLA Jet      1.2696 / 1.0889 / 1.1659
+  FLA fgas-8σ  1.4269 / 1.1158 / 1.2788
+
+[P4b] Spread of M_F and W_F across Sigma, DSigma and DoG_q=2 at matched k_50 (baryons, Conv. C); P4 threshold 0.01 on M:
+  TNG300-1     max |dM| 0.0194   max |dW| 0.0769
+  FLA fid      max |dM| 0.0111   max |dW| 0.0932
+  FLA Jet      max |dM| 0.0115   max |dW| 0.0895
+  FLA fgas-8σ  max |dM| 0.0262   max |dW| 0.0959
+
+[P2 / O-05] C(k) by galaxy sample (baryons, Conv. C) at k = 1, 2, 3.5, 5, 7 h/Mpc; and max |C_lo - C_hi| over 3-7 h/Mpc
+  TNG300-1     fid:1.011,1.040,1.068,1.090,1.119  alt:1.009,1.048,1.086,1.109,1.136  lo:1.034,1.138,1.325,1.323,1.325  hi:1.006,1.015,0.999,1.009,1.041
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.314, max |.| 0.333
+  FLA fid      fid:1.009,1.035,1.048,1.049,1.050  alt:1.011,1.051,1.075,1.066,1.054  lo:1.027,1.178,1.272,1.202,1.142  hi:1.004,1.002,0.985,0.996,1.013
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.233, max |.| 0.287
+  FLA Jet      fid:1.049,1.087,1.082,1.074,1.070  alt:1.047,1.084,1.073,1.043,1.029  lo:1.108,1.202,1.140,1.051,1.013  hi:1.034,1.061,1.064,1.083,1.097
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.019, max |.| 0.109
+  FLA fgas-8σ  fid:1.047,1.111,1.109,1.089,1.078  alt:1.045,1.108,1.099,1.064,1.047  lo:1.119,1.357,1.216,1.101,1.052  hi:1.029,1.060,1.076,1.084,1.090
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.082, max |.| 0.218
+
+[P3 / O-06] Cross-code (C_TNG - C_fid)/C, DSigma: at 1' and max over 1'-6'
+  LRG-like 5e-4  gas=b: at 1' +0.008; max |.| 0.013 at 1.625'
+  LRG-like 5e-4  gas=e: at 1' -0.032; max |.| 0.032 at 1.000'
+  BGS-like 1e-3  gas=b: at 1' +0.004; max |.| 0.022 at 2.000'
+  BGS-like 1e-3  gas=e: at 1' -0.059; max |.| 0.059 at 1.000'
+
+[Eq. 40] Doubly filtered coefficients at the smallest scale (bounded by 1 for any kernel) and C~:
+  TNG300-1     DSigma: r_bm 0.942 r_gm 2.606 r_gb 2.170 C~ 1.130; Sigma: r_bm 0.988 r_gm 1.546 r_gb 1.383 C~ 1.105; DoG_q=2: r_bm 0.947 r_gm 2.438 r_gb 2.025 C~ 1.140
+  FLA fid      DSigma: r_bm 0.940 r_gm 2.282 r_gb 2.063 C~ 1.040; Sigma: r_bm 0.981 r_gm 1.458 r_gb 1.293 C~ 1.107; DoG_q=2: r_bm 0.947 r_gm 2.167 r_gb 1.899 C~ 1.081
+  FLA Jet      DSigma: r_bm 0.913 r_gm 2.398 r_gb 2.066 C~ 1.060; Sigma: r_bm 0.963 r_gm 1.478 r_gb 1.219 C~ 1.167; DoG_q=2: r_bm 0.923 r_gm 2.268 r_gb 1.896 C~ 1.104
+  FLA fgas-8σ  DSigma: r_bm 0.910 r_gm 2.272 r_gb 1.997 C~ 1.035; Sigma: r_bm 0.960 r_gm 1.448 r_gb 1.192 C~ 1.167; DoG_q=2: r_bm 0.921 r_gm 2.159 r_gb 1.811 C~ 1.098
+
+---------------- z ≈ 0.26/0.30 ----------------
+
+[acceptance] regression vs round two (worst relative diff) and exact-C_F closure vs committed C_F:
+  TNG300-1     regression 6.9e-13 (pass True); C_F closure 4.7e-13
+  FLA fid      regression 1.2e-12 (pass True); C_F closure 1.6e-12
+  FLA Jet      regression 6.5e-13 (pass True); C_F closure 4.7e-12
+  FLA fgas-8σ  regression 1.5e-12 (pass True); C_F closure 2.5e-12
+
+[acceptance] binned route vs exact route for M_F (independent code paths; every filter, gas and convention), worst |dM| over usable bins; threshold 0.002 for the stored kernels, 0.005 for the derived filters:
+  TNG300-1     Sigma/DSigma/DoG 6.6e-04 (PASS); Upsilon/Y transform 1.6e-03 (PASS)
+  FLA fid      Sigma/DSigma/DoG 8.3e-04 (PASS); Upsilon/Y transform 3.0e-03 (PASS)
+  FLA Jet      Sigma/DSigma/DoG 4.7e-04 (PASS); Upsilon/Y transform 1.9e-03 (PASS)
+  FLA fgas-8σ  Sigma/DSigma/DoG 9.2e-04 (PASS); Upsilon/Y transform 5.1e-03 (FAIL)
+
+[acceptance] pre-registered closure: binned-route C_F against the committed C_F over 1'-9.75' (baryons, Convention C), threshold 0.005; the split itself uses the exact route:
+  TNG300-1     Sigma/DSigma 7.5e-04 (PASS); Upsilon/Y transform 3.9e-03 (PASS)
+  FLA fid      Sigma/DSigma 1.1e-03 (PASS); Upsilon/Y transform 3.0e-03 (PASS)
+  FLA Jet      Sigma/DSigma 8.0e-04 (PASS); Upsilon/Y transform 2.4e-03 (PASS)
+  FLA fgas-8σ  Sigma/DSigma 1.4e-03 (PASS); Upsilon/Y transform 6.0e-03 (FAIL)
+
+[P1] DSigma, baryons, Convention C, R = 1'.  f_W = ln W/ln C (window >= 0.8, mediation <= 0.2).  C(k) over DSigma(1')'s k05-k95 = 2.51-11.65 h/Mpc:
+  TNG300-1     C 1.2493 = W 1.0767 x M 1.1603; f_W +0.33; C(k) in range: mean 1.120, max |C-1| 0.166
+  FLA fid      C 1.1383 = W 1.0673 x M 1.0666; f_W +0.50; C(k) in range: mean 1.070, max |C-1| 0.097
+  FLA Jet      C 1.1092 = W 1.0655 x M 1.0410; f_W +0.61; C(k) in range: mean 1.056, max |C-1| 0.109
+  FLA fgas-8σ  C 1.1048 = W 1.0497 x M 1.0525; f_W +0.49; C(k) in range: mean 1.069, max |C-1| 0.136
+
+[O-01] M_F and W_F over the data range, DSigma, baryons, Convention C:
+  R               1.000         1.625         2.250         3.500         4.750         6.000
+  TNG300-1    M         1.1603        1.1307        1.1006        1.0668        1.0467        1.0336
+              W         1.0767        1.0381        1.0128        0.9910        0.9843        0.9832
+  FLA fid     M         1.0666        1.0871        1.0912        1.0781        1.0594        1.0416
+              W         1.0673        1.0520        1.0266        0.9963        0.9850        0.9835
+  FLA Jet     M         1.0410        1.0706        1.0908        1.1050        1.1012        1.0890
+              W         1.0655        1.0568        1.0346        1.0043        0.9889        0.9850
+  FLA fgas-8σ M         1.0525        1.0859        1.1112        1.1295        1.1245        1.1084
+              W         1.0497        1.0635        1.0506        1.0189        0.9959        0.9839
+
+[O-01] At R = 1' (DoG: smallest sigma1), baryons: C / W / M by filter and convention (FLA fid | TNG300-1)
+  DSigma             C:1.138/1.067/1.067 | T:1.137/1.064/1.069 | C:1.249/1.077/1.160 | T:1.245/1.072/1.162
+  Sigma              C:1.018/0.967/1.052 | T:1.021/0.973/1.049 | C:0.977/0.942/1.038 | T:0.983/0.950/1.034
+  Upsilon_R0=1       C:1.078/0.966/1.117 | T:1.082/0.970/1.115 | C:0.999/0.908/1.100 | T:1.008/0.919/1.097
+  Upsilon_R0=2       C:0.947/0.866/1.093 | T:0.957/0.879/1.088 | C:0.888/0.853/1.041 | T:0.904/0.873/1.035
+  Ytransform_Rmax=4  C:1.010/0.927/1.090 | T:1.015/0.935/1.086 | C:0.960/0.907/1.059 | T:0.968/0.919/1.054
+  Ytransform_Rmax=5  C:1.007/0.931/1.082 | T:1.012/0.939/1.077 | C:0.961/0.912/1.053 | T:0.969/0.924/1.049
+  Ytransform_Rmax=6  C:1.007/0.936/1.076 | T:1.011/0.944/1.071 | C:0.963/0.917/1.050 | T:0.971/0.928/1.046
+  Ytransform_Rmax=9  C:1.009/0.947/1.065 | T:1.013/0.954/1.062 | C:0.967/0.927/1.044 | T:0.974/0.937/1.040
+  DoG_q=2            C:1.044/1.021/1.023 | T:1.052/1.019/1.032 | C:1.206/1.079/1.118 | T:1.205/1.074/1.122
+  DoG_q=1.5          C:1.015/1.005/1.010 | T:1.026/1.005/1.021 | C:1.185/1.067/1.111 | T:1.186/1.062/1.117
+
+[O-01] Electrons, DSigma, Convention C at 1': C / W / M
+  TNG300-1     1.4549 / 1.1212 / 1.2976
+  FLA fid      1.4455 / 1.1667 / 1.2389
+  FLA Jet      1.4391 / 1.1758 / 1.2240
+  FLA fgas-8σ  1.5832 / 1.1822 / 1.3393
+
+[P4b] Spread of M_F and W_F across Sigma, DSigma and DoG_q=2 at matched k_50 (baryons, Conv. C); P4 threshold 0.01 on M:
+  TNG300-1     max |dM| 0.0204   max |dW| 0.0788
+  FLA fid      max |dM| 0.0440   max |dW| 0.0729
+  FLA Jet      max |dM| 0.0352   max |dW| 0.0634
+  FLA fgas-8σ  max |dM| 0.0454   max |dW| 0.0805
+
+[P2 / O-05] C(k) by galaxy sample (baryons, Conv. C) at k = 1, 2, 3.5, 5, 7 h/Mpc; and max |C_lo - C_hi| over 3-7 h/Mpc
+  TNG300-1     fid:1.013,1.045,1.099,1.114,1.154  alt:1.011,1.031,1.060,1.071,1.107  lo:1.038,1.200,1.394,1.427,1.422  hi:1.008,1.019,1.030,1.036,1.069
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.359, max |.| 0.391
+  FLA fid      fid:1.018,1.055,1.092,1.090,1.059  alt:1.012,1.039,1.058,1.057,1.049  lo:1.052,1.242,1.385,1.284,1.106  hi:1.010,1.026,1.035,1.037,1.042
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.271, max |.| 0.350
+  FLA Jet      fid:1.065,1.100,1.100,1.069,1.028  alt:1.066,1.099,1.102,1.085,1.068  lo:1.110,1.187,1.106,0.997,0.888  hi:1.057,1.086,1.099,1.093,1.091
+               C_lo - C_hi over 3-7 h/Mpc: mean -0.069, max |.| 0.156
+  FLA fgas-8σ  fid:1.068,1.126,1.124,1.080,1.035  alt:1.067,1.120,1.122,1.089,1.060  lo:1.151,1.374,1.234,1.068,0.957  hi:1.051,1.089,1.099,1.084,1.069
+               C_lo - C_hi over 3-7 h/Mpc: mean +0.026, max |.| 0.135
+
+[P3 / O-06] Cross-code (C_TNG - C_fid)/C, DSigma: at 1' and max over 1'-6'
+  BGS-like 1e-3  gas=b: at 1' +0.093; max |.| 0.093 at 1.000'
+  BGS-like 1e-3  gas=e: at 1' +0.006; max |.| 0.037 at 2.875'
+  LRG-like 5e-4  gas=b: at 1' +0.071; max |.| 0.071 at 1.000'
+  LRG-like 5e-4  gas=e: at 1' +0.016; max |.| 0.024 at 2.250'
+
+[Eq. 40] Doubly filtered coefficients at the smallest scale (bounded by 1 for any kernel) and C~:
+  TNG300-1     DSigma: r_bm 0.914 r_gm 3.295 r_gb 2.681 C~ 1.124; Sigma: r_bm 0.980 r_gm 1.541 r_gb 1.313 C~ 1.150; DoG_q=2: r_bm 0.919 r_gm 2.941 r_gb 2.269 C~ 1.191
+  FLA fid      DSigma: r_bm 0.926 r_gm 2.634 r_gb 2.504 C~ 0.975; Sigma: r_bm 0.971 r_gm 1.451 r_gb 1.243 C~ 1.134; DoG_q=2: r_bm 0.939 r_gm 2.463 r_gb 2.212 C~ 1.045
+  FLA Jet      DSigma: r_bm 0.893 r_gm 2.733 r_gb 2.577 C~ 0.948; Sigma: r_bm 0.949 r_gm 1.466 r_gb 1.184 C~ 1.176; DoG_q=2: r_bm 0.912 r_gm 2.555 r_gb 2.293 C~ 1.015
+  FLA fgas-8σ  DSigma: r_bm 0.897 r_gm 2.612 r_gb 2.541 C~ 0.922; Sigma: r_bm 0.943 r_gm 1.442 r_gb 1.159 C~ 1.174; DoG_q=2: r_bm 0.915 r_gm 2.451 r_gb 2.260 C~ 0.992

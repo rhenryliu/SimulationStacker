@@ -1,0 +1,75 @@
+# Round 3A at z ~ 0.5 (LRG-like): is C_F - 1 window smearing or mediation
+# failure?  docs/cross_corr/open-items.md O-01 to O-10; predictions in
+# docs/cross_corr/predictions/2026-09-27_round3a.md.
+#
+# The 'stack' and 'simulations' blocks are copied verbatim from
+# calibration_z05.yaml, so the fields, the fiducial SHAM sample and the
+# 19-aperture grid are exactly those of the round-two sweep; the regression
+# check in make_ck_spectra.py depends on it.  Only the 'round3a' block is new.
+#
+# Run from scripts/ (see cross_corr/runINT_round3a.sh):
+#   python cross_corr/make_ck_spectra.py      -p configs/cross_corr/round3a_z05.yaml
+#   python cross_corr/make_dog_calibration.py -p configs/cross_corr/round3a_z05.yaml
+
+stack:
+  redshift: 0.5
+  projections: ['yz']
+  min_radius: 1.0
+  max_radius: 6.0
+  num_radii: 9
+  extend_max_radius: 10.0
+  dr_arcmin: 0.75
+  upsilon_r0: [1.0, 2.0]
+  ytransform_rmax: [4.0, 5.0, 6.0, 9.0]
+  n_jk_side: 4
+  load_field: true
+  save_field: false
+  particle_type_e: 'ionized_gas'
+  particle_type_b: 'baryon'
+  halo_abundance_target: 5.0e-4    # (cMpc/h)^-3, DESI LRG bin 1 (fiducial)
+  parent_mass_upper: 5.0e14        # Msun/h
+
+round3a:
+  # Committed round-two outputs: the regression target, and k_50 for the
+  # analysis.
+  calibration_npz_path: '../data/cross_corr_C/'
+  task9_npz_path: '../data/cross_corr_C/'
+  out_path: '../data/cross_corr_C/round3a/'
+  # O-06: the BGS-like density swapped in at this snapshot.
+  alt_abundance_target: 1.0e-3
+  # O-05: split the fiducial sample at its median parent FoF mass.
+  mass_split: true
+  # Linear |k| bins for the spectra, 1/arcmin.
+  k_bin_width: 0.02
+  # O-02: DoG widths sigma1 log-spaced over [min, max] arcmin, sigma2 = q sigma1.
+  # q = 2 is the formalism's matched example (0.58', 1.15' at the 1'
+  # DSigma k_50); q = 1.5 is the sensitivity case (0.65', 0.98').
+  dog_sigma1_min: 0.5
+  dog_sigma1_max: 5.0
+  dog_n_sigma: 10
+  dog_ratios: [2.0, 1.5]
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'round3a_z05'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 67
+        n_pixels: 2674
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+        n_pixels: 8869
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 8869

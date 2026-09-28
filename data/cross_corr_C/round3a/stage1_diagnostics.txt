@@ -1,0 +1,141 @@
+==============================================================================
+Round 3A, Stage 1 diagnostics (committed round-two outputs)
+==============================================================================
+
+---------------- z ≈ 0.5 ----------------
+
+[O-10] Collapse: max |C_F - C_DSigma| at matched k_50 (all apertures; P4 threshold 0.03)
+                            TNG300-1       FLA fid       FLA Jet   FLA fgas-8σ
+  Sigma                    0.078( 8)     0.092( 8)     0.090( 8)     0.098( 8)
+  Upsilon_R0=1             0.144(16)     0.124(16)     0.120(16)     0.120(16)
+  Upsilon_R0=2             0.099(14)     0.170(14)     0.175(14)     0.199(14)
+  Ytransform_Rmax=4        0.121( 6)     0.160( 6)     0.172( 6)     0.207( 6)
+  Ytransform_Rmax=5        0.135( 9)     0.151( 8)     0.172( 8)     0.205( 8)
+  Ytransform_Rmax=6        0.113(11)     0.142(11)     0.163(11)     0.200(11)
+  Ytransform_Rmax=9        0.092( 9)     0.122( 9)     0.135( 9)     0.164( 9)
+
+[O-10] Mean |C-1| on matched aperture ranges, 1'-6' (DSigma | filter | bins)
+  Sigma                  0.052 |   0.051 | 12   ratio filter/DSigma =  0.98
+  Upsilon_R0=1           0.045 |   0.078 | 11   ratio filter/DSigma =  1.76
+  Upsilon_R0=2           0.035 |   0.123 |  9   ratio filter/DSigma =  3.49
+  Ytransform_Rmax=4      0.086 |   0.116 |  5   ratio filter/DSigma =  1.35
+  Ytransform_Rmax=5      0.079 |   0.122 |  6   ratio filter/DSigma =  1.55
+  Ytransform_Rmax=6      0.063 |   0.118 |  9   ratio filter/DSigma =  1.89
+  Ytransform_Rmax=9      0.052 |   0.086 | 12   ratio filter/DSigma =  1.66
+
+[Prediction 3] Sigma vs DSigma, mean |C-1|:
+  matched aperture (1'-6'): Sigma 0.051, DSigma 0.052
+  matched k_50 (13 points): Sigma 0.065, DSigma 0.010
+
+[O-03] C = a + b x from the FLAMINGO variants, predicting TNG300-1 (DSigma, baryons)
+       R  TNG-pred  fb spread  slope b  LOO rms pass(|err|<spread/2)
+   1.000   +0.0682     0.0607   -0.405   0.0418 False
+   1.625   +0.0707     0.0945   -0.509   0.0468 False
+   2.000   +0.0689     0.0978   -0.500   0.0454 False
+   2.250   +0.0674     0.0949   -0.479   0.0439 False
+   2.875   +0.0604     0.0830   -0.431   0.0380 False
+   3.500   +0.0509     0.0699   -0.393   0.0313 False
+   4.000   +0.0391     0.0615   -0.372   0.0240 False
+   4.125   +0.0367     0.0594   -0.366   0.0227 False
+   4.750   +0.0308     0.0494   -0.338   0.0190 False
+   5.000   +0.0310     0.0461   -0.331   0.0191 False
+   5.375   +0.0276     0.0426   -0.315   0.0171 False
+   6.000   +0.0227     0.0373   -0.286   0.0141 False
+
+[O-04] b/e ratios, DSigma: matter-crossed Y_bm/Y_em (jk err) | galaxy-crossed Y_gb/Y_ge | Conv. T Y_bt/Y_et
+  R = 1.000': TNG300-1 1.162±0.002 | 1.206 | 1.159; FLA fid 1.492±0.001 | 1.611 | 1.481; FLA Jet 1.566±0.001 | 1.748 | 1.554; FLA fgas-8σ 1.854±0.002 | 2.269 | 1.831
+  R = 2.250': TNG300-1 1.066±0.001 | 1.067 | 1.066; FLA fid 1.184±0.000 | 1.187 | 1.182; FLA Jet 1.222±0.001 | 1.248 | 1.220; FLA fgas-8σ 1.322±0.001 | 1.383 | 1.316
+  R = 3.500': TNG300-1 1.044±0.001 | 1.047 | 1.044; FLA fid 1.112±0.000 | 1.111 | 1.112; FLA Jet 1.137±0.001 | 1.149 | 1.136; FLA fgas-8σ 1.183±0.001 | 1.205 | 1.181
+  R = 6.000': TNG300-1 1.031±0.001 | 1.033 | 1.031; FLA fid 1.072±0.000 | 1.072 | 1.072; FLA Jet 1.083±0.000 | 1.089 | 1.083; FLA fgas-8σ 1.100±0.001 | 1.107 | 1.100
+  R = 9.750': TNG300-1 1.024±0.001 | 1.023 | 1.024; FLA fid 1.057±0.000 | 1.057 | 1.057; FLA Jet 1.058±0.001 | 1.062 | 1.058; FLA fgas-8σ 1.067±0.001 | 1.070 | 1.068
+
+[O-09] Global log-slope over 1'-9.75' of the DSigma amplitudes (P6 range for Y_gm: [-2.2, -1.8])
+  TNG300-1     Y_gm -1.323  Y_gb -1.161  Y_mm -0.871  Y_bm -0.746
+  FLA fid      Y_gm -1.284  Y_gb -1.010  Y_mm -0.866  Y_bm -0.632
+  FLA Jet      Y_gm -1.272  Y_gb -0.911  Y_mm -0.854  Y_bm -0.546
+  FLA fgas-8σ  Y_gm -1.276  Y_gb -0.845  Y_mm -0.854  Y_bm -0.501
+  Upsilon(1') share of Y_gm^(DSigma) and C-error inflation at R = 2.25', 6', 9.75':
+  TNG300-1     share +0.505 +0.729 +0.796   inflation    1.8    1.4    1.2
+  FLA fid      share +0.500 +0.736 +0.821   inflation    1.2    2.2    1.3
+  FLA Jet      share +0.502 +0.740 +0.826   inflation    0.8    1.5    1.5
+  FLA fgas-8σ  share +0.503 +0.740 +0.824   inflation    1.2    1.7    1.3
+
+[D-05] Axis split of C (DSigma); max |dC/C| over 1'-6' and its significance (jackknife)
+  gas=b code (TNG-fid)       max 0.013 at R=1.625' (   2.4 sigma)
+  gas=b feedback (f8-fid)    max 0.089 at R=2.000' (  60.6 sigma)
+  gas=b feedback (Jet-fid)   max 0.055 at R=2.875' (  35.8 sigma)
+  gas=e code (TNG-fid)       max 0.032 at R=1.000' (   5.7 sigma)
+  gas=e feedback (f8-fid)    max 0.178 at R=1.000' (  97.0 sigma)
+  gas=e feedback (Jet-fid)   max 0.072 at R=2.000' (  54.3 sigma)
+
+[P8] Correlation of leave-one-out C_b realizations, median over 1'-6' (P8: > 0.9 for the variants, |rho| < 0.5 across codes)
+  fid vs fgas-8σ +0.699; fid vs Jet +0.787; TNG vs fid -0.018
+
+---------------- z ≈ 0.26/0.30 ----------------
+
+[O-10] Collapse: max |C_F - C_DSigma| at matched k_50 (all apertures; P4 threshold 0.03)
+                            TNG300-1       FLA fid       FLA Jet   FLA fgas-8σ
+  Sigma                    0.077( 8)     0.052( 8)     0.055( 8)     0.042( 8)
+  Upsilon_R0=1             0.136(16)     0.094(17)     0.081(17)     0.089(17)
+  Upsilon_R0=2             0.183(14)     0.150(14)     0.134(14)     0.139(14)
+  Ytransform_Rmax=4        0.139( 6)     0.155( 6)     0.146( 6)     0.147( 6)
+  Ytransform_Rmax=5        0.135( 7)     0.168( 7)     0.172( 7)     0.191( 7)
+  Ytransform_Rmax=6        0.133(11)     0.157(13)     0.164(13)     0.201(13)
+  Ytransform_Rmax=9        0.113(10)     0.136( 9)     0.148( 9)     0.180( 9)
+
+[O-10] Mean |C-1| on matched aperture ranges, 1'-6' (DSigma | filter | bins)
+  Sigma                  0.100 |   0.057 | 12   ratio filter/DSigma =  0.57
+  Upsilon_R0=1           0.096 |   0.059 | 11   ratio filter/DSigma =  0.62
+  Upsilon_R0=2           0.085 |   0.068 |  9   ratio filter/DSigma =  0.81
+  Ytransform_Rmax=4      0.138 |   0.066 |  5   ratio filter/DSigma =  0.48
+  Ytransform_Rmax=5      0.131 |   0.076 |  6   ratio filter/DSigma =  0.58
+  Ytransform_Rmax=6      0.114 |   0.093 |  9   ratio filter/DSigma =  0.81
+  Ytransform_Rmax=9      0.100 |   0.094 | 12   ratio filter/DSigma =  0.93
+
+[Prediction 3] Sigma vs DSigma, mean |C-1|:
+  matched aperture (1'-6'): Sigma 0.057, DSigma 0.100
+  matched k_50 (9 points): Sigma 0.051, DSigma 0.034
+
+[O-03] C = a + b x from the FLAMINGO variants, predicting TNG300-1 (DSigma, baryons)
+       R  TNG-pred  fb spread  slope b  LOO rms pass(|err|<spread/2)
+   1.000   +0.0882     0.0335    0.331   0.0528 False
+   1.625   +0.0327     0.0235   -0.012   0.0247 False
+   2.000   +0.0279     0.0343   -0.155   0.0267 False
+   2.250   +0.0274     0.0472   -0.229   0.0277 False
+   2.875   +0.0291     0.0686   -0.332   0.0289 True
+   3.500   +0.0336     0.0768   -0.371   0.0288 True
+   4.000   +0.0336     0.0798   -0.388   0.0279 True
+   4.125   +0.0331     0.0796   -0.388   0.0272 True
+   4.750   +0.0307     0.0764   -0.386   0.0240 True
+   5.000   +0.0304     0.0743   -0.382   0.0231 True
+   5.375   +0.0320     0.0718   -0.379   0.0231 True
+   6.000   +0.0256     0.0662   -0.373   0.0181 True
+
+[O-04] b/e ratios, DSigma: matter-crossed Y_bm/Y_em (jk err) | galaxy-crossed Y_gb/Y_ge | Conv. T Y_bt/Y_et
+  R = 1.000': TNG300-1 1.354±0.005 | 1.577 | 1.343; FLA fid 1.932±0.003 | 2.453 | 1.910; FLA Jet 2.079±0.004 | 2.697 | 2.054; FLA fgas-8σ 2.635±0.005 | 3.776 | 2.593
+  R = 2.250': TNG300-1 1.123±0.002 | 1.150 | 1.121; FLA fid 1.326±0.001 | 1.401 | 1.319; FLA Jet 1.389±0.002 | 1.502 | 1.382; FLA fgas-8σ 1.606±0.003 | 1.844 | 1.590
+  R = 3.500': TNG300-1 1.071±0.001 | 1.079 | 1.070; FLA fid 1.183±0.001 | 1.205 | 1.181; FLA Jet 1.222±0.001 | 1.271 | 1.219; FLA fgas-8σ 1.330±0.002 | 1.424 | 1.324
+  R = 6.000': TNG300-1 1.039±0.000 | 1.039 | 1.039; FLA fid 1.099±0.000 | 1.105 | 1.098; FLA Jet 1.120±0.000 | 1.142 | 1.119; FLA fgas-8σ 1.161±0.001 | 1.191 | 1.159
+  R = 9.750': TNG300-1 1.025±0.001 | 1.029 | 1.025; FLA fid 1.063±0.000 | 1.066 | 1.063; FLA Jet 1.074±0.001 | 1.085 | 1.074; FLA fgas-8σ 1.090±0.001 | 1.102 | 1.090
+
+[O-09] Global log-slope over 1'-9.75' of the DSigma amplitudes (P6 range for Y_gm: [-2.2, -1.8])
+  TNG300-1     Y_gm -1.169  Y_gb -0.858  Y_mm -0.601  Y_bm -0.382
+  FLA fid      Y_gm -1.185  Y_gb -0.828  Y_mm -0.679  Y_bm -0.394
+  FLA Jet      Y_gm -1.178  Y_gb -0.812  Y_mm -0.667  Y_bm -0.341
+  FLA fgas-8σ  Y_gm -1.175  Y_gb -0.782  Y_mm -0.665  Y_bm -0.321
+  Upsilon(1') share of Y_gm^(DSigma) and C-error inflation at R = 2.25', 6', 9.75':
+  TNG300-1     share +0.551 +0.801 +0.855   inflation    0.9    1.0    1.3
+  FLA fid      share +0.532 +0.789 +0.850   inflation    0.8    1.4    1.4
+  FLA Jet      share +0.533 +0.790 +0.852   inflation    1.1    1.0    1.3
+  FLA fgas-8σ  share +0.535 +0.792 +0.853   inflation    1.3    1.0    1.3
+
+[D-05] Axis split of C (DSigma); max |dC/C| over 1'-6' and its significance (jackknife)
+  gas=b code (TNG-fid)       max 0.093 at R=1.000' (  12.1 sigma)
+  gas=b feedback (f8-fid)    max 0.073 at R=4.125' (  37.7 sigma)
+  gas=b feedback (Jet-fid)   max 0.046 at R=6.000' (  30.4 sigma)
+  gas=e code (TNG-fid)       max 0.037 at R=2.875' (   7.9 sigma)
+  gas=e feedback (f8-fid)    max 0.125 at R=2.250' (  66.7 sigma)
+  gas=e feedback (Jet-fid)   max 0.059 at R=6.000' (  26.1 sigma)
+
+[P8] Correlation of leave-one-out C_b realizations, median over 1'-6' (P8: > 0.9 for the variants, |rho| < 0.5 across codes)
+  fid vs fgas-8σ +0.840; fid vs Jet +0.898; TNG vs fid -0.344

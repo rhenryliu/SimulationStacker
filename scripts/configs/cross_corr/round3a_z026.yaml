@@ -1,0 +1,62 @@
+# Round 3A at z ~ 0.26 / 0.30 (BGS-like): companion of round3a_z05.yaml.
+#
+# The 'stack' and 'simulations' blocks are copied verbatim from
+# calibration_z026.yaml (FLAMINGO has no z = 0.26 snapshot on disk for all
+# three variants, so it uses snapshot 71, z = 0.30, as in round two).
+# Only the 'round3a' block is new.
+
+stack:
+  redshift: 0.26
+  projections: ['yz']
+  min_radius: 1.0
+  max_radius: 6.0
+  num_radii: 9
+  extend_max_radius: 10.0
+  dr_arcmin: 0.75
+  upsilon_r0: [1.0, 2.0]
+  ytransform_rmax: [4.0, 5.0, 6.0, 9.0]
+  n_jk_side: 4
+  load_field: true
+  save_field: false
+  particle_type_e: 'ionized_gas'
+  particle_type_b: 'baryon'
+  halo_abundance_target: 1.0e-3    # (cMpc/h)^-3, BGS-like (fiducial here)
+  parent_mass_upper: 5.0e14        # Msun/h
+
+round3a:
+  calibration_npz_path: '../data/cross_corr_C/'
+  task9_npz_path: '../data/cross_corr_C/'
+  out_path: '../data/cross_corr_C/round3a/'
+  # O-06: the LRG-like density swapped in at this snapshot.
+  alt_abundance_target: 5.0e-4
+  mass_split: true
+  k_bin_width: 0.02
+  dog_sigma1_min: 0.5
+  dog_sigma1_max: 5.0
+  dog_n_sigma: 10
+  dog_ratios: [2.0, 1.5]
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'round3a_z026'
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+        n_pixels: 4822
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 14015

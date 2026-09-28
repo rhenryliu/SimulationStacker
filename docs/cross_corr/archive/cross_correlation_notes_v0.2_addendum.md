@@ -1,3 +1,5 @@
+> SUPERSEDED. See `docs/cross_corr/README.md` §2. Kept for provenance.
+
 # Localizing Filters and the Direct-Ratio Estimator
 
 **Addendum v0.2 to `cross_correlation_notes.md`**

@@ -1,13 +1,20 @@
 # Filter and Normalization Specification
 
-Phase 0, item 1 of `docs/cross_correlation_notes.md` Sec. 8: the single source
+> **Status, 2026-09-27: superseded in part.** §1's Gate B verdict and target
+> field are replaced by `decisions.md` D-05 (reopened) and D-10 (provisional
+> filter set). §2's R₀ = 1′ conflicts with D-10's Υ(R₀ = 2′) cross-check;
+> unresolved. §9's "no DMO run on disk" is out of date: usable DMO references
+> for all four runs have been on scratch since 2026-09-24. The conventions in
+> §2–8 are current.
+
+Phase 0, item 1 of `archive/cross_correlation_notes.md` Sec. 8: the single source
 of truth for the filter definitions, the discretization, and the normalization
 and projection conventions, shared by the data, theory and simulation code
 paths. Everything downstream of Gate B uses exactly what is written here.
 
-Companion documents: `cross_correlation_notes.md` (theory, authoritative for
-the estimator), `r_profiles_task1_spec.md` (the Task 1 engineering spec) and
-`r_profiles_implementation_plan.md` (what was built and measured).
+Companion documents: `archive/cross_correlation_notes.md` (theory, authoritative for
+the estimator), `archive/r_profiles_task1_spec.md` (the Task 1 engineering spec) and
+`records/r_profiles_implementation_plan.md` (what was built and measured).
 
 ---
 
@@ -21,7 +28,7 @@ electron) field crossed with CDM — rather than `P_bm/P_mm` with a calibrated
 electron-to-baryon transfer.
 
 Both decisions and the evidence behind them are in
-`r_profiles_implementation_plan.md` sections T2 and T3. In brief: the
+`records/r_profiles_implementation_plan.md` sections T2 and T3. In brief: the
 annulus-mean kernel is uncompensated, so its *amplitude* integrates power down
 to the fundamental mode of whatever volume it is measured in and does not port
 between boxes (8.7 per cent shift under the measured test), which is
@@ -78,7 +85,7 @@ curves and the Gate A metrics can never disagree about it.
 Both reference radii are **not** global constants: they are read from each
 run's `meta_r0_arcmin` and `meta_ytransform_rmax`. R₀ moved from 1′ to 2′ in
 commit 91e39d7 and is now **back at 1′**, on the evidence of the R₀ scan in
-`r_profiles_implementation_plan.md` U6: 1′ gives the smallest cross-code
+`records/r_profiles_implementation_plan.md` U6: 1′ gives the smallest cross-code
 scatter (0.090, the only PASS at z ~ 0.5, against 0.143 at 2′), the most usable
 bins (8 against 7 over 1′–6′), and is the one R₀ whose statistic survives the
 trim unchanged. This restores agreement with Sec. 1 above, which never stopped

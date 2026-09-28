@@ -1,3 +1,5 @@
+> SUPERSEDED. See `docs/cross_corr/README.md` §2. Kept for provenance.
+
 # Model-Independent Baryon-Matter Cross-Correlations from kSZ and Galaxy Clustering: Theory Note and Simulation Validation Plan
 
 **R. Henry Liu** (with U. Seljak)

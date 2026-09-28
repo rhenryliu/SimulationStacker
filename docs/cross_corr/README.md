@@ -1,6 +1,6 @@
 # kSZ × clustering baryon–matter cross-correlation programme: docs map
 
-**Status as of 2026-09-21.** This file is the entry point for every session, human or agent. It says which document to believe for what, where the programme stands, and the rules that code changes must follow. It contains no derivations and copies no numbers it does not need; numbers live in the task records and are cited from there.
+**Status as of 2026-09-21; file layout as of 2026-09-27.** This file is the entry point for every session, human or agent. It says which document to believe for what, where the programme stands, and the rules that code changes must follow. It contains no derivations and copies no numbers it does not need; numbers live in the task records and are cited from there.
 
 Companion files at the same level: `decisions.md` (what has been decided, with status) and `open-items.md` (what has been proposed and not yet done).
 
@@ -16,13 +16,16 @@ The programme measures $x = P_{bm}/P_{mm}$, the baryon–matter cross-correlatio
 
 | document | authoritative for | superseded on | status |
 |---|---|---|---|
-| `records/tasks_7_to_10_record.md` | every round-two number; gate verdicts; code defects found; commits `ec8f129`, `82526e3` | nothing | **current, append-only** |
+| `records/tasks_7_to_10_record.md` | every round-two number; gate verdicts; code defects found; commits `ec8f129`, `82526e3`; §11 adds `dba0a68` and `6dbbebd` | nothing | **current, append-only** |
 | `records/tasks_1_to_4_record.md` | every round-one number; theory-chain validation; SHAM sample definitions; `data/r_profiles/*.npz` provenance | its Next step 1 (term B, cancelled); its Gate A verdict | **current for numbers, append-only** |
+| `records/r_profiles_implementation_plan.md` | Task 1 build log and raw round-one results (A1–A12, R1–R4, T1–T9); the $\Upsilon$ verification, the $R_0$ scan and the $R_0 = 1'$ decision, the stale FLAMINGO r-profiles (U1–U7) | its §1–6, the plan as first written (deviations recorded in A1–A12) | **current for numbers, append-only** |
 | `mathematical_formalism.md` | derivations, equation numbers (1)–(70), notation, assumptions ledger (§A), symbol table (§B) | nothing | current; regenerated deliberately, not patched |
 | `programme_synthesis.md` | narrative in three passes; provenance table §III.I | its matched-bin figure was corrected 2026-09-20 | current; regenerated deliberately |
+| `filter_specification.md` | filter definitions, aperture grid, discretization, normalization, projection, self-pair and error conventions (§2–8) | §1 (Gate B verdict and target field: D-05, D-10); its $R_0 = 1'$ conflicts with D-10's $\Upsilon(R_0=2')$, unresolved; see the status note at its top | current except as noted |
 | `archive/cross_correlation_notes_v0.3_response.md` | round-two scientific conclusions as first drawn | Task 9, which it reports unattempted but which was completed; "mediation fails" reading, now one of two live readings (formalism §8.4) | superseded |
 | `archive/cross_correlation_notes_v0.2_addendum.md` | Route B, the calibration factor, the mediation proposition, the four-filter analysis, Tasks 7–10 as specified, five advance predictions | predictions 1, 2, 5 falsified; the circular mediation test; the $6\times10^{-4}$ bound; $R_{\max}=5'$ as fiducial | superseded |
 | `archive/cross_correlation_notes.md` (v0.1) | the original estimator, physics, Tasks 1–6, Phases 0–7, Gates A–C as designed | point-mass marginalization (retired); near-unity expectation for $r$ (does not hold for compensated filters); $m$ = CDM as the only convention | superseded |
+| `archive/r_profiles_task1_spec.md` | the Task 1 engineering spec as first posed | three projections (only `yz` is cached), a CDM particle sweep (CDM is total minus baryon), snapshot 71 out of scope (in scope), its resolution requirements (the existing caches were used): `records/r_profiles_implementation_plan.md` A1–A4 | superseded |
 
 When two documents disagree, the later row in this table wins. When a record and any other document disagree on a number, the record wins.
 
@@ -71,7 +74,7 @@ Violating any of these has already cost a round. Each is justified in the formal
 - Any $\Sigma$-from-$\Delta\Sigma$ reconstruction requires the **local** $\Delta\Sigma$; feeding it the pipeline's annulus-mean $\Delta\Sigma$ biases by 43% at $1'$ (formalism §4.4).
 
 **Data products**
-- `data/r_profiles/*.npz` (round one) are bit-frozen. Round two added `data/cross_corr_C/` without touching `src/`.
+- `data/r_profiles/*.npz` are frozen at `dba0a68` (2026-09-10), the last of three regenerations after round one (`91e39d7`, `a07d613`, `dba0a68`; see `records/r_profiles_implementation_plan.md` U3–U7 and `records/tasks_7_to_10_record.md` §11). Round two added `data/cross_corr_C/` without touching `src/`.
 - All ten unordered pairs of $\{g,e,b,m\}$ are saved; $Y_{gm}$, $Y_{bm}$, $Y_{mm}$, $Y_{em}$ need no recomputation.
 - Numbers are cited from the records, never copied into other documents without "as of DATE, from RECORD".
 
@@ -91,31 +94,41 @@ Violating any of these has already cost a round. Each is justified in the formal
 | `src/theory.py` | halofit → $Y_{mm}$ chain (Route A only) |
 | `scripts/cross_corr/make_calibration_factor.py` | round-two sweep: $C$, $C_A$, $x$, $S$ per run/sample/filter |
 | `scripts/cross_corr/make_task9_spectra.py`, `plot_task9.py` | 2D spectra from cached maps; the Task 9 figure |
+| `scripts/cross_corr/make_r_profiles.py`, `plot_r_profiles.py` | round-one r-profiles and the Task 1 figure; since `6dbbebd` its bottom row is $C$ and its Gate A statistic is the cross-code scatter of $C$ |
+| `scripts/cross_corr/plot_electron_baryon.py` | Task 3, the $e$ versus $b$ correction |
+| `scripts/cross_corr/check_filter_compensation.py`, `check_theory_transfer.py`, `check_projection_depth.py`, `check_resolution.py` | Task 2 box-scale test; Task 4 A/B/C decomposition and depth study; resolution and boundary-tie checks |
+| `scripts/cross_corr/check_upsilon_r0.py` | the $R_0$ scan (`records/r_profiles_implementation_plan.md` U6) |
+| `scripts/cross_corr/runINT_*.sh`, `runCPU_*.sh` | SLURM runners, submitted from `scripts/`; `runCPU_calibration.sh` is superseded by `runINT_calibration.sh` |
+| `scripts/configs/cross_corr/` | `r_profiles_z05.yaml`, `r_profiles_z026.yaml`, `calibration_z05.yaml`, `calibration_z026.yaml` |
 | `tests/test_calibration_factor.py` | identity tests; extend for any new kernel |
-| `data/r_profiles/*.npz` | round-one amplitudes, frozen |
+| `tests/test_rprofiles.py`, `test_kernels.py`, `test_rprofiles_integration.py` | round-one unit tests; the integration test skips without the scratch data |
+| `data/r_profiles/*.npz` | round-one amplitudes, frozen at `dba0a68` |
 | `data/cross_corr_C/` | round-two outputs |
 
 ---
 
-## 6. Proposed directory layout
+## 6. Directory layout
 
 ```
-docs/
+docs/cross_corr/
   README.md                       this file: map, status, rules
   decisions.md                    decision log with status tags
   open-items.md                   proposals with tests and pass criteria
   mathematical_formalism.md       human reference, equations (1)–(70)
   programme_synthesis.md          human narrative in three passes
+  filter_specification.md         Phase 0 conventions; status note at its top
   records/
-    tasks_1_to_4_record.md        append-only, ground truth for round one
-    tasks_7_to_10_record.md       append-only, ground truth for round two
+    tasks_1_to_4_record.md               append-only, ground truth for round one
+    tasks_7_to_10_record.md              append-only, ground truth for round two
+    r_profiles_implementation_plan.md    append-only, Task 1 build log and U1–U7
   archive/
-    cross_correlation_notes.md              v0.1, superseded 2026-09
+    cross_correlation_notes.md               v0.1, superseded 2026-09
     cross_correlation_notes_v0.2_addendum.md superseded 2026-09
     cross_correlation_notes_v0.3_response.md superseded 2026-09
+    r_profiles_task1_spec.md                 superseded 2026-08
 ```
 
-Each archived file gets a two-line header: `SUPERSEDED. See docs/README.md §2. Kept for provenance.` Nothing in `archive/` is to be treated as current.
+Each archived file gets a two-line header: `SUPERSEDED. See docs/cross_corr/README.md §2. Kept for provenance.` Nothing in `archive/` is to be treated as current. Documents written before 2026-09-27 cite each other by bare filename; §2 gives every file's location.
 
 ---
 

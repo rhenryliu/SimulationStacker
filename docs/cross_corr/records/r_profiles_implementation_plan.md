@@ -1307,3 +1307,11 @@ the galaxy sample is rebuilt from the catalogues on every run while the
 particle fields come from cache. The `r_bm`/`r_em` versus `r_gb`/`r_ge` split
 used above is a cheap way to tell a catalogue change from a field change: only
 the latter moves the galaxy-free coefficients.
+
+---
+
+**File locations (appended 2026-09-27).** Since the docs were reorganized this
+log is in `docs/cross_corr/records/`, beside the two task records.
+`filter_specification.md` is in `docs/cross_corr/`; `cross_correlation_notes.md`,
+its v0.2 addendum and v0.3 response, and `r_profiles_task1_spec.md` are in
+`docs/cross_corr/archive/`. `docs/cross_corr/README.md` §2 lists every file.

@@ -621,3 +621,45 @@ salloc -q interactive -C cpu -N 1 -t 1:00:00 -A desi bash cross_corr/runINT_cali
 salloc -q interactive -C cpu -N 1 -t 1:00:00 -A desi bash cross_corr/runINT_task9.sh
 cd ../tests/ && pytest test_calibration_factor.py -q     # 22 tests
 ```
+
+---
+
+## 11. Addendum, 2026-09-27: cross-correlation commits after this record
+
+Appended when the docs were reorganized; nothing above is changed. Two commits
+touched the cross-correlation code after `82526e3`.
+
+**`dba0a68` (2026-09-10): `r_gm` and the Park et al. Y transform in the
+r-profiles, and R0 back to 1′.** `make_r_profiles.py` and `plot_r_profiles.py`
+gain an `r_gm` row and a `Y(R; Rmax = 6')` column, the transform assembled from
+the Sigma amplitudes per jackknife realization. The `src/rprofiles.py` changes
+are additive (`ytransform_defined_mask`, `assemble_ytransform`, an optional
+`filters=` on `r_profiles`). The r-profile configs return to `R0 = 1'` on the
+evidence of the R0 scan (`r_profiles_implementation_plan.md` U6). All eight
+`data/r_profiles/*.npz` were regenerated: every Sigma and DSigma array is
+bit-identical to its predecessor, and `meta_r0_arcmin` is the only metadata
+that changed. Per the commit message, the regenerated files reproduce U6's
+cross-code scatter of `r_bm/r_gb` (0.0896 against 0.090 at `z ≈ 0.5`, 0.1343
+against 0.134 at `z ≈ 0.26`), and the Y transform fails Gate A on `r_bm/r_gb`
+(0.24 and 0.83): at `z ≈ 0.5` only in the bin abutting the `0.8 Rmax` mask, at
+`z ≈ 0.26` through TNG300-1's `Y_gg` self-pair fragility. The same message notes
+that the 0.8 fraction looks too permissive at `Rmax = 6'`, and that the `.npz`
+are written non-atomically.
+
+**`6dbbebd` (2026-09-15): Gate A on `C` in the Task 1 figure.**
+`C = r_bm r_gm / r_gb` becomes the Task 1 figure's bottom row and the Gate A
+statistic of `plot_r_profiles.py`; `r_bm/r_gb` stays in the report without a
+verdict. Display only. Worst cross-code scatter of `C` over 1′–6′, at both
+redshifts and for all four filters (Sigma, DSigma, Upsilon(R0 = 1′),
+Y(Rmax = 6′)): **0.9–6.6 per cent for baryons, 1.8–6.4 per cent for
+electrons.** Rechecked on 2026-09-27 from the committed `data/r_profiles/*.npz`.
+This is the `N = 2` statistic of `tasks_1_to_4_record.md` §4: the sample
+standard deviation over one run per code family (TNG300-1, FLAMINGO fiducial)
+divided by the mean. It is not the pooled four-run scatter of Stage 6 and §4
+above (4.2–9.6 per cent), and the two should not be compared directly.
+
+**File locations.** Since 2026-09-27 this record, `tasks_1_to_4_record.md` and
+`r_profiles_implementation_plan.md` are in `docs/cross_corr/records/`;
+`filter_specification.md` is in `docs/cross_corr/`; `cross_correlation_notes.md`,
+the v0.2 addendum and the v0.3 response are in `docs/cross_corr/archive/`.
+`docs/cross_corr/README.md` §2 lists every file.

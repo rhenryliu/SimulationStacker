@@ -1,3 +1,5 @@
+> SUPERSEDED. See `docs/cross_corr/README.md` §2. Kept for provenance.
+
 # The Calibration Factor, Measured
 
 **Response v0.3 to `cross_correlation_notes_v0.2_addendum.md`**

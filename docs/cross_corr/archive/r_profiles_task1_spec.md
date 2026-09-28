@@ -1,3 +1,5 @@
+> SUPERSEDED. See `docs/cross_corr/README.md` §2. Kept for provenance.
+
 # Task 1 Engineering Spec: r-profile computation in SimulationStacker
 
 Companion to `docs/cross_correlation_notes.md` (the theory note), which is

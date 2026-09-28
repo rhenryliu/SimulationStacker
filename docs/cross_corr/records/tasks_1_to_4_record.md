@@ -581,3 +581,12 @@ sbatch cross_corr/runCPU_rprofiles.sh    # Tasks 1-3
 sbatch cross_corr/runCPU_task4.sh        # Task 4
 cd ../tests/ && pytest -q                # 57 tests, no simulation data needed
 ```
+
+---
+
+**File locations (appended 2026-09-27).** Since the docs were reorganized this
+record is in `docs/cross_corr/records/`, beside `tasks_7_to_10_record.md` and
+`r_profiles_implementation_plan.md`. `filter_specification.md` is in
+`docs/cross_corr/`; `cross_correlation_notes.md` and `r_profiles_task1_spec.md`
+are in `docs/cross_corr/archive/`. `docs/cross_corr/README.md` §2 lists every
+file.

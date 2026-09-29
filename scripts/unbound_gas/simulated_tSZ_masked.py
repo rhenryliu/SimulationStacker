@@ -67,6 +67,40 @@ _FLAMINGO_COLOURS = {
 # plt.rcParams['text.usetex'] = True
 # plt.rcParams['mathtext.fontset'] = 'cm'
 
+def fit_label(sim_type_name, sim):
+    """Label under which lensing/fit_dsigma_ksz.py stores a simulation's fit.
+
+    Mirrors the labels built by ``make_stacker`` in that script.
+
+    Args:
+        sim_type_name (str): One of 'IllustrisTNG', 'SIMBA', 'FLAMINGO'.
+        sim (dict): The config entry, with 'name' and (for SIMBA and FLAMINGO)
+            'feedback'.
+
+    Returns:
+        str: e.g. 'TNG300-1', 'm100n1024_s50' or 'FLAMINGO L1_m9'.
+    """
+    if sim_type_name == 'SIMBA':
+        return f"{sim['name']}_{sim['feedback']}"
+    if sim_type_name == 'FLAMINGO':
+        return f"FLAMINGO {sim['feedback']}"
+    return sim['name']
+
+
+def load_fitted_abundances(fit_path):
+    """Read the SHAM densities fitted on lensing by lensing/fit_dsigma_ksz.py.
+
+    Args:
+        fit_path (str): Path to that script's results npz.
+
+    Returns:
+        dict: Best-fit number density n_best in (cMpc/h)^-3, keyed by
+        :func:`fit_label`.
+    """
+    with np.load(fit_path) as fit:
+        return {str(label): float(fit[f'{label}/n_best']) for label in fit['labels']}
+
+
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
 
@@ -108,6 +142,14 @@ def main(path2config, verbose=True):
         halo_mass_avg=stack_config.get('halo_mass_avg', 10 ** (13.22)),
         halo_mass_upper=stack_config.get('halo_mass_upper', 5 * 10 ** (14)),
     )
+    # Optional per-simulation SHAM densities fitted on lensing
+    # (lensing/fit_dsigma_ksz.py); each replaces halo_abundance_target.
+    fit_path = stack_config.get('abundance_from_fit')
+    fitted_abundances = None
+    if fit_path is not None:
+        if not selection_kwargs['use_subhalos']:
+            raise ValueError("abundance_from_fit sets the SHAM density, so it needs use_subhalos: true")
+        fitted_abundances = load_fitted_abundances(fit_path)
 
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
@@ -203,6 +245,16 @@ def main(path2config, verbose=True):
                 if verbose:
                     print(f"Processing simulation: {sim_name}")
 
+                sim_selection = dict(selection_kwargs)
+                if fitted_abundances is not None:
+                    label = fit_label(sim_type_name, sim)
+                    if label not in fitted_abundances:
+                        raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
+                                       f"fitted: {sorted(fitted_abundances)}")
+                    sim_selection['halo_abundance_target'] = fitted_abundances[label]
+                    if verbose:
+                        print(f"SHAM density fitted on lensing: n = {fitted_abundances[label]:.4e} (cMpc/h)^-3")
+
                 # Legend label; overridden only for FLAMINGO, whose TeX label
                 # differs from the plain-text name.
                 plot_label = None
@@ -215,7 +267,7 @@ def main(path2config, verbose=True):
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii,
-                                                         **selection_kwargs)
+                                                         **sim_selection)
 
                     try:
                         OmegaBaryon = stacker.header['OmegaBaryon']
@@ -246,7 +298,7 @@ def main(path2config, verbose=True):
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii,
-                                                         **selection_kwargs)
+                                                         **sim_selection)
                     
                     OmegaBaryon = 0.048  # Default value for SIMBA
                     sim_name = sim_name_show
@@ -266,7 +318,7 @@ def main(path2config, verbose=True):
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii,
-                                                         **selection_kwargs)
+                                                         **sim_selection)
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
                     # '-' instead of '_' so the name is plain text

@@ -11,6 +11,9 @@ stack:
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
   use_subhalos: true # SHAM selection (like the kSZ Figure 7 config), for comparison with data
+  # SHAM density per simulation, fitted to the HSC Y3 x DESI LRG bin-1 lensing
+  # profile by lensing/fit_dsigma_ksz.py (a different lens sample from the tSZ data).
+  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
 
 plot:
   plot_data: true

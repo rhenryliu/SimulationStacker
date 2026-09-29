@@ -67,10 +67,15 @@ stack:
   filter_type_col2:   'CAP'
   filter_type_2_col2: 'CAP'
 
-  # Column 3: DSigma filter (0.75 arcmin annulus, the stackMap default), on
-  # the same beam-convolved maps as columns 1 and 2
+  # Column 3: DSigma filter (0.75 arcmin annulus, the stackMap default) ...
   filter_type_col3:   'DSigma'
   filter_type_2_col3: 'DSigma'
+  # ... on unconvolved 0.2 arcmin maps (no beam in the gas or the total map),
+  # the simulation counterpart of the beam-compensated kSZ x lensing gas
+  # fraction (unbound gas paper decision, 2026-09-29), as in the stackArea
+  # DSigma figure and the P(k)-section lensing panel.
+  pixel_size_col3: 0.2
+  beam_size_col3: 0
 
   # Columns drawn, left to right (default ['3d', 'col1', 'col2']).
   columns: ['3d', 'col1', 'col2', 'col3']

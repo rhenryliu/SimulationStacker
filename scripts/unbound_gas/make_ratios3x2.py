@@ -304,6 +304,7 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
     err   : ndarray
     """
     pixelSize   = params['pixel_size']
+    beamSize    = params.get('beam_size', 1.6)  # arcmin FWHM; 0 or None: no beam
     radDistance = params['rad_distance']
     projection  = params['projection']
     save        = params['save_field']
@@ -318,14 +319,14 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
         pType, filterType=filterType,
         minRadius=minR, maxRadius=maxR, numRadii=nRadii,
         save=save, load=load, radDistance=radDistance,
-        pixelSize=pixelSize, projection=projection,
+        pixelSize=pixelSize, beamSize=beamSize, projection=projection,
         subtract_mean=sub_mean,
     )
     radii1, profiles1 = stacker.stackMap(
         pType2, filterType=filterType2,
         minRadius=minR, maxRadius=maxR, numRadii=nRadii,
         save=save, load=load, radDistance=radDistance,
-        pixelSize=pixelSize, projection=projection,
+        pixelSize=pixelSize, beamSize=beamSize, projection=projection,
         subtract_mean=sub_mean,
     )
 
@@ -612,10 +613,18 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                         stacker, pType, pType2, params_sim, OmegaBaryon)
                 else:
                     ft, ft2 = col_filters[kind]
+                    # Optional per-column pixel size and beam (e.g. an
+                    # unconvolved 0.2 arcmin DSigma column); defaults are the
+                    # shared 2D settings, i.e. the 1.6 arcmin beam.
+                    params_col = dict(params_2d)
+                    for key in ('pixel_size', 'beam_size'):
+                        if f'{key}_{kind}' in stack_cfg:
+                            params_col[key] = stack_cfg[f'{key}_{kind}']
                     if verbose:
-                        print(f"    Computing 2D profiles (filter={ft}/{ft2})...")
+                        print(f"    Computing 2D profiles (filter={ft}/{ft2}, pixel "
+                              f"{params_col['pixel_size']}', beam {params_col.get('beam_size', 1.6)}')...")
                     radii, ratio, err = compute_2d_profile_ratio(
-                        stacker, pType, pType2, ft, ft2, params_2d, OmegaBaryon,
+                        stacker, pType, pType2, ft, ft2, params_col, OmegaBaryon,
                         params_3d['min_radius_3d'], params_3d['max_radius_3d'],
                         params_3d['num_radii_3d'], inv_sim)
                     # Track the largest plotted arcmin radius for the shared 2D x-limit.

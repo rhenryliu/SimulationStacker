@@ -1,5 +1,6 @@
 # star_fraction_particles.yaml: Figure 1 from the merged particle-based fractions
-# (star_fraction_particles_{1,2,3}.yaml, merged into load_path).
+# (star_fraction_particles_{1,2,3}.yaml of job 59070120, merged into load_path; same
+# convention as star_fraction_v2.yaml, whose load_path is also in the figures folder).
 redshift: 0.5
 n_pixels: 1000
 load_field: true
@@ -8,7 +9,7 @@ projection: yz
 halo_mass_avg: 16595869000000.0
 halo_mass_upper: 500000000000000.0
 load: true
-load_path: ../data/star_fraction/star_fraction_particles_z0.5.yaml
+load_path: ../figures/2026-09/09-29/star_fraction_particles_z0.5_merged.yaml
 fig_path: ../figures/
 fig_name: star_fraction_particles
 fig_type: png

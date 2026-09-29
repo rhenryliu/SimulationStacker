@@ -2,7 +2,7 @@
 #SBATCH -A desi
 #SBATCH -C cpu
 #SBATCH --qos=regular
-#SBATCH --time=02:30:00
+#SBATCH --time=01:30:00
 #SBATCH --nodes=3
 #SBATCH --job-name=masks_sham_flamingo
 #SBATCH -o ../Outputs_Perlmutter/masks_sham_flamingo-%j.out

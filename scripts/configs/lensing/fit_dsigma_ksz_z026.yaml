@@ -101,15 +101,21 @@ plot:
   fig_type: 'png'
 
 
+# The shared LRG grid (<= 4e-3) did not bracket the minimum for any run (job 59074639:
+# all at the 4e-3 edge, chi2 1300-4100 for 6 dof): BGS hosts are lighter, so the three
+# runs here extend the grid to 3.2e-2.
 simulations:
   - sim_type: 'SIMBA'
     sims:
       - name: 'm100n1024'
         snapshot: 136
         feedback: 's50'
+        abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3, 8.0e-3, 1.6e-2, 3.2e-2]
   - sim_type: 'IllustrisTNG'
     sims:
       - name: 'TNG300-1'
         snapshot: 80
+        abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3, 8.0e-3, 1.6e-2, 3.2e-2]
       - name: 'Illustris-1'
         snapshot: 116
+        abundance_targets: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3, 8.0e-3, 1.6e-2, 3.2e-2]

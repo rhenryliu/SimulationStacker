@@ -1,0 +1,28 @@
+# star_fraction_particles_2.yaml: subset 2 of star_fraction_v2.yaml (Figure 1),
+# computed from the particles (method: particles; per-halo R200m, exclusive
+# regions, winds as gas) on one node of runCPU_star_fraction_particles.sh.
+# The three subsets' YAMLs are merged and plotted with star_fraction_particles.yaml.
+redshift: 0.5
+n_pixels: 1000
+load_field: true
+save_field: false
+projection: yz
+halo_mass_avg: 16595869000000.0
+halo_mass_upper: 500000000000000.0
+load: false
+load_path: ../figures/2025-09/star_fraction_v2_z0.5_star_fraction.yaml
+fig_path: ../figures/
+fig_name: star_fraction_particles_2
+fig_type: png
+simulations:
+- sim_type: IllustrisTNG
+  sims:
+  - name: TNG300-1
+    snapshot: 67
+- sim_type: FLAMINGO
+  sims:
+  - name: L1_m9
+    snapshot: 67
+    feedback: fgas-8sigma
+    n_pixels: 2000
+method: particles

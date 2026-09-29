@@ -1,0 +1,62 @@
+# star_fraction_particles.yaml: Figure 1 from the merged particle-based fractions
+# (star_fraction_particles_{1,2,3}.yaml, merged into load_path).
+redshift: 0.5
+n_pixels: 1000
+load_field: true
+save_field: true
+projection: yz
+halo_mass_avg: 16595869000000.0
+halo_mass_upper: 500000000000000.0
+load: true
+load_path: ../data/star_fraction/star_fraction_particles_z0.5.yaml
+fig_path: ../figures/
+fig_name: star_fraction_particles
+fig_type: png
+simulations:
+- sim_type: SIMBA
+  sims:
+  - name: m50n512
+    snapshot: 125
+    feedback: s50
+  - name: m50n512
+    snapshot: 125
+    feedback: s50noagn
+  - name: m50n512
+    snapshot: 125
+    feedback: s50nox
+  - name: m50n512
+    snapshot: 125
+    feedback: s50nojet
+  - name: m50n512
+    snapshot: 125
+    feedback: s50nofb
+  - name: m100n1024
+    snapshot: 125
+    feedback: s50
+- sim_type: IllustrisTNG
+  sims:
+  - name: TNG100-1
+    snapshot: 67
+  - name: TNG300-1
+    snapshot: 67
+  - name: TNG300-2
+    snapshot: 67
+  - name: Illustris-1
+    snapshot: 103
+  - name: Illustris-2
+    snapshot: 103
+- sim_type: FLAMINGO
+  sims:
+  - name: L1_m9
+    snapshot: 67
+    feedback: L1_m9
+    n_pixels: 2000
+  - name: L1_m9
+    snapshot: 67
+    feedback: fgas-8sigma
+    n_pixels: 2000
+  - name: L1_m9
+    snapshot: 67
+    feedback: Jet_fgas-4sigma
+    n_pixels: 2000
+method: particles

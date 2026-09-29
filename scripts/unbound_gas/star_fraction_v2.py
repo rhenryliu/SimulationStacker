@@ -129,6 +129,42 @@ def star_fractions_for_sim(stacker, nPixels, projection, saveField, loadField,
     return float(global_fraction), float(r200m_fraction)
 
 
+def star_fractions_particles(stacker, halo_mass_avg, halo_mass_upper, verbose=True):
+    """Global and within-R200m star fractions from the particles.
+
+    Same definition as the aggregate stellar fraction of the P(k) section
+    (compute_fstar_obs.py): true stars over all baryons, with TNG/Illustris
+    wind-phase particles counted as gas. The within-R200m value sums over the
+    regions of the selected massive haloes, each of its own R200m; a particle
+    inside several spheres belongs to the most massive halo containing it
+    (``halo_transfer`` aperture labels), so nothing is counted twice.
+
+    Args:
+        stacker (SimulationStacker): Initialised stacker for the simulation.
+        halo_mass_avg (float): Target average halo mass [M_sun/h] of the
+            'massive' selection.
+        halo_mass_upper (float): Upper halo-mass bound [M_sun/h].
+        verbose (bool): If True, print progress information.
+
+    Returns:
+        tuple[float, float]: ``(global_fraction, r200m_fraction)``.
+    """
+    import halo_transfer as ht
+    haloes = stacker.loadHalos()
+    gmass = np.asarray(haloes['GroupMass'], dtype=np.float64)
+    sel = np.asarray(select_massive_halos(gmass, halo_mass_avg, halo_mass_upper))
+    m_low = float(gmass[sel].min())
+    if verbose:
+        print(f"  Selected haloes: {np.size(gmass[sel])}, lightest {m_low:.3e} Msun/h")
+    store = ht.collect_particles(stacker, [{'name': 'ap1', 'method': 'aperture', 'x': 1.0}],
+                                 haloes, m_low, baryons=True, verbose=verbose)
+    bary = ht.halo_baryons(store, 'ap1', gmass, m_low)
+    r200m_fraction = bary['mstar'][sel].sum() / bary['mbaryon'][sel].sum()
+    tot = store['totals']
+    global_fraction = tot['mstar'] / (tot['mstar'] + tot['mwind'] + tot['mgas'] + tot['mbh'])
+    return float(global_fraction), float(r200m_fraction)
+
+
 def main(path2config, verbose=True):
     """Load config, compute the two star fractions per simulation, and save the
     grouped bar chart.
@@ -229,12 +265,17 @@ def main(path2config, verbose=True):
                 # n_pixels (FLAMINGO needs 2000: at 1000 its 681 ckpc/h voxels
                 # are larger than R200m).
                 nPixels_sim = int(sim.get('n_pixels', nPixels))
-                global_frac, r200m_frac = star_fractions_for_sim(
-                    stacker, nPixels=nPixels_sim, projection=projection,
-                    saveField=saveField, loadField=loadField,
-                    halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
-                    verbose=verbose,
-                )
+                if config.get('method', 'grid') == 'particles':
+                    global_frac, r200m_frac = star_fractions_particles(
+                        stacker, halo_mass_avg=halo_mass_avg,
+                        halo_mass_upper=halo_mass_upper, verbose=verbose)
+                else:
+                    global_frac, r200m_frac = star_fractions_for_sim(
+                        stacker, nPixels=nPixels_sim, projection=projection,
+                        saveField=saveField, loadField=loadField,
+                        halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
+                        verbose=verbose,
+                    )
 
                 plot_dict[label] = {'global': global_frac, 'r200m': r200m_frac}
                 print(f"{label}: Global = {global_frac:.4f}, Within R200m = {r200m_frac:.4f}")

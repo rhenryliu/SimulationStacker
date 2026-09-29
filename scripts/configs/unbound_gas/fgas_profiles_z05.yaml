@@ -75,6 +75,9 @@ stack:
   #   2D and 3D stacking paths.
   # ------------------------------------------------------------------
   halo_abundance_target: 5.0e-4   # target number density (cMpc/h)^-3
+  # Per-simulation SHAM densities fitted on the HSC Y3 x DESI LRG bin-1 lensing
+  # profile (lensing/fit_dsigma_ksz.py); they replace halo_abundance_target.
+  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
 
 
 plot:

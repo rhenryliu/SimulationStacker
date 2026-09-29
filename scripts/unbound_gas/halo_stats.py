@@ -17,7 +17,9 @@ resolves when the scripts are launched from ``scripts/`` as
 ``sys.path.append('../src/')`` line, since it imports from ``src/``.
 """
 
+import json
 import warnings
+from pathlib import Path
 
 import numpy as np
 
@@ -63,6 +65,117 @@ def _mean_valid(masses):
     if n_valid == 0:
         return float('nan'), 0
     return float(np.nanmean(masses)), n_valid
+
+
+def map_geometry(stacker, z, pixel_size):
+    """Pixels per side and exact arcmin per pixel of a map, as ``makeMap`` computes them.
+
+    Args:
+        stacker (SimulationStacker): Provides the header (box size, cosmology).
+        z (float): Redshift of the map.
+        pixel_size (float): Nominal pixel size in arcmin.
+
+    Returns:
+        tuple: (nPixels, arcmin per pixel).
+    """
+    import astropy.units as u
+    from astropy.cosmology import FlatLambdaCDM
+    from utils import comoving_to_arcmin  # type: ignore
+    cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'],
+                          Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K)
+    theta = comoving_to_arcmin(stacker.header['BoxSize'], z, cosmo=cosmo)
+    n = int(np.ceil(theta / pixel_size))
+    return n, theta / n
+
+
+def require_masked_map(stacker, p_type, projection, mask_rad, z, pixel_size, density):
+    """Refuse to stack a masked map that was not built around the stacked sample.
+
+    The masked-map cache path does not encode the halo sample, and a missing
+    map would be rebuilt by ``SimulationStacker.makeField`` around the
+    mass-cut sample and saved at that path. Since 2026-09-29 the cached
+    masked maps of the unbound gas figures are built by
+    precompute_masked_sham_hosts.py around the host haloes of the SHAM
+    galaxies at the lensing-fitted density, with a ``.sample.json`` record.
+
+    Args:
+        stacker (SimulationStacker): The simulation.
+        p_type (str): Particle type of the map (e.g. 'tau', 'tSZ').
+        projection (str): Projection of the map.
+        mask_rad (float): Masking radius in units of R200m.
+        z (float): Redshift of the map.
+        pixel_size (float): Nominal pixel size in arcmin.
+        density (float or None): SHAM number density being stacked, or None
+            for a mass-cut stack.
+
+    Raises:
+        FileNotFoundError: If the map or its sample record is missing.
+        ValueError: If the map was built around a different sample.
+    """
+    from loadIO import _get_data_filepath  # type: ignore
+    n, _ = map_geometry(stacker, z, pixel_size)
+    path = _get_data_filepath(stacker.simType, stacker.sim, stacker.snapshot, stacker.feedback,
+                              p_type, n, projection, 'map', '2D', True, mask_rad, stacker.base_path)
+    meta_path = Path(str(path) + '.sample.json')
+    if not (path.exists() and meta_path.exists()):
+        raise FileNotFoundError(f"{path} or its sample record is missing; build it with "
+                                f"unbound_gas/precompute_masked_sham_hosts.py first")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    if (density is None or meta.get('sample') != 'sham-hosts'
+            or not np.isclose(meta.get('density') or -1.0, density)):
+        raise ValueError(f"{path} was built around sample {meta.get('sample')!r} at n = "
+                         f"{meta.get('density')}, but this run stacks "
+                         f"{'the mass-cut sample' if density is None else f'SHAM at n = {density}'}")
+
+
+def fit_label(sim_type_name, sim):
+    """Label under which lensing/fit_dsigma_ksz.py stores a simulation's fit.
+
+    Mirrors the labels built by ``make_stacker`` in that script.
+
+    Args:
+        sim_type_name (str): One of 'IllustrisTNG', 'SIMBA', 'FLAMINGO'.
+        sim (dict): The config entry, with 'name' and (for SIMBA and FLAMINGO)
+            'feedback'.
+
+    Returns:
+        str: e.g. 'TNG300-1', 'm100n1024_s50' or 'FLAMINGO L1_m9'.
+    """
+    if sim_type_name == 'SIMBA':
+        return f"{sim['name']}_{sim['feedback']}"
+    if sim_type_name == 'FLAMINGO':
+        return f"FLAMINGO {sim['feedback']}"
+    return sim['name']
+
+
+def load_fitted_abundances(fit_paths):
+    """Read the SHAM densities fitted on lensing by lensing/fit_dsigma_ksz.py.
+
+    Args:
+        fit_paths (str or list of str): Path(s) to that script's results npz.
+            Several files (e.g. a separate fit of runs missing from the first)
+            are merged; a simulation fitted in more than one file is an error,
+            so a density can never be picked silently from the wrong fit.
+
+    Returns:
+        dict: Best-fit number density n_best in (cMpc/h)^-3, keyed by
+        :func:`fit_label`.
+
+    Raises:
+        ValueError: If the same simulation label appears in two files.
+    """
+    if isinstance(fit_paths, (str, bytes)) or hasattr(fit_paths, '__fspath__'):
+        fit_paths = [fit_paths]
+    fitted = {}
+    for fit_path in fit_paths:
+        with np.load(fit_path) as fit:
+            for label in fit['labels']:
+                label = str(label)
+                if label in fitted:
+                    raise ValueError(f"{label!r} is fitted in more than one of {fit_paths}")
+                fitted[label] = float(fit[f'{label}/n_best'])
+    return fitted
 
 
 def select_sample(stacker, use_subhalos=False, halo_abundance_target=5e-4,

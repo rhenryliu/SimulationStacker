@@ -28,7 +28,8 @@ from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from halos import select_massive_halos
 # Sibling module in this directory (Python puts the running script's own
 # directory on sys.path); must come after the '../src/' append above.
-from halo_stats import sample_stats, format_stats, format_table, write_stats_file
+from halo_stats import (sample_stats, format_stats, format_table, write_stats_file,
+                        fit_label, load_fitted_abundances, require_masked_map)
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il # type: ignore
@@ -103,6 +104,15 @@ def main(path2config, verbose=True):
     halo_abundance_target = stack_config.get('halo_abundance_target', 5e-4)
     halo_mass_avg = stack_config.get('halo_mass_avg', 10 ** (13.22))
     halo_mass_upper = stack_config.get('halo_mass_upper', 5 * 10 ** (14))
+    # Optional per-simulation SHAM densities fitted on lensing
+    # (lensing/fit_dsigma_ksz.py; one npz or a list of them); each replaces
+    # halo_abundance_target for its simulation.
+    fit_path = stack_config.get('abundance_from_fit')
+    fitted_abundances = None
+    if fit_path is not None:
+        if not use_subhalos:
+            raise ValueError("abundance_from_fit sets the SHAM density, so it needs use_subhalos: true")
+        fitted_abundances = load_fitted_abundances(fit_path)
 
     # maskHaloes and maskRadii will be set in the loop
     pixelSize = stack_config.get('pixel_size', 0.5) # in arcmin
@@ -148,6 +158,10 @@ def main(path2config, verbose=True):
     # stacked sample cannot drift apart.
     halo_masks = {}
     stats_rows = []
+    densities = {}  # SHAM density stacked per simulation, for the saved table
+    # Stacked profiles, written next to the figure so the numbers quoted in the
+    # text can be read back without restacking.
+    profiles_out = {}
 
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -248,23 +262,40 @@ def main(path2config, verbose=True):
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
+                # SHAM density of this simulation: the lensing fit if given.
+                sim_abundance = halo_abundance_target
+                if fitted_abundances is not None:
+                    label = fit_label(sim_type_name, sim)
+                    if label not in fitted_abundances:
+                        raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
+                                       f"fitted: {sorted(fitted_abundances)}")
+                    sim_abundance = fitted_abundances[label]
+
                 # Select the sample (and report its halo masses) once per
                 # simulation, then reuse it for every masking column.
                 sim_key = (sim_type_name, sim['name'], sim.get('feedback'))
                 if sim_key not in halo_masks:
+                    if verbose and fitted_abundances is not None:
+                        print(f"SHAM density fitted on lensing: n = {sim_abundance:.4e} (cMpc/h)^-3")
+                    densities[sim_name] = sim_abundance if use_subhalos else None
                     halo_masks[sim_key], sim_stats = sample_stats(
                         stacker, sim_name, use_subhalos=use_subhalos,
-                        halo_abundance_target=halo_abundance_target,
+                        halo_abundance_target=sim_abundance,
                         halo_mass_avg=halo_mass_avg,
                         halo_mass_upper=halo_mass_upper)
                     stats_rows.append(sim_stats)
                     if verbose:
                         print(format_stats(sim_stats), flush=True)
 
+                if maskHaloes:
+                    # The cached masked maps are built around the stacked SHAM
+                    # hosts; never let stackMap rebuild one around another sample.
+                    require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
+                                       sim_abundance if use_subhalos else None)
                 radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
                                         save=saveField, load=loadField, radDistance=radDistance,
                                         use_subhalos=use_subhalos,
-                                        halo_abundance_target=halo_abundance_target,
+                                        halo_abundance_target=sim_abundance,
                                         halo_mass_avg=halo_mass_avg,
                                         halo_mass_upper=halo_mass_upper,
                                         halo_mask=halo_masks[sim_key],
@@ -275,6 +306,13 @@ def main(path2config, verbose=True):
                 v_c = 300000 / 299792458 # velocity over speed of light.
                 
                 profiles_plot = np.mean(profiles0, axis=1)
+                col_key = f"mask{maskRadii:.0f}" if maskHaloes else 'unmasked'
+                out_key = '/'.join(str(k) for k in sim_key if k is not None)
+                profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
+                profiles_out[f'{out_key}/{col_key}_sem'] = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                profiles_out[f'{out_key}/n_objects'] = profiles0.shape[1]
+                profiles_out[f'{out_key}/abundance'] = np.nan if sim_abundance is None else sim_abundance
+                profiles_out['radii_arcmin'] = radii0 * radDistance
                 ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
@@ -370,7 +408,11 @@ def main(path2config, verbose=True):
 
     # Halo-sample summary: to stdout (so it lands in the SLURM .out) and to a
     # text file alongside the figure.
-    selection = (f"SHAM on SubhaloMStar, target n = {halo_abundance_target} (cMpc/h)^-3, "
+    if fitted_abundances is not None:
+        sham_n = f"n fitted on lensing per simulation ({fit_path})"
+    else:
+        sham_n = f"target n = {halo_abundance_target} (cMpc/h)^-3"
+    selection = (f"SHAM on SubhaloMStar, {sham_n}, "
                  f"parent-mass cap {halo_mass_upper:.3e} Msun/h"
                  if use_subhalos else
                  f"mass cut, target <M> = {halo_mass_avg:.4e} Msun/h, "
@@ -381,11 +423,13 @@ def main(path2config, verbose=True):
         f'particle type   : {pType}    filter: {filterType}    projection: {projection}',
         f'redshift        : {redshift}',
         f'selection       : {selection}',
-    ]
+    ] + ([f'SHAM density    : {k}: {v:.4e} (cMpc/h)^-3' for k, v in densities.items() if v is not None]
+         if use_subhalos else [])
     table = format_table(stats_rows)
     print('\n' + '\n'.join(preamble) + '\n\n' + table + '\n', flush=True)
     write_stats_file(figPath / f'{figName}_{pType}_z{redshift}_halo_masses.txt',
                      stats_rows, preamble=preamble)
+    np.savez(figPath / f'{figName}_{pType}_z{redshift}_profiles.npz', **profiles_out)
 
     print('Done!!! time taken = ', time.time() - t0, ' seconds')
 

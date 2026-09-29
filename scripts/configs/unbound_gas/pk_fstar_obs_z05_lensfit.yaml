@@ -1,0 +1,100 @@
+# pk_fstar_obs_z05_lensfit.yaml: pk_fstar_obs_z05.yaml with the lensing panel
+# stacked on the lensing-fitted SHAM sample (unbound gas paper, 2026-09-29).
+# The s values, spectra and maps are sample-independent and shared.
+# pk_fstar_obs_z05.yaml
+# ---------------------
+# Observation-based stellar bands (unbound gas paper, P(k) section) at z ~ 0.5:
+# the S(k) and lensing f_gas(theta) of each simulation with its stars rescaled
+# so that an aggregate stellar quantity of the haloes >= 1e13 Msun/h, within
+# 1 R200m, hits a low and a high target:
+#   fstar        f* = sum M* / sum (M* + M_wind + M_gas + M_BH)  (option a)
+#   mstar_m200m  sum M* / sum M200m                              (option c)
+# Every region's true stars are scaled by one factor s per simulation and end
+# (a population rescale), exchanged with the region's ionized gas; where the
+# ionized gas cannot supply the stars added (s > 1), a region converts all of
+# it and s is re-solved so the aggregate still hits the target
+# (user decisions 2026-09-25).
+#
+# Read by (run from the scripts/ directory):
+#   unbound_gas/compute_fstar_obs.py     -- s per end; fields, spectra, 2D maps of the capped ends
+#   unbound_gas/stack_fstar_obs_maps.py  -- lensing stacks of those maps
+#   unbound_gas/make_pk_fstar_obs.py     -- figures and table
+#   (runINT_fstar_obs.sh runs the first two, one simulation per node)
+# Ends with s <= 1, or s > 1 without a capped region, come exactly from the
+# s = 0 transfer files of pk_components_z05.yaml's `stellar:` block (ap1, M13).
+
+pk:
+  threads: 128
+
+fstar_obs:
+  aperture_radius: 1.0          # x R200m: the s = 0 run's 'ap1' regions (mass priority)
+  halo_mass_min: 1.0e13         # FoF GroupMass cut [Msun/h]
+  targets:                      # [low, high], same at both redshifts
+    fstar: [0.05, 0.30]
+    mstar_m200m: [0.01, 0.04]   # M200m: catalogue SO mass (GroupMass_m200m)
+
+# Same lensing observable, sample and data as pk_components_z05.yaml.
+lensing:
+  config: configs/lensing/mass_ratio_noBeam_z05.yaml
+  data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.5.npz
+  # SHAM density per simulation from the lensing fit; stacks tagged 'lensfit'.
+  sample_name: 'lensfit'
+  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+  overrides: {}
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_fstar_obs_z05_lensfit'
+  fig_type: 'pdf'
+  z_label: '$z \simeq 0.5$'
+
+# ---------------------------------------------------------------------------
+# Simulations: copied from pk_fstar_z05.yaml (same snapshots, grids, DMO), no SIMBA.
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 67              # z = 0.503
+    n_pixels: 1000            # 205 ckpc/h voxels, k_Nyq = 15.3 h/Mpc
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 67
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_067/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 103             # z = 0.503
+    n_pixels: 1000            # 75 ckpc/h voxels, k_Nyq = 41.9 h/Mpc
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 103
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_103/'
+
+  # FLAMINGO at 2000^3 (341 ckpc/h voxels, k_Nyq = 9.2 h/Mpc), the grid of the
+  # existing float32 caches. All three variants share the L1_m9_DMO reference.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67              # z = 0.5
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 67
+      # Nested by the download; holds flamingo_0067.hdf5 (virtual file, used
+      # for the header) and swift_snapshot_0067/ (the 32 chunk files).
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

@@ -53,6 +53,9 @@ def run_sim(entry: dict, config: dict, nproc) -> None:
 
     lens = lensing_settings(config)
     stack = lens['stack']
+    if lens.get('fitted') is not None:
+        raise NotImplementedError("abundance_from_fit is not wired into stack_fstar_maps.py "
+                                  "(use compute_stellar_maps.sim_stack as stack_stellar_maps.py does)")
     lsim, z = lensing_sim(lens, entry)
     if lsim is None:
         print(f"  not in the lensing config {lens['config_path']}; skipping")

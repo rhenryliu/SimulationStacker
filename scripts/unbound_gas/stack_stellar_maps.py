@@ -58,7 +58,7 @@ import numpy as np
 from compute_pk_stellar import mass_tag, variants_of
 from compute_stellar_maps import (f_of_scale, field2d_path, lensing_settings, lensing_sim,
                                   map_n_pixels, map_path, maps_diag_path, omega_b_of,
-                                  sample_settings, stack_path)
+                                  sample_settings, sim_stack, stack_path)
 from pk_common import load_config, save_npz_atomic, select_sims, sim_label
 
 # Set in the parent before the pool forks (read-only in the workers).
@@ -123,7 +123,7 @@ def run_sim(entry: dict, config: dict, nproc, max_halos) -> None:
     from stacker import SimulationStacker
 
     lens = lensing_settings(config)
-    stack = lens['stack']
+    stack = sim_stack(lens, entry)
     lsim, z = lensing_sim(lens, entry)
     if lsim is None:
         print(f"  not in the lensing config {lens['config_path']}; skipping")

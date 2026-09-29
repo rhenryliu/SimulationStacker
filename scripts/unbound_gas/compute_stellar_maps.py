@@ -139,14 +139,45 @@ def lensing_settings(config: dict) -> dict:
     Returns:
         dict: 'config_path', 'config' (parsed lensing noBeam config), 'stack'
         (``resolve_stack_settings``), 'data' (beam-compensated data .npz path
-        or None), 'sample_name'.
+        or None), 'sample_name', and 'fitted': the per-simulation SHAM
+        densities of the block's optional ``abundance_from_fit`` (one npz of
+        lensing/fit_dsigma_ksz.py or a list of them), else None. Use
+        :func:`sim_stack` for the settings of one simulation.
     """
     lb = config['lensing']
     path = Path(lb['config'])
     lcfg = load_config(str(path))
+    fitted = None
+    if lb.get('abundance_from_fit') is not None:
+        from halo_stats import load_fitted_abundances
+        fitted = load_fitted_abundances(lb['abundance_from_fit'])
     return dict(config_path=str(path), config=lcfg,
                 stack=resolve_stack_settings(lcfg['stack'], lb.get('overrides')),
-                data=lb.get('data'), sample_name=str(lb.get('sample_name', 'lens')))
+                data=lb.get('data'), sample_name=str(lb.get('sample_name', 'lens')),
+                fitted=fitted)
+
+
+def sim_stack(lens: dict, entry: dict) -> dict:
+    """Stacking settings of one simulation.
+
+    The lensing block's settings, with the SHAM density replaced by that
+    simulation's lensing-fitted density when the block names
+    ``abundance_from_fit``; otherwise the block's settings unchanged.
+
+    Raises:
+        ValueError: If a fit is given but the stack does not use subhaloes.
+        KeyError: If the simulation has no fitted density.
+    """
+    fitted = lens.get('fitted')
+    if fitted is None:
+        return lens['stack']
+    if not lens['stack']['use_subhalos']:
+        raise ValueError("abundance_from_fit sets the SHAM density, so it needs use_subhalos: true")
+    from halo_stats import fit_label
+    label = fit_label(entry['sim_type'], entry)
+    if label not in fitted:
+        raise KeyError(f"No lensing fit for {label!r}; fitted: {sorted(fitted)}")
+    return dict(lens['stack'], halo_abundance_target=fitted[label])
 
 
 def lensing_sim(lens: dict, entry: dict):

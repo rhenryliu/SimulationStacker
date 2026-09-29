@@ -56,6 +56,9 @@ from utils import comoving_to_arcmin, flamingo_label
 from stacker import SimulationStacker
 from halos import select_halos
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
+# Sibling module in this directory (Python puts the running script's own
+# directory on sys.path); must come after the '../src/' append above.
+from halo_stats import fit_label, load_fitted_abundances
 
 # ---------------------------------------------------------------------------
 # Global matplotlib style  (matches make_ratios3x2.py exactly)
@@ -640,6 +643,11 @@ def main(path2config: str, verbose: bool = True):
         # SHAM target number density: used by both the 2D and 3D paths.
         'halo_abundance_target': stack_cfg.get('halo_abundance_target', 5e-4),
     }
+    # Optional per-simulation SHAM densities fitted on lensing
+    # (lensing/fit_dsigma_ksz.py; one npz or a list of them); each replaces
+    # halo_abundance_target in the SHAM panel for its simulation.
+    fit_path = stack_cfg.get('abundance_from_fit')
+    fitted_abundances = load_fitted_abundances(fit_path) if fit_path is not None else None
 
     redshift = params['redshift']
 
@@ -727,6 +735,7 @@ def main(path2config: str, verbose: bool = True):
     R200m_label = None
 
     t0 = time.time()
+    profiles_out = {}
 
     # ------------------------------------------------------------------
     # Loop over all simulations in the order they appear in the config.
@@ -747,8 +756,19 @@ def main(path2config: str, verbose: bool = True):
                 sim, sim_type_name, redshift)
             colour = sim_colours[sim_label]
 
+            # SHAM density of this simulation: the lensing fit if given.
+            sim_params = dict(params)
+            if fitted_abundances is not None:
+                label = fit_label(sim_type_name, sim)
+                if label not in fitted_abundances:
+                    raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
+                                   f"fitted: {sorted(fitted_abundances)}")
+                sim_params['halo_abundance_target'] = fitted_abundances[label]
+                if verbose:
+                    print(f"  SHAM density fitted on lensing: n = {fitted_abundances[label]:.4e} (cMpc/h)^-3")
+
             if verbose:
-                _print_selection_stats(stacker, params)
+                _print_selection_stats(stacker, sim_params)
 
             if dim == '2D':
                 if verbose:
@@ -757,7 +777,7 @@ def main(path2config: str, verbose: bool = True):
                     print(f"  Stacking {pT}/{pT2} 2D profiles "
                           f"(mass-cut ×2, SHAM ×2)...")
                 radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_val = \
-                    compute_fgas_2d(stacker, params, OmegaBaryon, cosmo)
+                    compute_fgas_2d(stacker, sim_params, OmegaBaryon, cosmo)
             else:
                 if verbose:
                     pT  = params['particle_type']
@@ -765,7 +785,7 @@ def main(path2config: str, verbose: bool = True):
                     print(f"  Stacking {pT}/{pT2} 3D profiles "
                           f"(mass-cut + SHAM)...")
                 radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_val = \
-                    compute_fgas_3d(stacker, params, OmegaBaryon)
+                    compute_fgas_3d(stacker, sim_params, OmegaBaryon)
 
             if verbose:
                 units = 'arcmin' if dim == '2D' else 'kpc/h'
@@ -775,6 +795,16 @@ def main(path2config: str, verbose: bool = True):
             if sim_type_name == 'IllustrisTNG' and R200m_ref is None:
                 R200m_ref   = R200m_val
                 R200m_label = sim_label
+
+            # Keep the plotted values for the npz written next to the figure.
+            key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
+            profiles_out['radii'] = radii
+            profiles_out[f'{key}/fgas_masscut'] = fgas_mass
+            profiles_out[f'{key}/err_masscut'] = err_mass
+            profiles_out[f'{key}/fgas_sham'] = fgas_sham
+            profiles_out[f'{key}/err_sham'] = err_sham
+            _n = sim_params['halo_abundance_target']
+            profiles_out[f'{key}/abundance'] = np.nan if _n is None else _n
 
             # ---- Plot mass-cut panel ----
             ax_mass.plot(radii, fgas_mass, label=sim_label, color=colour,
@@ -806,10 +836,6 @@ def main(path2config: str, verbose: bool = True):
     ):
         # Unity reference line — the cosmic baryon fraction in normalised units.
         ax.axhline(1.0, color='k', ls='--', lw=2, zorder=0)
-
-        # Shaded ±5 % band for visual reference.
-        ax.axhspan(0.95, 1.05, color='grey', alpha=0.15, zorder=0,
-                   label=r'$\pm 5\%$')
 
         # Vertical dotted line at mean R200m from TNG300-1 mass-cut halos.
         if R200m_ref is not None:
@@ -843,6 +869,7 @@ def main(path2config: str, verbose: bool = True):
     out_path = figPath / f'{figName}_{dim}.{figType}'
     fig.savefig(out_path, dpi=300)  # type: ignore
     plt.close(fig)
+    np.savez(figPath / f'{figName}_{dim}_profiles.npz', **profiles_out)
 
     elapsed = (time.time() - t0) / 60
     print(f"\nFigure saved to: {out_path}")

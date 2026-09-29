@@ -46,7 +46,7 @@ import compute_fstar_obs as cfo
 import make_pk_local as mpl  # the SIMBA label
 import make_pk_stellar as mps  # style, colours and labels
 from compute_stellar_maps import (f_of_scale, lensing_settings, lensing_sim, sample_settings,
-                                  stack_path)
+                                  sim_stack, stack_path)
 from pk_common import load_config, select_sims, sim_label, spectra_path
 from stack_fstar_obs_maps import obs_stack_path
 
@@ -150,7 +150,7 @@ def analyse(entry: dict, config: dict, preview: bool):
         print(f"  {sim_label(entry)}: no lensing stacks ({p0.name})")
         return r
     with np.load(p0) as a:
-        if str(a['settings']) != sample_settings(lens['stack'], z):
+        if str(a['settings']) != sample_settings(sim_stack(lens, entry), z):
             raise ValueError(f"{p0} was stacked with other settings than the config's lensing block")
         N, T, fac = a['N_mean'], a['T_mean'], float(a['factor'])
         c = f"{name}__{tag}"
@@ -161,7 +161,7 @@ def analyse(entry: dict, config: dict, preview: bool):
     stk = None
     if pf.exists():
         stk = np.load(pf)
-        if str(stk['settings']) != sample_settings(lens['stack'], z):
+        if str(stk['settings']) != sample_settings(sim_stack(lens, entry), z):
             raise ValueError(f"{pf} was stacked with other settings than the config's lensing block")
         r['lens']['checks'] = {q: float(stk[q]) for q in ('explicit_check_N', 'explicit_check_T')}
     for kk, d in r['ends'].items():

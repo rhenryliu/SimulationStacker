@@ -1,0 +1,181 @@
+# pk_components_z05_lensfit.yaml: pk_components_z05.yaml restricted to the
+# ap1/M13 stellar transfer, for stack_stellar_maps.py on the lensing-fitted
+# SHAM sample (unbound gas paper, 2026-09-29). Only the stellar/lensing
+# blocks and the simulation list are read by stack_stellar_maps.py.
+# pk_components_z05.yaml
+# ----------------------
+# Configuration for the matter power spectrum section of the unbound gas paper:
+# how much the non-ionized baryons (neutral gas, stars, black holes) matter for
+# the baryonic suppression of P(k).
+#
+# Read by (run from the scripts/ directory):
+#   unbound_gas/build_dmo_field.py        -- 3D DM field of each DMO reference run
+#   unbound_gas/validate_pk_caches.py     -- checks on the cached 3D fields used
+#   unbound_gas/compute_pk_components.py  -- auto/cross spectra of the components
+#   unbound_gas/make_pk_alpha.py          -- figures and tables
+#
+# Each hydro simulation is split into five mass components on one 3D grid,
+#   DM, ionized_gas, neutral_gas, Stars, BH,
+# built from the existing TSC caches in <root>/<SimType>/products/3D/:
+#   DM          = total - gas - Stars - BH
+#   neutral_gas = gas - ionized_gas
+# The 15 auto and cross spectra of their overdensities are enough to evaluate
+# P_mm exactly for any linear redistribution of the baryon mass between the
+# components (P_mm is bilinear in the component weights).
+#
+# All simulations are at z ~ 0.5 (snapshot numbers per entry).
+
+pk:
+  threads: 128          # Pylians FFT/loop threads
+
+  # Omega_b for mass-budget checks only (validate_pk_caches.py), used when the
+  # snapshot header has no 'OmegaBaryon' (Illustris and SIMBA). Same values as
+  # make_pk_suppression.py. The analysis itself never uses these: component
+  # weights come from the box means of the cached fields.
+  omega_baryon_fallback:
+    Illustris-1: 0.0456   # WMAP-9 cosmology
+    m100n1024: 0.048      # SIMBA, Planck 2016 cosmology
+
+  # Wavenumbers (h/Mpc) at which make_pk_alpha.py tabulates the results.
+  k_table: [0.5, 1.0, 2.0, 5.0, 10.0]
+
+# Local redistribution model. Read ONLY by compute_pk_local.py and
+# make_pk_local.py; build_dmo_field.py, validate_pk_caches.py,
+# compute_pk_components.py and make_pk_alpha.py ignore this block, so their
+# behaviour and outputs are unchanged by it.
+#
+# Each moved component e is transported within a radius R so that it follows
+# the target template T: m_e = rho_T * [W_R * (rho_e / (W_R * rho_T))], i.e.
+# every cell spreads its mass over the kernel around it in proportion to T.
+# Mass is conserved exactly and large-scale power is unchanged (unlike the
+# global alpha model).
+local:
+  radii: [0.5, 1.0, 2.0, 4.0]    # R [comoving Mpc/h]
+  min_radius_cells: 2.0          # skip R below this many grid cells (drops
+                                 # R=0.5 for FLAMINGO's 0.34 Mpc/h cells)
+  kernels: ['tophat', 'gaussian']
+  # Gaussian per-axis width sigma = factor * R. 1/sqrt(5) = 0.4472 gives the
+  # Gaussian the same rms radius as the sphere of radius R (sqrt(3/5) R), so
+  # the two kernels are compared at matched scale. Set 1.0 for the
+  # W(k) = exp(-k^2 R^2 / 2) convention.
+  gaussian_sigma_factor: 0.4472136
+  targets: ['ionized', 'dm']     # lay the moved mass out like local ionized gas / DM
+  moved: ['all', 'stars', 'neutral']   # 'all' = neutral_gas + Stars + BH
+
+# Halo-level stellar-to-ionized-gas transfer. Read ONLY by
+# compute_pk_stellar.py and make_pk_stellar.py; every other script ignores
+# this block.
+#
+# In each selected halo region, a fraction (1 - s) of the stellar mass is
+# removed from the stars and added to the region's ionized gas in proportion
+# to each gas particle's ionized mass (mass conserved halo by halo; nothing
+# outside the regions changes). s = stellar scale: 1 = the simulation, 0 = all
+# selected stellar mass moved. Stars exclude TNG/Illustris wind particles.
+# Regions: the halo finder's membership ('membership': FoF groups; CAESAR
+# haloes for SIMBA; FoF groups of the SOAP centrals for FLAMINGO) and/or
+# spheres of x * R200m (GroupRad) around GroupPos ('aperture'; overlaps go
+# to the most massive halo). P_mm(s) is exactly quadratic in (1 - s), so the
+# spectra are computed once (s = 0) and stellar_scales only affects plots.
+stellar:
+  # Only the ap1 / M13 transfer that pk_fstar_obs_z05_lensfit.yaml reads.
+  methods: ['aperture']
+  aperture_radii: [1.0]                      # x, in units of R200m
+  halo_mass_min: [1.0e13]                    # FoF GroupMass cut [Msun/h]
+  stellar_scales: [1.0, 0.75, 0.5, 0.25, 0.0]
+
+# Lensing observable in the bottom panel of make_pk_stellar.py's _stellar_S_
+# figures: the beam-free simulation f_gas(theta) of
+# lensing/beam_compensated_ratio_v2.py under the same transfer. Read ONLY by
+# compute_stellar_maps.py, stack_stellar_maps.py and make_pk_stellar.py.
+# The stacking settings, redshifts and halo sample come from `config` (a
+# lensing noBeam config); `overrides` replaces any of them (e.g.
+# halo_abundance_target) and `sample_name` tags the stacked output, so stacks
+# of other samples coexist (the transfer maps do not depend on the sample).
+# `data`: the beam-compensated measurement written by the lensing script.
+lensing:
+  config: configs/lensing/mass_ratio_noBeam_z05.yaml
+  data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.5.npz
+  # SHAM density per simulation from the lensing fit (lensing/fit_dsigma_ksz.py)
+  # instead of the noBeam config's single halo_abundance_target; stacks are
+  # tagged 'lensfit' so they coexist with the 'lens' (5e-4) ones.
+  sample_name: 'lensfit'
+  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+  overrides: {}
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'pk_components_z05'
+  fig_type: 'pdf'
+  z_label: '$z \simeq 0.5$'      # figure title (make_pk_stellar.py only)
+  # Simulations left out of make_pk_stellar.py's figures (its tables keep
+  # them), matched like its --sims (label, name or feedback). SIMBA is left
+  # out for now (user decision 2026-09-24); delete the line to restore it.
+  exclude_sims: ['m100n1024']
+
+# ---------------------------------------------------------------------------
+# Simulations. `n_pixels` is the 3D grid (voxels per side) of the cached fields.
+# `dmo` names the dark-matter-only run with the same initial conditions; its DM
+# field is built on the same grid by build_dmo_field.py. `dmo.path` is the
+# snapshot location relative to the data root: a directory of chunk files, or
+# a single file for SIMBA.
+# ---------------------------------------------------------------------------
+simulations:
+  - sim_type: 'IllustrisTNG'
+    name: 'TNG300-1'
+    snapshot: 67              # z = 0.503
+    n_pixels: 1000            # 205 ckpc/h voxels, k_Nyq = 15.3 h/Mpc
+    dmo:
+      name: 'TNG300-1-Dark'
+      snapshot: 67
+      path: 'IllustrisTNG/TNG300-1-Dark/output/snapdir_067/'
+
+  - sim_type: 'IllustrisTNG'
+    name: 'Illustris-1'
+    snapshot: 103             # z = 0.503
+    n_pixels: 1000            # 75 ckpc/h voxels, k_Nyq = 41.9 h/Mpc
+    dmo:
+      name: 'Illustris-1-Dark'
+      snapshot: 103
+      path: 'IllustrisTNG/Illustris-1-Dark/output/snapdir_103/'
+
+  - sim_type: 'SIMBA'
+    name: 'm100n1024'
+    snapshot: 125             # z = 0.4904
+    feedback: 's50'
+    n_pixels: 1000            # 100 ckpc/h voxels, k_Nyq = 31.4 h/Mpc
+    dmo:
+      # Public SIMBA DM-only run (simba.roe.ac.uk/simdata/m100n1024/dm/);
+      # its snapshot 009 is at z = 0.4904, the same as hydro snapshot 125.
+      name: 'm100n1024'
+      feedback: 'dm'
+      snapshot: 9
+      path: 'SIMBA/m100n1024/dm/snapshots/snap_m100n1024_009.hdf5'
+
+  # FLAMINGO at 2000^3 (341 ckpc/h voxels, k_Nyq = 9.2 h/Mpc), the grid of the
+  # existing float32 caches. All three variants share the L1_m9_DMO reference.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67              # z = 0.5
+    feedback: 'L1_m9'
+    n_pixels: 2000
+    dmo: &flamingo_dmo
+      name: 'L1_m9'
+      feedback: 'L1_m9_DMO'
+      snapshot: 67
+      # Nested by the download; holds flamingo_0067.hdf5 (virtual file, used
+      # for the header) and swift_snapshot_0067/ (the 32 chunk files).
+      path: 'FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/FLAMINGO/L1_m9/L1_m9_DMO/snapshots/flamingo_0067/'
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'fgas-8sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo

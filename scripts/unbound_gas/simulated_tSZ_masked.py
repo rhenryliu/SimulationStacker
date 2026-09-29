@@ -26,6 +26,9 @@ sys.path.append('../src/')
 from stacker import SimulationStacker
 from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from halos import select_massive_halos
+# Sibling module in this directory (Python puts the running script's own
+# directory on sys.path); must come after the '../src/' append above.
+from halo_stats import fit_label, load_fitted_abundances, require_masked_map
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il # type: ignore
@@ -66,40 +69,6 @@ _FLAMINGO_COLOURS = {
 # plt.rcParams['font.serif'] = ['Computer Modern Roman']
 # plt.rcParams['text.usetex'] = True
 # plt.rcParams['mathtext.fontset'] = 'cm'
-
-def fit_label(sim_type_name, sim):
-    """Label under which lensing/fit_dsigma_ksz.py stores a simulation's fit.
-
-    Mirrors the labels built by ``make_stacker`` in that script.
-
-    Args:
-        sim_type_name (str): One of 'IllustrisTNG', 'SIMBA', 'FLAMINGO'.
-        sim (dict): The config entry, with 'name' and (for SIMBA and FLAMINGO)
-            'feedback'.
-
-    Returns:
-        str: e.g. 'TNG300-1', 'm100n1024_s50' or 'FLAMINGO L1_m9'.
-    """
-    if sim_type_name == 'SIMBA':
-        return f"{sim['name']}_{sim['feedback']}"
-    if sim_type_name == 'FLAMINGO':
-        return f"FLAMINGO {sim['feedback']}"
-    return sim['name']
-
-
-def load_fitted_abundances(fit_path):
-    """Read the SHAM densities fitted on lensing by lensing/fit_dsigma_ksz.py.
-
-    Args:
-        fit_path (str): Path to that script's results npz.
-
-    Returns:
-        dict: Best-fit number density n_best in (cMpc/h)^-3, keyed by
-        :func:`fit_label`.
-    """
-    with np.load(fit_path) as fit:
-        return {str(label): float(fit[f'{label}/n_best']) for label in fit['labels']}
-
 
 def main(path2config, verbose=True):
     """Main function to process the simulation maps.
@@ -198,6 +167,9 @@ def main(path2config, verbose=True):
     ]
     
     t0 = time.time()
+    # Stacked profiles, written next to the figure so the numbers quoted in the
+    # text can be read back without restacking.
+    profiles_out = {}
     
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -263,6 +235,11 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                 simType=sim_type_name)
 
+                    if maskHaloes:
+                        # The cached masked maps are built around the stacked SHAM hosts;
+                        # never let stackMap rebuild one around another sample.
+                        require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
+                                           sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
@@ -294,6 +271,11 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name, 
                                                 feedback=feedback)
                     
+                    if maskHaloes:
+                        # The cached masked maps are built around the stacked SHAM hosts;
+                        # never let stackMap rebuild one around another sample.
+                        require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
+                                           sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
@@ -314,6 +296,11 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name,
                                                 feedback=feedback)
 
+                    if maskHaloes:
+                        # The cached masked maps are built around the stacked SHAM hosts;
+                        # never let stackMap rebuild one around another sample.
+                        require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
+                                           sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
                     radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
@@ -336,6 +323,14 @@ def main(path2config, verbose=True):
                 v_c = 300000 / 299792458 # velocity over speed of light.
                 
                 profiles_plot = np.mean(profiles0, axis=1)
+                col_key = f"mask{maskRadii:.0f}" if maskHaloes else 'unmasked'
+                out_key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
+                profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
+                profiles_out[f'{out_key}/{col_key}_sem'] = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                profiles_out[f'{out_key}/n_objects'] = profiles0.shape[1]
+                _n = sim_selection['halo_abundance_target']
+                profiles_out[f'{out_key}/abundance'] = np.nan if _n is None else _n
+                profiles_out['radii_arcmin'] = radii0 * radDistance
                 ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
@@ -400,15 +395,15 @@ def main(path2config, verbose=True):
                 secax_x.set_xlabel('R [ckpc/h]')
             
             # Set secondary y-axis only on rightmost column
-            if col_idx == 3:
-                ax.legend(loc='best', fontsize=12)
-                secax = ax.secondary_yaxis('right',
-                                           functions=(lambda y: y ,
-                                                     lambda y: y))
-                if row_idx == 0:
-                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
-                else:
-                    secax.set_ylabel(r'Compton-$y$ [$\rm{arcmin}^2$]')
+            if col_idx == 0:
+                ax.legend(loc='upper left', fontsize=12)
+            elif col_idx == 3 and plot_config['plot_data']:
+                # Only the data entry here; the simulations are labelled in
+                # the first column.
+                handles, labels = ax.get_legend_handles_labels()
+                keep = [k for k, lab in enumerate(labels) if lab == plot_config['data_label']]
+                ax.legend([handles[k] for k in keep], [labels[k] for k in keep],
+                          loc='upper left', fontsize=12)
             
             ax.set_yscale(plot_config.get('yscale', 'log'))
             ax.set_xlim(0.0, 6.5)
@@ -433,6 +428,7 @@ def main(path2config, verbose=True):
                  fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
+    np.savez(figPath / f'{pType}_{figName}_z{redshift}_profiles.npz', **profiles_out)
     
     print('Done!!! time taken = ', time.time() - t0, ' seconds')
 

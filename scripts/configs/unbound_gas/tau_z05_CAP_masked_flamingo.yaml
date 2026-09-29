@@ -14,6 +14,12 @@ stack:
   mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
   pixel_size: 0.5 # in arcmin
   use_subhalos: true # Whether to use subhalos for selection (SHAM) instead of halos (mass cut)
+  # SHAM density per simulation, fitted to the HSC Y3 x DESI LRG bin-1 lensing
+  # profile by lensing/fit_dsigma_ksz.py; the SIMBA-50 variants have their own
+  # (noisier) fit. The masked maps are built around the hosts of these samples
+  # (unbound_gas/precompute_masked_sham_hosts.py).
+  abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_simba50.npz']
 
 plot:
   plot_data: true

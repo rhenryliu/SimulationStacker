@@ -36,7 +36,7 @@ import numpy as np
 import stack_stellar_maps as ssm
 from compute_fstar_obs import obs_map_path, obs_path, obs_settings
 from compute_stellar_maps import (field2d_path, lensing_settings, lensing_sim, map_n_pixels,
-                                  sample_settings, stack_path)
+                                  sample_settings, sim_stack, stack_path)
 from pk_common import load_config, save_npz_atomic, select_sims, sim_label
 
 
@@ -53,7 +53,7 @@ def run_sim(entry: dict, config: dict, nproc) -> None:
     obs = obs_settings(config)
     name, tag = obs['variant']['name'], obs['tag']
     lens = lensing_settings(config)
-    stack = lens['stack']
+    stack = sim_stack(lens, entry)
     lsim, z = lensing_sim(lens, entry)
     if lsim is None:
         print(f"  not in the lensing config {lens['config_path']}; skipping")

@@ -80,7 +80,7 @@ import astropy.units as u
 # Internal package imports
 # ---------------------------------------------------------------------------
 sys.path.append('../src/')
-from utils import arcmin_to_comoving, comoving_to_arcmin
+from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from stacker import SimulationStacker
 from halos import select_massive_halos
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
@@ -145,7 +145,7 @@ def make_stacker(sim: dict, redshift: float):
         stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                     simType=sim_type, feedback=feedback)
         # sim_label = f"{sim_name}_{feedback}"
-        sim_label = "SIMBA-m100"
+        sim_label = "SIMBA-100"
         OmegaBaryon = 0.048
 
     elif sim_type == 'FLAMINGO':
@@ -154,7 +154,7 @@ def make_stacker(sim: dict, redshift: float):
         stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                     simType=sim_type, feedback=feedback)
         # '-' instead of '_' so the label renders under usetex (cf. star_fraction_v2.py).
-        sim_label = f"FLAMINGO {feedback}".replace('_', '-')
+        sim_label = flamingo_label(feedback)
         # load_flamingo_header normalises the SWIFT cosmology into TNG-style keys,
         # so OmegaBaryon is present; fall back to the DES Y3 value used elsewhere
         # in the repo if a variant ever omits it.

@@ -46,9 +46,10 @@ matplotlib.rcParams.update({
 PAPER_LABEL = {
     ('IllustrisTNG', 'TNG300-1', None): 'TNG300-1',
     ('IllustrisTNG', 'Illustris-1', None): 'Illustris-1',
-    ('FLAMINGO', 'L1_m9', 'L1_m9'): 'FLAMINGO L1-m9',
-    ('FLAMINGO', 'L1_m9', 'fgas-8sigma'): r'FLAMINGO fgas-8$\sigma$',
-    ('FLAMINGO', 'L1_m9', 'Jet_fgas-4sigma'): r'FLAMINGO Jet-fgas-4$\sigma$',
+    # FLAMINGO names as utils.flamingo_label, written for mathtext (no usetex here).
+    ('FLAMINGO', 'L1_m9', 'L1_m9'): 'FLAMINGO L1_m9',
+    ('FLAMINGO', 'L1_m9', 'fgas-8sigma'): r'FLAMINGO fgas$-8\sigma$',
+    ('FLAMINGO', 'L1_m9', 'Jet_fgas-4sigma'): r'FLAMINGO Jet_fgas$-4\sigma$',
 }
 # Symbol of each option's aggregate in the legends.
 AGG_SYMBOL = {'fstar': r'\bar{f}_\star', 'mstar_m200m': r'\bar{M}_\star/\bar{M}_{200m}'}

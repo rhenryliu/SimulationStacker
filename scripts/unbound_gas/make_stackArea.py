@@ -80,7 +80,7 @@ import astropy.units as u
 # Internal package imports
 # ---------------------------------------------------------------------------
 sys.path.append('../src/')
-from utils import arcmin_to_comoving, comoving_to_arcmin
+from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from stacker import SimulationStacker
 from halos import select_massive_halos
 from mask_utils import get_cutout_indices_3d, sum_over_cutouts
@@ -178,7 +178,7 @@ def make_stacker(sim: dict, redshift: float):
                                     simType=sim_type, feedback=feedback)
         OmegaBaryon = 0.048  # Standard value for SIMBA runs
         # sim_label = f"{sim_name}_{feedback}"
-        sim_label = "SIMBA-m100"
+        sim_label = "SIMBA-100"
 
     elif sim_type == 'FLAMINGO':
         # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
@@ -186,7 +186,7 @@ def make_stacker(sim: dict, redshift: float):
         stacker = SimulationStacker(sim_name, snapshot, z=redshift,
                                     simType=sim_type, feedback=feedback)
         # '-' instead of '_' so the label renders under usetex (as in Figure 5).
-        sim_label = f"FLAMINGO {feedback}".replace('_', '-')
+        sim_label = flamingo_label(feedback)
         # load_flamingo_header maps the SWIFT cosmology onto TNG-style keys.
         # Its Omega0 is Omega_cdm + Omega_b with neutrinos excluded, matching the
         # 'total' field (gas + DM + Stars + BH), so Omega_b / Omega_m is

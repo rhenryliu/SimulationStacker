@@ -33,6 +33,12 @@
 # DATASETS (two jobs working on the same files would race), e.g.:
 #   DATASETS="flam_L1_m9_57 ..." sbatch --time=24:00:00 cross_corr/fetch_snapshots_z075_z10.sh
 #   DATASETS="tng300_57 tng300_50 tngdark_57 tngdark_50" sbatch cross_corr/fetch_snapshots_z075_z10.sh
+# Another manifest (fetch_snapshot_tools.py manifest --flamingo-variants ...)
+# needs FULL_MANIFEST set to it as well, or the completeness step rejects its
+# dataset names; e.g. the FLAMINGO Mstar download of 2026-09-29:
+#   MANIFEST=$M FULL_MANIFEST=$M STAGE_ROOT=.../staging_fetch_flamingo_mstar NPAR=6 \
+#       sbatch --time=16:00:00 --job-name=fetch_flamingo_mstar \
+#       -o ../Outputs_Perlmutter/fetch_flamingo_mstar-%j.out cross_corr/fetch_snapshots_z075_z10.sh
 # Smoke test (one file of each kind, no completeness check):
 #   MANIFEST=../Outputs_Perlmutter/fetch_z075_z10_smoke.tsv CHECK_COMPLETE=0 \
 #       sbatch --time=03:00:00 cross_corr/fetch_snapshots_z075_z10.sh
@@ -82,7 +88,7 @@ fi
 # fetch_one URL DEST SIZE RESUME AUTH KIND
 fetch_one () {
     local url=$1 dest=$2 size=$3 resume=$4 auth=$5 kind=$6
-    local name part remote got attempt rc restart
+    local name part remote got attempt rc restart pause
     local -a hdr=() cont=()
     name=${dest#"$DATA_ROOT"/}
     part="$STAGE_ROOT/$name.part"
@@ -102,8 +108,14 @@ fetch_one () {
     else
         # Final-hop Content-Length (the TNG API answers with a 302 to a data
         # server): reset at every status line so an earlier hop never survives.
-        remote=$(sys_curl -sIL -m 120 "${hdr[@]}" "$url" | tr -d '\r' \
-                 | awk '/^HTTP\// {n=""} tolower($1)=="content-length:" {n=$2} END {print n}')
+        # Retried with backoff: the API sometimes answers with a short error
+        # body for a few minutes (2026-09-29).
+        for pause in 60 300 0; do
+            remote=$(sys_curl -sIL -m 120 "${hdr[@]}" "$url" | tr -d '\r' \
+                     | awk '/^HTTP\// {n=""} tolower($1)=="content-length:" {n=$2} END {print n}')
+            if [[ "$remote" =~ ^[0-9]+$ ]] && [ "$remote" -ge "$MIN_BYTES" ]; then break; fi
+            [ "$pause" -gt 0 ] && sleep "$pause"
+        done
     fi
     if ! [[ "$remote" =~ ^[0-9]+$ ]] || [ "$remote" -lt "$MIN_BYTES" ]; then
         echo "FAIL $name: bad Content-Length '$remote' (server error?)"

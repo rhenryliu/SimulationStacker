@@ -39,7 +39,10 @@ not TNG field subsets and not Durham, both checked 2026-09-28).
 Subcommands (run from ``scripts/``):
 
     manifest <out>                 write the full manifest, print totals and
-                                   any destination that already exists
+                                   any destination that already exists;
+                                   --flamingo-variants / --flamingo-snaps /
+                                   --no-flamingo-dmo / --no-tng select another
+                                   set (defaults: the set above)
     smoke <manifest> <out>         one file of each kind, for a smoke test
     check <file> <kind>            verify one file
     install <staged> <dest> <kind> verify, then move onto dest; never
@@ -222,12 +225,20 @@ def _walk_remote(directory, prefix=''):
             yield prefix + name, int(obj.size)
 
 
-def _flamingo_lines():
-    """Manifest lines for every FLAMINGO file (sizes from the server listing)."""
+def _flamingo_lines(variants: list = FLAMINGO_HYDRO, snaps: list = FLAMINGO_SNAPS,
+                    dmo: bool = True) -> list:
+    """Manifest lines for every FLAMINGO file (sizes from the server listing).
+
+    Args:
+        variants: Hydro variant directory names under ``FLAMINGO/L1_m9/``.
+        snaps: Snapshot numbers.
+        dmo: Also list ``L1_m9_DMO`` at the same snapshots.
+    """
     import hdfstream
     hdfstream.disable_progress(True)
-    runs = [(f'flam_{v}_{s}', v, s) for s in FLAMINGO_SNAPS for v in FLAMINGO_HYDRO]
-    runs += [(f'flamdmo_{s}', 'L1_m9_DMO', s) for s in FLAMINGO_SNAPS]
+    runs = [(f'flam_{v}_{s}', v, s) for s in snaps for v in variants]
+    if dmo:
+        runs += [(f'flamdmo_{s}', 'L1_m9_DMO', s) for s in snaps]
     lines = []
     for dataset, variant, snap in runs:
         snap_dir = f'FLAMINGO/L1_m9/{variant}/snapshots/flamingo_{snap:04d}'
@@ -288,18 +299,24 @@ def _tng_lines():
     return lines
 
 
-def write_manifest(out: str) -> None:
+def write_manifest(out: str, variants: list = FLAMINGO_HYDRO, snaps: list = FLAMINGO_SNAPS,
+                   dmo: bool = True, tng: bool = True) -> None:
     """Write the full manifest and summarize it.
+
+    The defaults give the z ~ 0.75 / z = 1.0 set this module was written for.
 
     Args:
         out: Output TSV path.
+        variants: FLAMINGO hydro variants to list.
+        snaps: FLAMINGO snapshot numbers.
+        dmo: Also list FLAMINGO L1_m9_DMO at those snapshots.
+        tng: Also list the TNG runs of ``TNG_RUNS``.
     """
-    lines = _flamingo_lines() + _tng_lines()
+    lines = _flamingo_lines(variants, snaps, dmo) + (_tng_lines() if tng else [])
     with open(out, 'w') as f:
         for line in lines:
             f.write('\t'.join(str(x) for x in line) + '\n')
 
-    headers = _tng_headers()
     print(f'wrote {len(lines)} lines to {out}')
     print(f'{"dataset":22s} {"files":>6s} {"known bytes":>16s}')
     per = OrderedDict()
@@ -308,7 +325,8 @@ def write_manifest(out: str) -> None:
         per[line[0]] = (n + 1, b + int(line[4]))
     for dataset, (n, b) in per.items():
         print(f'{dataset:22s} {n:6d} {b / 1e12:13.3f} TB')
-    for dataset, sim, snap, subset in TNG_RUNS:
+    headers = _tng_headers() if tng else None
+    for dataset, sim, snap, subset in (TNG_RUNS if tng else []):
         meta = _tng_json(f'{sim}/snapshots/{snap}/', headers)
         tag = 'subset of' if subset else 'whole'
         print(f'{dataset:22s} API: snapshot {meta["filesize_snapshot"] / 1e12:.3f} TB ({tag}), '
@@ -460,6 +478,10 @@ def main() -> None:
     sub = parser.add_subparsers(dest='cmd', required=True)
     p = sub.add_parser('manifest')
     p.add_argument('out')
+    p.add_argument('--flamingo-variants', nargs='+', default=FLAMINGO_HYDRO)
+    p.add_argument('--flamingo-snaps', nargs='+', type=int, default=FLAMINGO_SNAPS)
+    p.add_argument('--no-flamingo-dmo', action='store_true')
+    p.add_argument('--no-tng', action='store_true')
     p = sub.add_parser('smoke')
     p.add_argument('manifest')
     p.add_argument('out')
@@ -476,7 +498,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.cmd == 'manifest':
-        write_manifest(args.out)
+        write_manifest(args.out, args.flamingo_variants, args.flamingo_snaps,
+                       dmo=not args.no_flamingo_dmo, tng=not args.no_tng)
     elif args.cmd == 'smoke':
         write_smoke(args.manifest, args.out)
     elif args.cmd == 'check':

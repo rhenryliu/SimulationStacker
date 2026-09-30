@@ -63,6 +63,8 @@ _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
     'Jet_fgas-4sigma': '#C71585',  # magenta
+    'Mstar-1sigma':             '#17BECF',  # cyan
+    'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 
 # # Set matplotlib to use Computer Modern font
@@ -162,6 +164,15 @@ def main(path2config, verbose=True):
     # Stacked profiles, written next to the figure so the numbers quoted in the
     # text can be read back without restacking.
     profiles_out = {}
+    # Guide lines: n x the mean R200m of the stacked hosts of each row's first
+    # simulation, in arcmin (that simulation's own cosmology).
+    row_rad_arcmin = {}
+    sim_rad_arcmin = {}  # the same per simulation, filled with its halo sample
+    # Cosmology of the secondary (comoving) x-axis: set by the TNG block below as
+    # before; falls back to the first simulation's for configs without TNG.
+    cosmo = None
+    # A simulation listed in two rows is stacked once per column.
+    stack_cache = {}
 
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -179,7 +190,10 @@ def main(path2config, verbose=True):
             sim_type_name = sim_type['sim_type']
             ax = axes[row_idx, col_idx]
             
-            colourmap = matplotlib.colormaps[colourmaps[row_idx]] # type: ignore
+            # Colour map by suite (the row order used to pick it, which failed
+            # for a fourth row); FLAMINGO runs have fixed colours regardless.
+            colourmap = matplotlib.colormaps[{'SIMBA': 'hsv', 'IllustrisTNG': 'twilight'}.get(  # type: ignore
+                sim_type_name, 'plasma')]
             
             if sim_type_name == 'IllustrisTNG':
                 TNG_sims = sim_type['sims']
@@ -284,6 +298,14 @@ def main(path2config, verbose=True):
                         halo_mass_avg=halo_mass_avg,
                         halo_mass_upper=halo_mass_upper)
                     stats_rows.append(sim_stats)
+                    sim_cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'],
+                                              Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K)
+                    sim_rad_arcmin[sim_key] = comoving_to_arcmin(sim_stats['rad_mean'],
+                                                                 redshift, sim_cosmo)
+                    if cosmo is None:
+                        cosmo = sim_cosmo
+                if row_idx not in row_rad_arcmin:
+                    row_rad_arcmin[row_idx] = sim_rad_arcmin[sim_key]
                     if verbose:
                         print(format_stats(sim_stats), flush=True)
 
@@ -292,14 +314,18 @@ def main(path2config, verbose=True):
                     # hosts; never let stackMap rebuild one around another sample.
                     require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                        sim_abundance if use_subhalos else None)
-                radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
-                                        save=saveField, load=loadField, radDistance=radDistance,
-                                        use_subhalos=use_subhalos,
-                                        halo_abundance_target=sim_abundance,
-                                        halo_mass_avg=halo_mass_avg,
-                                        halo_mass_upper=halo_mass_upper,
-                                        halo_mask=halo_masks[sim_key],
-                                        projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                if (sim_key, col_idx) in stack_cache:
+                    radii0, profiles0 = stack_cache[(sim_key, col_idx)]
+                else:
+                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                                            save=saveField, load=loadField, radDistance=radDistance,
+                                            use_subhalos=use_subhalos,
+                                            halo_abundance_target=sim_abundance,
+                                            halo_mass_avg=halo_mass_avg,
+                                            halo_mass_upper=halo_mass_upper,
+                                            halo_mask=halo_masks[sim_key],
+                                            projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                    stack_cache[(sim_key, col_idx)] = (radii0, profiles0)
 
                 # Plotting
                 T_CMB = 2.7255
@@ -352,8 +378,7 @@ def main(path2config, verbose=True):
             ax = axes[row_idx, col_idx]
             
             if col_idx != 3:
-                R200C_arcmin = comoving_to_arcmin(R200C * u.kpc / u.h, redshift, cosmo)
-                ax.axvline(R200C_arcmin * (col_idx + 1), color='k', linestyle='--', lw=1)
+                ax.axvline(row_rad_arcmin[row_idx] * (col_idx + 1), color='k', linestyle='--', lw=1)
 
             # Set x-label only on bottom row
             if row_idx == nRows - 1:
@@ -401,7 +426,7 @@ def main(path2config, verbose=True):
     # order, and centred on each row after tight_layout has fixed the layout.
     for row_idx, sim_type in enumerate(config['simulations']):
         bbox = axes[row_idx, 0].get_position()
-        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), sim_type['sim_type'],
+        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), sim_type.get('row_label', sim_type['sim_type']),
                  fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)

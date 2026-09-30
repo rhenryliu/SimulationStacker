@@ -1,0 +1,22 @@
+# Appendix B (iteration 3): make_kSZ_outside_fraction.py at z ~ 0.26 for the BGS
+# lensing-fit SHAM samples of SIMBA-100, TNG300-1 and Illustris-1 (profiles from
+# simulated_kSZ_masked.py with tau_z026_CAP_masked_bgs.yaml, job 59117702). No
+# data: the kSZ measurement drawn at z = 0.5 is for the LRGs.
+# Run from the scripts/ directory:
+#   python unbound_gas/make_kSZ_outside_fraction.py -p configs/unbound_gas/kSZ_outside_fraction_z026.yaml
+
+profiles_npz: '../figures/2026-09/09-30/profiles_xy_masked_z026_bgs_tau_z0.26_profiles.npz'
+data_path: null
+fig_path: '../figures/'
+fig_name: 'kSZ_outside_fraction_z026'
+fig_type: 'pdf'
+row_height: 3.6
+fraction_ylim: [-0.2, 1.0]
+summary_theta: [2.0, 4.0, 6.0]
+rows:
+  - suite: 'SIMBA'
+    title: 'SIMBA'
+    sims: ['SIMBA/m100n1024/s50']
+  - suite: 'IllustrisTNG'
+    title: 'IllustrisTNG'
+    sims: ['IllustrisTNG/TNG300-1', 'IllustrisTNG/Illustris-1']

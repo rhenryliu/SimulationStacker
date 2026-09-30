@@ -1,0 +1,45 @@
+# Appendix B of the unbound gas paper (iteration 3, 2026-09-29): the kSZ masking
+# figure at z ~ 0.26 (DESI BGS) for TNG300-1 (snapshot 80), Illustris-1 (116)
+# and SIMBA-100 (136), stacked on SHAM galaxies at the densities fitted to the
+# HSC Y3 x DESI BGS lensing profile (fit_dsigma_ksz_z026_bgs.npz), with masks
+# around their host haloes (precompute_masked_sham_hosts.py --z 0.26).
+# FLAMINGO is left out: its 0.5' cube at z = 0.30 would be ~5606^3 (~700 GB).
+# Projected at z = 0.26 like the cached z ~ 0.26 maps. No data points: the
+# plotted kSZ measurement is for the LRGs. The outside-gas fractions are drawn
+# by make_kSZ_outside_fraction.py from this run's profiles npz.
+# Run from the scripts/ directory:
+#   python unbound_gas/simulated_kSZ_masked.py -p configs/unbound_gas/tau_z026_CAP_masked_bgs.yaml
+
+stack:
+  redshift: 0.26
+  filter_type: 'CAP'
+  load_field: true
+  save_field: true
+  rad_distance: 1.0
+  particle_type: 'tau'
+  projection: 'xy'
+  mask_haloes: false
+  mask_radii: 3.0
+  pixel_size: 0.5
+  use_subhalos: true
+  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z026_bgs.npz'
+plot:
+  plot_data: false
+  fig_path: '../figures/'
+  fig_name: 'profiles_xy_masked_z026_bgs'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  suptitle: false
+  row_height: 3.8
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 136
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+      - name: 'Illustris-1'
+        snapshot: 116

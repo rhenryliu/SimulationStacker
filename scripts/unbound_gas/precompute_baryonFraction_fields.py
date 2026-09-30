@@ -28,7 +28,8 @@ What one task writes
 Under ``<data root>/{simType}/products/``:
 
 - ``--dim 2D``: ``2D/..._{nPixels}_{projection}.npy``, the unconvolved projected
-  field.  It is written via ``makeMap(beamSize=0)`` rather than ``makeField`` so
+  field (or, with ``--beam-size`` > 0, the beam-convolved ``_map`` file).  It
+  is written via ``makeMap`` (``beamSize=0`` by default) rather than ``makeField`` so
   that ``nPixels`` is derived from the box's angular size exactly as the figure
   derives it -- the two must agree or the figure will not find the file.
 - ``--dim 3D``: ``3D/..._{nPixels}.npy``, the cubic field.  The 3D cache
@@ -116,9 +117,13 @@ def main(args: argparse.Namespace) -> int:
     else:
         nPixels = map_n_pixels(stacker, args.redshift, args.pixel_size)
 
+    # A beam > 0 (2D only) writes the beam-convolved '_map' file instead of
+    # the raw field.
+    beamed = args.dim == '2D' and args.beam_size > 0
     target = _get_data_filepath(
         args.simtype, args.sim, args.snapshot, args.feedback, args.ptype,
-        nPixels, projection=args.projection, data_type='field', dim=args.dim,
+        nPixels, projection=args.projection,
+        data_type='map' if beamed else 'field', dim=args.dim,
         base_path=stacker.base_path,
     )
     print(f"Target: {target}")
@@ -127,6 +132,19 @@ def main(args: argparse.Namespace) -> int:
           f"nPixels={nPixels} projection={args.projection}")
 
     if target.exists() and not args.overwrite:
+        # loadIO.save_data writes with a plain np.save, so a task killed
+        # mid-write leaves a truncated file. Open it lazily to check that it is
+        # complete; stop rather than treat a broken cache as done.
+        try:
+            arr = np.load(target, mmap_mode='r')
+            shape = arr.shape
+            del arr
+        except ValueError as e:
+            raise RuntimeError(f"{target} exists but cannot be read ({e}); it is probably "
+                               "truncated. Move it aside (to the trash) and resubmit.") from e
+        expected = (nPixels,) * (3 if args.dim == '3D' else 2)
+        if shape != expected:
+            raise RuntimeError(f"{target} has shape {shape}, expected {expected}")
         print(f"  Already present ({target.stat().st_size / 1e9:.1f} GB); skipping.")
         return 0
 
@@ -138,7 +156,7 @@ def main(args: argparse.Namespace) -> int:
         # beamSize=0 -> makeMap skips the convolution and saves the raw field,
         # which is exactly what the figure loads when beam_size: 0.
         stacker.makeMap(args.ptype, z=args.redshift, projection=args.projection,
-                        pixelSize=args.pixel_size, beamSize=0,
+                        pixelSize=args.pixel_size, beamSize=args.beam_size,
                         save=args.save, load=True)
 
     gc.collect()
@@ -169,6 +187,9 @@ if __name__ == "__main__":
                         help="Projection axis (2D only; 3D filenames carry none).")
     parser.add_argument('--pixel-size', type=float, default=0.2,
                         help='2D pixel size in arcmin. Default 0.2.')
+    parser.add_argument('--beam-size', type=float, default=0.0,
+                        help='2D only: beam FWHM [arcmin]; > 0 writes the '
+                             "beam-convolved '_map' file instead of the raw field")
     parser.add_argument('--n-pixels', type=int, default=1000,
                         help='3D grid size per side. Default 1000.')
     parser.add_argument('--redshift', type=float, default=0.5,

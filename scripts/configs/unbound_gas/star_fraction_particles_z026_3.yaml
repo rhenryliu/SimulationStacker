@@ -1,0 +1,21 @@
+# Unbound gas paper Appendix B (iteration 3): f* from the particles at z ~ 0.26 (FLAMINGO z = 0.30), mass cut at the DESI BGS mean host halo mass 10^13.239 Msun/h (Hadzhiyska+2026 Table I).
+redshift: 0.3
+n_pixels: 1000
+load_field: true
+save_field: false
+projection: yz
+halo_mass_upper: 500000000000000.0
+load: false
+load_path: ../figures/2025-09/star_fraction_v2_z0.5_star_fraction.yaml
+fig_path: ../figures/
+fig_type: png
+halo_mass_avg: 17338040000000.0
+fig_name: star_fraction_particles_z026_3
+simulations:
+- sim_type: FLAMINGO
+  sims:
+  - name: L1_m9
+    snapshot: 71
+    feedback: fgas-8sigma
+    n_pixels: 2000
+method: particles

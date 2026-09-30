@@ -33,7 +33,10 @@ script does not move anything to the trash -- the runners
 (runCPU_masked_sham_hosts*.sh) move the old maps to the scratch trash before
 calling it, and ``--overwrite`` should not be used on a map that has not been
 moved away first. The script stops before any work if the cached 3D cube is
-missing (create_masked_field would otherwise rebuild it from the particles).
+missing (create_masked_field would otherwise rebuild it from the particles),
+unless ``--build-cube`` is given: the cube is then built once with
+``SimulationStacker.makeField(dim='3D')`` -- the same ``create_field`` call and
+cache path as the masked path -- and saved before any masking.
 
 Memory: the 3D cube is reloaded for every radius (create_masked_field
 multiplies it in place). FLAMINGO needs a full CPU node per (variant, ptype):
@@ -48,6 +51,7 @@ Usage (from the scripts/ directory):
 
 import argparse
 import datetime
+import gc
 import json
 import os
 import sys
@@ -135,7 +139,11 @@ def main():
     ap.add_argument('--compare-to', default=None,
                     help='dry-run only: .npy map to compare the first radius against')
     ap.add_argument('--overwrite', action='store_true')
+    ap.add_argument('--build-cube', action='store_true',
+                    help='build and cache a missing 3D cube from the particles first')
     args = ap.parse_args()
+    if args.build_cube and args.dry_run:
+        ap.error('--build-cube writes the 3D cube; it cannot be combined with --dry-run')
 
     t0 = time.time()
     projection = args.projection or _DEFAULT_PROJECTION[args.ptype]
@@ -152,8 +160,15 @@ def main():
     n_pix, _ = map_geometry(st, args.z, args.pixel_size)
     cube = _get_data_filepath(args.sim_type, args.name, args.snapshot, args.feedback, args.ptype,
                               n_pix, projection, 'field', '3D', False, 2.0, st.base_path)
+    if not cube.exists() and args.build_cube:
+        t1 = time.time()
+        st.makeField(args.ptype, nPixels=n_pix, projection=projection, save=True, load=False,
+                     dim='3D')
+        gc.collect()
+        print(f"  built and cached the 3D cube {cube.name} in {time.time() - t1:.0f} s", flush=True)
     if not cube.exists():
-        raise FileNotFoundError(f"no cached 3D cube {cube}; refusing to rebuild it from the particles")
+        raise FileNotFoundError(f"no cached 3D cube {cube}; refusing to rebuild it from the particles "
+                                "(pass --build-cube to build it)")
     hosts, info = mask_hosts(st, args.sample, density, mass_upper=args.halo_mass_upper,
                              mass_avg=args.halo_mass_avg)
     print(f"{args.sim_type} {args.name} {args.feedback or ''} {args.ptype} ({projection}): "

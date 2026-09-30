@@ -1,0 +1,91 @@
+# Appendix B of the unbound gas paper (iteration 3, 2026-09-29): ionized gas and
+# baryon fraction profiles at z ~ 0.26 (DESI BGS) in 3D, CAP (0.5', 1.6' beam)
+# and Delta Sigma (0.2', no beam), for the mass-cut sample at the mean host halo
+# mass of the DESI BGS, 10^13.239 Msun/h (Hadzhiyska et al. 2026, Table I,
+# "BGS, All"; cut on the FoF mass). Snapshots as the companion's BGS comparison:
+# TNG300-1 80 and Illustris-1 116 (z = 0.2613), SIMBA-100 136 (z = 0.2668), all
+# projected at z = 0.26 like the cached maps; FLAMINGO snapshot 71 at z = 0.30.
+# Run from the scripts/ directory:
+#   python unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_z026_bgs.yaml --ptype ionized_gas
+
+stack:
+  redshift: 0.26
+  projection: 'yz'
+  load_field: true
+  save_field: true
+  subtract_mean: false
+  particle_type:   'ionized_gas'
+  particle_type_2: 'total'
+  n_pixels:      1000
+  min_radius_3d: 200.0
+  max_radius_3d: 4000.0
+  num_radii_3d:  11
+  halo_mass_avg: 1.733804e+13   # 10^13.239 Msun/h, the BGS mean host halo mass
+  halo_mass_min: 1.733804e+13   # (unused by the script; kept equal to avoid confusion)
+  halo_mass_max: 5.0e+14
+  pixel_size:    0.5
+  rad_distance:  1.0
+  filter_type_col2:   'CAP'
+  filter_type_2_col2: 'CAP'
+  filter_type_col3:   'DSigma'
+  filter_type_2_col3: 'DSigma'
+  pixel_size_col3: 0.2
+  beam_size_col3: 0
+  columns: ['3d', 'col2', 'col3']
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'ratios_z026_bgs'
+  panel_width: 4.6
+  panel_height: 4.0
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+      - name: 'Illustris-1'
+        snapshot: 116
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm100n1024'
+        snapshot: 136
+        feedback: 's50'
+  - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO (AGN)'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 2000
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        n_pixels: 2000
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000
+        redshift: 0.3
+  - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO ($M_\ast$)'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 2000
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Mstar-1sigma'
+        n_pixels: 2000
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Mstar-1sigma_fgas-4sigma'
+        n_pixels: 2000
+        redshift: 0.3

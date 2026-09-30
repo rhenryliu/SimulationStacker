@@ -171,7 +171,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Precompute FLAMINGO unmasked and masked SZ maps.')
     parser.add_argument('--feedback', type=str, required=True,
-                        choices=['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma'],
+                        choices=['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma',
+                                 'Mstar-1sigma', 'Mstar-1sigma_fgas-4sigma'],
                         help='FLAMINGO variant directory name.')
     parser.add_argument('--ptype', type=str, required=True,
                         choices=['tSZ', 'tau'], dest='pType',

@@ -103,6 +103,8 @@ _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
     'Jet_fgas-4sigma': '#C71585',  # magenta
+    'Mstar-1sigma':             '#17BECF',  # cyan
+    'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 
 

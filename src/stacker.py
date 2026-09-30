@@ -79,7 +79,8 @@ class SimulationStacker(object):
             feedback (str, optional): Feedback model variant for SIMBA and
                 FLAMINGO. SIMBA: one of ['s50', 's50nox', 's50noagn',
                 's50nofb', 's50nojet']. FLAMINGO: one of ['L1_m9' (fiducial),
-                'fgas-8sigma', 'Jet_fgas-4sigma'] (raw directory names).
+                'fgas-8sigma', 'Jet_fgas-4sigma', 'Mstar-1sigma',
+                'Mstar-1sigma_fgas-4sigma'] (raw directory names).
                 Required for both. Defaults to None.
             z (float, optional): Redshift of the snapshot. Used for
                 cosmological distance calculations in maps. Defaults to 0.0.
@@ -109,7 +110,8 @@ class SimulationStacker(object):
             # feedback holds the FLAMINGO variant, using raw directory names
             # (the fiducial run is 'L1_m9', i.e. sim == feedback for it).
             self.simPath = self.base_path + 'FLAMINGO/' + sim + '/' + feedback + '/' # type: ignore
-            assert feedback in ['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma']
+            assert feedback in ['L1_m9', 'fgas-8sigma', 'Jet_fgas-4sigma',
+                                'Mstar-1sigma', 'Mstar-1sigma_fgas-4sigma']
         else:
             raise NotImplementedError('Simulation type not implemented')
 

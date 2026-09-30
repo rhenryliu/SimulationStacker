@@ -284,6 +284,9 @@ _FLAMINGO_TEX_NAMES = {
     'L1_m9':           r'L1\_m9',
     'fgas-8sigma':     r'fgas$-8\sigma$',
     'Jet_fgas-4sigma': r'Jet\_fgas$-4\sigma$',
+    # Named as in the FLAMINGO paper (Schaye et al. 2023): M*-sigma.
+    'Mstar-1sigma':             r'M$_\ast-\sigma$',
+    'Mstar-1sigma_fgas-4sigma': r'M$_\ast-\sigma$\_fgas$-4\sigma$',
 }
 
 

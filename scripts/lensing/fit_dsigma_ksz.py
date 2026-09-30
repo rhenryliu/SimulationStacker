@@ -334,7 +334,7 @@ def field_pixels(stacker, redshift, pixel_size):
 
 
 def stack_dsigma_at(stacker, target, *, subhalos, parents, halo_mass_upper,
-                    lens, stack_kwargs, h_sim):
+                    lens, stack_kwargs, h_sim, max_objects=None, seed=0):
     """Select a SHAM sample at one number density and stack Delta Sigma on it.
 
     Args:
@@ -346,6 +346,10 @@ def stack_dsigma_at(stacker, target, *, subhalos, parents, halo_mass_upper,
         lens (dict): Output of :func:`read_lensing_data`, for the radius check.
         stack_kwargs (dict): Passed straight to ``stackField``.
         h_sim (float): The simulation's Hubble parameter.
+        max_objects (int, optional): If the SHAM sample is larger, stack a
+            random subsample of this size (fixed ``seed``). The mean profile is
+            unbiased; only its standard error grows. Defaults to None (all).
+        seed (int, optional): Seed of the subsample. Defaults to 0.
 
     Returns:
         tuple: ``(halo_mask, mean_profile, sem, mean_parent_mass)`` with the
@@ -361,6 +365,11 @@ def stack_dsigma_at(stacker, target, *, subhalos, parents, halo_mass_upper,
         raise ValueError(
             f"target n = {target:.3e} (cMpc/h)^-3 selected zero subhaloes in this "
             "box; the density grid reaches below what the box can support.")
+    if max_objects is not None and halo_mask.size > max_objects:
+        rng = np.random.default_rng(seed)
+        print(f"    subsampling {max_objects} of {halo_mask.size} subhaloes (seed {seed})",
+              flush=True)
+        halo_mask = np.sort(rng.choice(halo_mask, size=max_objects, replace=False))
     radii, profiles = stacker.stackField(halo_mask=halo_mask, **stack_kwargs)
 
     # radii come back at exactly rp * h_sim; guard the invariant the whole
@@ -430,6 +439,10 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
     ksz_nrad = stack_config.get('ksz_num_radii', 9)
 
     halo_mass_upper = stack_config.get('halo_mass_upper', 5e14)
+    # Optional random subsample of large SHAM samples (e.g. FLAMINGO at BGS
+    # densities, ~6e6 galaxies); off unless set.
+    subsample = dict(max_objects=stack_config.get('max_objects'),
+                     seed=stack_config.get('subsample_seed', 0))
     default_targets = [float(t) for t in stack_config['abundance_targets']]
 
     r_min_arcmin = fit_config.get('r_min_arcmin', 2.25)
@@ -550,7 +563,7 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
                     halo_mask, mean_profile, sem, m_par = stack_dsigma_at(
                         stacker, target, subhalos=subhalos, parents=parents,
                         halo_mass_upper=halo_mass_upper, lens=lens,
-                        stack_kwargs=stack_kwargs, h_sim=h_sim)
+                        stack_kwargs=stack_kwargs, h_sim=h_sim, **subsample)
                     n_haloes.append(halo_mask.size)
                     mean_mass.append(m_par)
                     ds_grid.append(mean_profile)
@@ -576,7 +589,7 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
             best_mask, ds_best, ds_best_sem, mass_best = stack_dsigma_at(
                 stacker, fit['n_best'], subhalos=subhalos, parents=parents,
                 halo_mass_upper=halo_mass_upper, lens=lens,
-                stack_kwargs=stack_kwargs, h_sim=h_sim)
+                stack_kwargs=stack_kwargs, h_sim=h_sim, **subsample)
             chi2_best_actual = chi2_of_profile(ds_best, lens['ds'], lens['cov'],
                                                fit_mask, n_jk)
             if verbose:

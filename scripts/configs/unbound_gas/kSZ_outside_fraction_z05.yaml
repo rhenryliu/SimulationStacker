@@ -1,0 +1,30 @@
+# Config for make_kSZ_outside_fraction.py (unbound gas paper, exploratory; user
+# item f.6, 2026-09-29): the kSZ masking figure as the fraction of the signal
+# from gas outside the retained spheres. Reads the profiles npz that
+# simulated_kSZ_masked.py writes next to the masking figure; point
+# profiles_npz at the newest run.
+# Run from the scripts/ directory:
+#   python unbound_gas/make_kSZ_outside_fraction.py -p configs/unbound_gas/kSZ_outside_fraction_z05.yaml
+
+profiles_npz: '../figures/2026-09/09-29/profiles_xy_masked_flamingo_tau_z0.5_profiles.npz'
+data_path: '../data/Fig2_sim.npz'
+data_label: 'Hadzhiyska 2024'
+fig_path: '../figures/'
+fig_name: 'kSZ_outside_fraction_z05'
+fig_type: 'pdf'
+row_height: 3.6
+fraction_ylim: [-0.2, 1.0]
+summary_theta: [2.0, 4.0, 6.0]
+
+# Rows as in the masking figure; keys are 'suite/name[/feedback]' in the npz.
+rows:
+  - suite: 'SIMBA'
+    title: 'SIMBA'
+    sims: ['SIMBA/m100n1024/s50', 'SIMBA/m50n512/s50noagn', 'SIMBA/m50n512/s50nox',
+           'SIMBA/m50n512/s50nofb']
+  - suite: 'IllustrisTNG'
+    title: 'IllustrisTNG'
+    sims: ['IllustrisTNG/TNG100-1', 'IllustrisTNG/TNG300-1', 'IllustrisTNG/Illustris-1']
+  - suite: 'FLAMINGO'
+    title: 'FLAMINGO'
+    sims: ['FLAMINGO/L1_m9/L1_m9', 'FLAMINGO/L1_m9/fgas-8sigma', 'FLAMINGO/L1_m9/Jet_fgas-4sigma']

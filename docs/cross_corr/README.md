@@ -86,7 +86,8 @@ Violating any of these has already cost a round. Each is justified in the formal
 - Any $\Sigma$-from-$\Delta\Sigma$ reconstruction requires the **local** $\Delta\Sigma$; feeding it the pipeline's annulus-mean $\Delta\Sigma$ biases by 43% at $1'$ (formalism §4.4).
 
 **Data products**
-- `data/r_profiles/*.npz` are frozen at `dba0a68` (2026-09-10), the last of three regenerations after round one (`91e39d7`, `a07d613`, `dba0a68`; see `records/r_profiles_implementation_plan.md` U3–U7 and `records/tasks_7_to_10_record.md` §11). Round two added `data/cross_corr_C/` without touching `src/`.
+- The twelve $z\approx0.5$ and $z\approx0.26/0.30$ files in `data/r_profiles/` are frozen at `dba0a68` (2026-09-10), the last of three regenerations after round one (`91e39d7`, `a07d613`, `dba0a68`; see `records/r_profiles_implementation_plan.md` U3–U7 and `records/tasks_7_to_10_record.md` §11). Round two added `data/cross_corr_C/` without touching `src/`.
+- The same folder also holds the $z\approx0.75$ and $z\approx1.0$ r-profiles added on 2026-09-30 (TNG300-1 snapshots 57 and 50, FLAMINGO snapshots 62 and 57; configs `r_profiles_z075.yaml`, `r_profiles_z10.yaml`; runners `runCPU_rprofiles_highz_fields.sh`, `runCPU_rprofiles_highz.sh`). They are not part of the frozen set and have no record entry yet.
 - All ten unordered pairs of $\{g,e,b,m\}$ are saved; $Y_{gm}$, $Y_{bm}$, $Y_{mm}$, $Y_{em}$ need no recomputation.
 - Numbers are cited from the records, never copied into other documents without "as of DATE, from RECORD".
 
@@ -111,14 +112,14 @@ Violating any of these has already cost a round. Each is justified in the formal
 | `scripts/cross_corr/check_filter_compensation.py`, `check_theory_transfer.py`, `check_projection_depth.py`, `check_resolution.py` | Task 2 box-scale test; Task 4 A/B/C decomposition and depth study; resolution and boundary-tie checks |
 | `scripts/cross_corr/check_upsilon_r0.py` | the $R_0$ scan (`records/r_profiles_implementation_plan.md` U6) |
 | `scripts/cross_corr/runINT_*.sh`, `runCPU_*.sh` | SLURM runners, submitted from `scripts/`; `runCPU_calibration.sh` is superseded by `runINT_calibration.sh` |
-| `scripts/configs/cross_corr/` | `r_profiles_z05.yaml`, `r_profiles_z026.yaml`, `calibration_z05.yaml`, `calibration_z026.yaml` |
+| `scripts/configs/cross_corr/` | `r_profiles_z05.yaml`, `r_profiles_z026.yaml`, `r_profiles_z075.yaml`, `r_profiles_z10.yaml`, `calibration_z05.yaml`, `calibration_z026.yaml` |
 | `tests/test_calibration_factor.py` | identity tests; extend for any new kernel |
 | `tests/test_rprofiles.py`, `test_kernels.py`, `test_rprofiles_integration.py` | round-one unit tests; the integration test skips without the scratch data |
 | `scripts/cross_corr/round3a_lib.py` | Round 3A shared functions: exact Parseval amplitudes, the window/mediation split $C_{\mathcal F} = W_{\mathcal F}M_{\mathcal F}$, the DoG kernel, the 3D component bookkeeping |
 | `scripts/cross_corr/make_ck_spectra.py`, `make_dog_calibration.py`, `runCPU_round3a.sh` | Round 3A compute: spectra, $C(k)$, the exact split and the regression check against round two; the DoG sweep |
 | `scripts/cross_corr/round3a_diagnostics.py`, `round3a_ck_analysis.py`, `round3a_dog_analysis.py`, `round3a_backreaction.py` | Round 3A analysis, Stages 1–4 (login node) |
 | `tests/test_round3a.py` | Round 3A tests: Parseval amplitudes against `compute_Y_matrix`, the split's limits, the DoG kernel, the wiring |
-| `data/r_profiles/*.npz` | round-one amplitudes, frozen at `dba0a68` |
+| `data/r_profiles/*.npz` | round-one amplitudes, frozen at `dba0a68`; plus the $z\approx0.75$ and $z\approx1.0$ files (2026-09-30), outside the frozen set |
 | `data/cross_corr_C/` | round-two outputs; `round3a/` holds Round 3A's |
 
 ---

@@ -1,0 +1,106 @@
+# Task 1 r-profiles at z ~ 1.0: TNG300-1 snapshot 50 (z = 0.9973, a field
+# subset of the full snapshot: the mini-snapshot fields plus
+# NeutralHydrogenAbundance) and FLAMINGO snapshot 57 (z = 1.00) for all three
+# variants.
+#
+# Every setting in the 'stack' and 'plot' blocks is copied verbatim from
+# r_profiles_z05.yaml, including the SHAM number density (5e-4, held fixed
+# across redshift so the comparison keeps the sample definition), the aperture
+# grid, R0 = 1', Y(Rmax = 6') and the 4x4 jackknife.  Only the snapshots, the
+# per-run redshift and n_pixels, and fig_name differ.
+#
+# Each run's `redshift` is its snapshot's header value.  It is also the redshift
+# the cached fields were built at (unbound_gas/precompute_baryonFraction_fields.py
+# --redshift, via cross_corr/runCPU_rprofiles_highz_fields.sh), so n_pixels is
+# ceil(box angle / 0.2') at that redshift and FLAMINGO's ionized_gas uses the
+# right scale factor.  (The older caches were sized at the nominal z: TNG300-1
+# at 0.5 and 0.26, FLAMINGO snapshot 71 at 0.30.)
+#
+# Run with (the fields must be cached first; see runCPU_rprofiles_highz.sh):
+#   cd scripts/
+#   python cross_corr/make_r_profiles.py -p configs/cross_corr/r_profiles_z10.yaml
+
+stack:
+  redshift: 1.0
+
+  # Only 'yz' is currently cached for every suite.  'xy' and 'xz' would each
+  # require a full particle sweep per field type per simulation.
+  projections: ['yz']
+
+  min_radius: 1.0        # arcmin
+  max_radius: 6.0        # arcmin
+  num_radii: 9           # nine linear bins, matching the existing pipeline
+  # Append further bins above max_radius at the same 0.625' spacing, as a
+  # large-aperture diagnostic. The 1'-6' bins above are untouched by this.
+  # Not extended below 1', where the data are resolution-limited.
+  extend_max_radius: 10.0
+  dr_arcmin: 0.75        # annulus width of the compensated filter
+
+  # Upsilon reference radius.  Restored to 1' from the exploratory 2' of
+  # commit 91e39d7: the R0 scan in docs/r_profiles_implementation_plan.md U6
+  # measured 1' as the only PASS at z ~ 0.5 (cross-code scatter 0.090 against
+  # 0.143), the most usable bins, and the one R0 whose statistic is neither
+  # propped up by nor hostage to the fragile bin next to the cut.
+  r0_arcmin: 1.0         # Upsilon reference radius
+
+  # Park et al. (2021) Y transform, Y(R; Rmax) = Sigma(R) - Sigma(Rmax).
+  # Compensated (unlike Sigma) and local from below (unlike DSigma), it
+  # references the LARGEST aperture rather than the smallest.  Bins at and
+  # above 0.8*Rmax are masked, where the transform vanishes by construction.
+  # 6' is the top of the data range and is already an aperture-grid point, so
+  # the grid is unchanged; the addendum's fiducial 5' would leave only five
+  # usable bins in 1'-6' and its best-performing 9' sits outside the range the
+  # kSZ stack measures (v0.3 response Sec. 4.2).
+  ytransform_rmax: 6.0
+
+  n_jk_side: 4           # 4x4 = 16 leave-one-out spatial jackknife patches
+
+  load_field: true
+  save_field: false      # everything needed is already cached
+
+  particle_type_e: 'ionized_gas'   # free electrons
+  particle_type_b: 'baryon'        # gas + stars + BH
+
+  # SHAM galaxy sample: top-N subhalos by stellar mass matching this number
+  # density, after restricting to parent FoF haloes below parent_mass_upper.
+  # Both settings reproduce the f_gas paper's sample exactly (the pre-filter is
+  # stackMap's default, applied by the existing use_subhalos=True path).
+  halo_abundance_target: 5.0e-4    # (cMpc/h)^-3, held at the z ~ 0.5 value (user, 2026-09-30)
+  parent_mass_upper: 5.0e14        # Msun/h; set to null to disable
+
+plot:
+  npz_path: '../data/r_profiles/'
+  fig_path: '../figures/'
+  fig_name: 'r_profiles_z10'
+  fig_type: 'png'
+
+# SIMBA m100n1024 and Illustris-1 were dropped after Task 1: their boxes are
+# 100 and 75 cMpc/h, giving only 500 and 210 SHAM galaxies at these number
+# densities, which is too few to measure Y_gg over 1'-6'. Their jackknife
+# errors on r_bm/r_gb exceeded the cross-code scatter itself, so they added
+# noise rather than a cross-code constraint. See docs/r_profiles_implementation_plan.md.
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 50
+        redshift: 0.9973
+        n_pixels: 1535
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 57
+        feedback: 'L1_m9'
+        redshift: 1.0
+        n_pixels: 5076
+      - name: 'L1_m9'
+        snapshot: 57
+        feedback: 'fgas-8sigma'
+        redshift: 1.0
+        n_pixels: 5076
+      - name: 'L1_m9'
+        snapshot: 57
+        feedback: 'Jet_fgas-4sigma'
+        redshift: 1.0
+        n_pixels: 5076

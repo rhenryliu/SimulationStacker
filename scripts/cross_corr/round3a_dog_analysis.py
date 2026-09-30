@@ -12,8 +12,11 @@ spectrum, and for the exact Parseval DoG amplitudes, which must agree with the
 sweep).  Formalism §4.5's rule: "substantial shrinkage" means at least a
 factor two at matched ``k_50`` in all four runs.
 
-Writes a figure under ``figures/<yyyy-mm>/<mm-dd>/`` and the numbers to
-``data/cross_corr_C/round3a/stage3_dog_analysis.{npz,txt}``.
+Writes the numbers to ``data/cross_corr_C/round3a/stage3_dog_analysis.{npz,txt}``
+and two versions of the figure, as PNG and PDF, under
+``figures/<yyyy-mm>/<mm-dd>/``: ``round3a_s3_dog`` against ``k_50`` and
+``round3a_s3_dog_R`` against aperture radius, each with ``Upsilon(R0 = 1')``
+beside DSigma.
 
 Usage
 -----
@@ -38,7 +41,8 @@ sys.path.append('../src/')
 sys.path.append(str(Path(__file__).resolve().parent))
 
 import round3a_lib as lib
-from round3a_ck_analysis import RUNS, COLOURS, SAMPLES, k50, split
+from round3a_ck_analysis import (RUNS, COLOURS, SAMPLES, filter_mask, k50,
+                                 split)
 
 matplotlib.rcParams.update({
     'font.family': 'serif', 'font.serif': ['DejaVu Serif'],
@@ -48,6 +52,17 @@ matplotlib.rcParams.update({
 })
 
 DOG_FILTERS = ('DoG_q=2', 'DoG_q=1.5')
+UPSILON = 'Upsilon_R0=1'
+
+#: Figure labels.  TNG300-1 gets a colour rather than COLOURS' dark grey, which
+#: would merge with the black DSigma and Upsilon curves.
+FIG_NAMES = {'TNG300-1': 'TNG300-1',
+             'L1_m9_fiducial': 'FLAMINGO fiducial',
+             'L1_m9_Jet_fgas-4sigma': r'FLAMINGO Jet_fgas$-4\sigma$',
+             'L1_m9_fgas-8sigma': r'FLAMINGO fgas$-8\sigma$'}
+FIG_COLOURS = {**COLOURS, 'TNG300-1': 'tab:green'}
+DOG_LABELS = {'DoG_q=2': r'DoG, $\sigma_2=2\sigma_1$',
+              'DoG_q=1.5': r'DoG, $\sigma_2=1.5\sigma_1$'}
 
 
 def load(r3_dir, cal_dir, zkey):
@@ -185,42 +200,144 @@ def report(results, zkeys):
                       + '  | DSigma ' + ' '.join(f'{c:.3f}' for c in cs))
 
 
-def fig(results, fig_dir):
-    """``C`` against ``k_50`` for DSigma and the two DoG families.
+def dsigma_equivalent_aperture(k_ds, radii, k_new):
+    """The DSigma aperture with a given ``k_50``.
+
+    Formalism §4.5 places a DoG on the aperture scale as "matched to DSigma
+    at R" (equal ``k_50``).  ``k_50`` is quantized by the k binning, so
+    neighbouring apertures can share a value (e.g. 4' and 4.125'); tied
+    apertures are averaged before the inversion, so a width landing on a tie
+    is placed at the tie's centre rather than at either end.
+
+    Args:
+        k_ds (np.ndarray): DSigma's ``k_50`` per aperture, h/Mpc.
+        radii (np.ndarray): The apertures, arcmin.
+        k_new (np.ndarray): The ``k_50`` values to place, h/Mpc.
+
+    Returns:
+        np.ndarray: Apertures, arcmin; NaN outside DSigma's ``k_50`` range
+        (no extrapolation).
+
+    Raises:
+        ValueError: If ``k_50`` rises anywhere with aperture, which would make
+            the inversion ambiguous.
+    """
+    k_ds = np.asarray(k_ds, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    if np.any(np.diff(k_ds) > 0):
+        raise ValueError('DSigma k_50 rises with aperture; the '
+                         'DSigma-equivalent aperture is ambiguous.')
+    k_unique, index = np.unique(k_ds, return_inverse=True)
+    r_mean = np.bincount(index, weights=radii) / np.bincount(index)
+    return lib.interp_log_k(k_unique, r_mean, k_new)
+
+
+def figure_curves(runs):
+    """Figure-only quantities, kept out of the saved Stage 3 numbers.
+
+    ``Upsilon(R0 = 1')`` from the round-two calibration file, masked where it
+    is undefined (``R <= R0``), at its own ``k_50``; and, for each DoG width,
+    its DSigma-equivalent aperture (:func:`dsigma_equivalent_aperture`).
+    Widths outside DSigma's ``k_50`` range have no such aperture (NaN).
+
+    The calibration and spectra files share one aperture grid, in the same
+    order: :func:`load` admits a spectra file only if it passed
+    ``make_ck_spectra``'s regression check, which compares the grids.
+
+    Args:
+        runs (dict): Output of :func:`load`.
+
+    Returns:
+        dict: per label: ``z``, ``radii``, ``ups_k50``, ``ups_C``,
+        ``ups_err`` and ``R_eq_<DoG filter>``.
+    """
+    out = {}
+    for label, r in runs.items():
+        radii = np.asarray(r['cal']['radii'], dtype=float)
+        keep = filter_mask(UPSILON, radii)
+        cv = {'z': float(r['ck']['meta_redshift']), 'radii': radii}
+        for key, value in (('ups_k50', k50(r['ck'], UPSILON)),
+                           ('ups_C', r['cal'][f'C_b_{UPSILON}']),
+                           ('ups_err', r['cal'][f'Cerr_b_{UPSILON}'])):
+            cv[key] = np.where(keep, np.asarray(value, dtype=float), np.nan)
+        k_ds = k50(r['ck'], 'DSigma')
+        for filt in DOG_FILTERS:
+            cv[f'R_eq_{filt}'] = dsigma_equivalent_aperture(
+                k_ds, radii, k50(r['ck'], filt))
+        out[label] = cv
+    return out
+
+
+def fig(results, curves, fig_dir, xaxis='k50'):
+    """``r_bm r_gm / r_gb`` for DSigma, Upsilon(R0 = 1') and the two DoGs.
+
+    ``r_bm r_gm / r_gb = Y_bm Y_gm / (Y_mm Y_gb)`` is the calibration factor
+    ``C``, written out for outward-facing use.  Two versions: ``xaxis='k50'``
+    places every filter at its own ``k_50``, the matched comparison;
+    ``xaxis='R'`` places DSigma and Upsilon at their aperture radius, as in
+    ``plot_r_profiles.py``, and each DoG at its DSigma-equivalent aperture
+    (see :func:`figure_curves`).
 
     Args:
         results (dict): ``{zkey: compare(...)}``, with the DSigma curves.
+        curves (dict): ``{zkey: figure_curves(...)}``.
         fig_dir (pathlib.Path): Output directory.
+        xaxis (str, optional): ``'k50'`` or ``'R'``.
 
     Returns:
-        pathlib.Path: The figure.
+        list: The figure paths, PNG and PDF.
+
+    Raises:
+        ValueError: If ``xaxis`` is not ``'k50'`` or ``'R'``.
     """
+    if xaxis not in ('k50', 'R'):
+        raise ValueError(f"xaxis must be 'k50' or 'R', got {xaxis!r}")
+    by_k = xaxis == 'k50'
     fig_, axes = plt.subplots(2, 4, figsize=(17, 7.5), sharey=True)
     for row, zkey in enumerate(results):
-        for col, (label, short) in enumerate(RUNS):
+        for col, (label, _) in enumerate(RUNS):
             ax = axes[row, col]
             ds = results[zkey][('__ds__', label)]
-            ax.errorbar(ds['k50'], ds['C'], yerr=ds['err'], fmt='s-',
-                        color='k', ms=3, label=r'$\Delta\Sigma$')
+            cv = curves[zkey][label]
+            ax.errorbar(ds['k50'] if by_k else cv['radii'], ds['C'],
+                        yerr=ds['err'], fmt='s-', color='k', ms=3,
+                        label=r'$\Delta\Sigma$')
+            ok = np.isfinite(cv['ups_C'])
+            x_ups = cv['ups_k50'] if by_k else cv['radii']
+            ax.errorbar(x_ups[ok], cv['ups_C'][ok], yerr=cv['ups_err'][ok],
+                        fmt='D-.', color='k', mfc='none', ms=4,
+                        label=r"$\Upsilon(R_0=1')$")
             for filt, ls in zip(DOG_FILTERS, ('o--', '^:')):
                 r = results[zkey][(label, filt)]
-                ax.errorbar(r['k50_dog'], r['C_dog'], yerr=r['err_dog'],
-                            fmt=ls, color=COLOURS[label], ms=3,
-                            label=filt.replace('_', ' '))
+                x = r['k50_dog'] if by_k else cv[f'R_eq_{filt}']
+                ok = np.isfinite(x)
+                ax.errorbar(x[ok], r['C_dog'][ok], yerr=r['err_dog'][ok],
+                            fmt=ls, color=FIG_COLOURS[label], ms=3,
+                            label=DOG_LABELS[filt])
             ax.axhline(1.0, color='0.5', lw=0.8)
-            ax.set_xscale('log')
-            ax.set_title(f'{short}, z≈{SAMPLES[zkey]["z"]}')
+            if by_k:
+                ax.set_xscale('log')
+            ax.set_title(f"{FIG_NAMES[label]}, $z={cv['z']:.2f}$")
             if row == 1:
-                ax.set_xlabel(r'$k_{50}$ [$h$/Mpc]')
-        axes[row, 0].set_ylabel(r'$C_{\mathcal{F}}$ (baryons)')
+                ax.set_xlabel(r'$k_{50}$ [$h\,$Mpc$^{-1}$]' if by_k
+                              else r'$R$ [arcmin]')
+        axes[row, 0].set_ylabel(r'$r_{bm}\,r_{gm}\,/\,r_{gb}$')
     axes[0, 0].legend()
-    fig_.suptitle('O-02: a positive-window kernel (DoG) against '
-                  r'$\Delta\Sigma$ at matched $k_{50}$')
+    where = (r'at matched $k_{50}$' if by_k else
+             'against aperture radius; each DoG at the '
+             r'$\Delta\Sigma$ aperture of equal $k_{50}$')
+    fig_.suptitle(r"$\Delta\Sigma$, $\Upsilon(R_0=1')$ and "
+                  f'difference-of-Gaussians (DoG) kernels {where}\n'
+                  'b = gas + stars + BH, m = CDM')
     fig_.tight_layout()
-    path = fig_dir / 'round3a_s3_dog.png'
-    fig_.savefig(path, dpi=140)
+    stem = 'round3a_s3_dog' if by_k else 'round3a_s3_dog_R'
+    paths = []
+    for ext in ('png', 'pdf'):
+        path = fig_dir / f'{stem}.{ext}'
+        fig_.savefig(path, dpi=140)
+        paths.append(path)
     plt.close(fig_)
-    return path
+    return paths
 
 
 def main(r3_dir, cal_dir, fig_root, verbose=True):
@@ -236,7 +353,7 @@ def main(r3_dir, cal_dir, fig_root, verbose=True):
     now = datetime.now()
     fig_dir = Path(fig_root) / now.strftime('%Y-%m') / now.strftime('%m-%d')
     fig_dir.mkdir(parents=True, exist_ok=True)
-    results = {}
+    results, curves = {}, {}
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         for zkey in SAMPLES:
@@ -248,14 +365,17 @@ def main(r3_dir, cal_dir, fig_root, verbose=True):
                     'C': r['cal']['C_b_DSigma'],
                     'err': r['cal']['Cerr_b_DSigma']}
             results[zkey] = res
-        path = fig(results, fig_dir)
+            curves[zkey] = figure_curves(runs)
+        paths = (fig(results, curves, fig_dir, xaxis='k50')
+                 + fig(results, curves, fig_dir, xaxis='R'))
         buf = io.StringIO()
         with redirect_stdout(buf):
             report(results, SAMPLES)
     text = buf.getvalue()
     if verbose:
         print(text)
-        print(f'Wrote {path}')
+        for path in paths:
+            print(f'Wrote {path}')
     flat = {}
     for zkey, res in results.items():
         for key, value in res.items():

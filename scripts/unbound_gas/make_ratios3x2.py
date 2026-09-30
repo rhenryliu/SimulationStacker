@@ -73,6 +73,8 @@ _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
     'Jet_fgas-4sigma': '#C71585',  # magenta
+    'Mstar-1sigma':             '#17BECF',  # cyan
+    'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 
 # Column kinds (see module docstring) and their titles; the 2D titles name
@@ -225,7 +227,8 @@ def compute_3d_profile_ratio(stacker: SimulationStacker,
     sub_mean    = params['subtract_mean']
     # mass_min    = params['halo_mass_min']
     # mass_max    = params.get('halo_mass_max', None)
-    mass_min    = 10 ** 13.22 
+    # 'massive' selection: target mean mass and upper bound (Msun/h).
+    mass_min    = params.get('halo_mass_avg', 10 ** 13.22)
     mass_max    = 5 * 1e14  
 
     # Build 3D fields for both particle types.
@@ -315,19 +318,21 @@ def compute_2d_profile_ratio(stacker: SimulationStacker,
     minR = inverse_arcmin(minR_com)
     maxR = inverse_arcmin(maxR_com)
 
+    mass_avg    = params.get('halo_mass_avg', 10 ** 13.22)
+
     radii0, profiles0 = stacker.stackMap(
         pType, filterType=filterType,
         minRadius=minR, maxRadius=maxR, numRadii=nRadii,
         save=save, load=load, radDistance=radDistance,
         pixelSize=pixelSize, beamSize=beamSize, projection=projection,
-        subtract_mean=sub_mean,
+        subtract_mean=sub_mean, halo_mass_avg=mass_avg,
     )
     radii1, profiles1 = stacker.stackMap(
         pType2, filterType=filterType2,
         minRadius=minR, maxRadius=maxR, numRadii=nRadii,
         save=save, load=load, radDistance=radDistance,
         pixelSize=pixelSize, beamSize=beamSize, projection=projection,
-        subtract_mean=sub_mean,
+        subtract_mean=sub_mean, halo_mass_avg=mass_avg,
     )
 
     ratio, err = _profile_ratio_and_err(profiles0, profiles1,
@@ -482,6 +487,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         'subtract_mean': subtract_mn,
         'halo_mass_min': stack_cfg.get('halo_mass_min', 10 ** 13.22),
         'halo_mass_max': stack_cfg.get('halo_mass_max', 5e14),
+        # Target mean mass of the 'massive' mass-cut sample (all columns).
+        'halo_mass_avg': float(stack_cfg.get('halo_mass_avg', 10 ** 13.22)),
     }
 
     # --- 2D column parameters ---
@@ -490,6 +497,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # columns extend to the same comoving extent (4000 ckpc/h) as the 3D column.
     rad_distance = stack_cfg.get('rad_distance', 1.0)
     params_2d = {
+        'halo_mass_avg': params_3d['halo_mass_avg'],
+        'beam_size':     stack_cfg.get('beam_size', 1.6),  # arcmin FWHM; per-column override below
         'pixel_size':    stack_cfg.get('pixel_size', 0.5),
         'rad_distance':  rad_distance,
         'projection':    projection,
@@ -525,7 +534,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     if unknown:
         raise ValueError(f"Unknown column kind(s) {unknown}; use '3d', 'col1', 'col2' or 'col3'.")
     col_titles = {'3d': '3D cumulative'}
-    col_titles.update({k: f'2D {_FILTER_TITLES.get(ft, ft)}' for k, (ft, _) in col_filters.items()})
+    # 2D titles name the filter and whether the maps are beam-convolved.
+    for k, (ft, _) in col_filters.items():
+        beam = stack_cfg.get(f'beam_size_{k}', params_2d['beam_size'])
+        beam_str = rf"${float(beam):g}'$ beam" if beam else 'no beam'
+        col_titles[k] = f'2D {_FILTER_TITLES.get(ft, ft)}, {beam_str}'
 
     # ------------------------------------------------------------------
     # One row per simulation suite, in config order.
@@ -543,7 +556,9 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             colours = cmap(np.linspace(0.2, 0.85, len(sims)))
         else:
             raise ValueError(f"Unknown simulation type: {name!r}")
-        suites.append((name, sims, colours))
+        # An optional row_label lets one suite fill two rows (e.g. the FLAMINGO
+        # AGN and stellar-mass variants, each with L1_m9 as the reference).
+        suites.append((name, sims, colours, suite.get('row_label', name)))
     nRows, nCols = len(suites), len(columns)
 
     # ------------------------------------------------------------------
@@ -573,7 +588,12 @@ def main(path2config: str, ptype: str, verbose: bool = True):
 
     t0 = time.time()
 
-    for row_idx, (sim_type_name, sims, colours) in enumerate(suites):
+    # A simulation listed in two rows is stacked once; its results are reused.
+    results_cache = {}
+    # Plotted profiles, written next to the figure for quoting in the text.
+    profiles_out = {}
+
+    for row_idx, (sim_type_name, sims, colours, _) in enumerate(suites):
         if verbose:
             print(f"\n{'='*60}")
             print(f"Suite: {sim_type_name}  (row {row_idx})")
@@ -586,8 +606,11 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 print(f"\n  [{j+1}/{len(sims)}] {sim_name}{feedback_str}")
 
             # ---- Instantiate stacker ----
+            # A simulation entry may set its own redshift (e.g. FLAMINGO's z = 0.30
+            # snapshot next to z ~ 0.26 runs); it sets the projection and arcmin radii.
+            sim_z = float(sim.get('redshift', redshift))
             stacker, OmegaBaryon, cosmo, sim_label = setup_stacker(
-                sim, sim_type_name, redshift)
+                sim, sim_type_name, sim_z)
 
             # ---- Arcmin <-> kpc/h conversion ----
             # Per-sim converters (this sim's own cosmology) convert the 2D
@@ -597,13 +620,24 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                 def _fwd(arcmin): return arcmin_to_comoving(arcmin, z, c)
                 def _inv(comov):  return comoving_to_arcmin(comov,  z, c)
                 return _fwd, _inv
-            fwd_sim, inv_sim = _make_converters(cosmo, redshift)
+            fwd_sim, inv_sim = _make_converters(cosmo, sim_z)
             if forward_arcmin is None:
                 forward_arcmin, inverse_arcmin = fwd_sim, inv_sim
 
             R200m_kpch = None
+            sim_key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback'))
+                               if k is not None)
+            # Cache key: also the snapshot, redshift and 3D grid, so a run repeated
+            # in another row is reused only when it is the same stack.
+            cache_key = (sim_key, sim['snapshot'], sim_z, sim.get('n_pixels'))
             for col_idx, kind in enumerate(columns):
-                if kind == '3d':
+                if (cache_key, kind) in results_cache:
+                    radii, ratio, err, R200m_cached = results_cache[(cache_key, kind)]
+                    if kind == '3d':
+                        R200m_kpch = R200m_cached
+                    else:
+                        max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                elif kind == '3d':
                     if verbose:
                         print(f"    Computing 3D profiles...")
                     # Per-simulation 3D grid size, falling back to the global one.
@@ -629,6 +663,13 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                         params_3d['num_radii_3d'], inv_sim)
                     # Track the largest plotted arcmin radius for the shared 2D x-limit.
                     max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                results_cache[(cache_key, kind)] = (radii, ratio, err,
+                                                  R200m_kpch if kind == '3d' else None)
+                profiles_out[f'{sim_key}/{kind}_radii'] = radii
+                profiles_out[f'{sim_key}/{kind}_ratio'] = ratio
+                profiles_out[f'{sim_key}/{kind}_err'] = err
+                if kind == '3d':
+                    profiles_out[f'{sim_key}/R200m_kpch'] = R200m_kpch
 
                 plot_panel(axes[row_idx, col_idx], radii, ratio, err,
                            sim_label, colours[j], plot_error_bars)
@@ -642,7 +683,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
             # Cache R200m (comoving and arcmin) for the vline decoration.
             if R200m_kpch is not None and R200m_kpch_per_row[row_idx] is None:
                 R200m_kpch_per_row[row_idx] = R200m_kpch
-                R200m_arcmin_per_row[row_idx] = comoving_to_arcmin(R200m_kpch, redshift, cosmo)
+                R200m_arcmin_per_row[row_idx] = comoving_to_arcmin(R200m_kpch, sim_z, cosmo)
 
     # ------------------------------------------------------------------
     # Axis decorations
@@ -676,20 +717,20 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # -----------------------------------------------------------------------
     # Row labels placed as text on the leftmost axes so that shared-y axes do
     # not duplicate the y-label on every panel
-    for row_idx, (sim_type_name, _, _) in enumerate(suites):
-        axes[row_idx, 0].annotate(sim_type_name, xy=(-0.25, 0.5), xycoords='axes fraction',
+    for row_idx, (_, _, _, row_label) in enumerate(suites):
+        axes[row_idx, 0].annotate(row_label, xy=(-0.25, 0.5), xycoords='axes fraction',
                                   ha='right', va='center', rotation=90, fontsize=14,
                                   fontweight='bold')
 
     # Lay out the panels first, then put one legend per row (handles from its
     # rightmost panel) in the strip to the right of that row.
     fig.tight_layout(rect=[0, 0, 1 - legend_width / fig_width, 1]) # type: ignore
-    for row_idx, (sim_type_name, _, _) in enumerate(suites):
+    for row_idx, (_, _, _, row_label) in enumerate(suites):
         handles, labels = axes[row_idx, -1].get_legend_handles_labels()
         bbox = axes[row_idx, -1].get_position()
         fig.legend(handles, labels,
                    loc='upper left', bbox_to_anchor=(bbox.x1 + 0.01, bbox.y1),
-                   frameon=True, fontsize=13, title=sim_type_name,
+                   frameon=True, fontsize=13, title=row_label,
                    title_fontsize=14)
 
     # ------------------------------------------------------------------
@@ -698,6 +739,9 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     out_path = figPath / f'{figName}_{pType}.{figType}'
     fig.savefig(out_path, dpi=300) # type: ignore
     plt.close(fig)
+    profiles_out['column_kinds'] = np.array(columns)
+    profiles_out['column_titles'] = np.array([col_titles[k] for k in columns])
+    np.savez(figPath / f'{figName}_{pType}_profiles.npz', **profiles_out)
 
     elapsed = (time.time() - t0) / 60
     print(f"\nFigure saved to: {out_path}")

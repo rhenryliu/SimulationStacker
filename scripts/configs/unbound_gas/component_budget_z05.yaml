@@ -12,7 +12,7 @@ fig_path: '../figures/'
 fig_name: 'component_budget_z05'
 fig_type: 'pdf'
 width: 7.1
-row_height: 1.05
+row_height: 0.80  # 8 rows + caption must fit a page (was 1.05: float too large by 111 pt)
 rmax_ckpch: 4000.0
 thetamax_arcmin: 10.5
 simulations:

@@ -93,13 +93,14 @@ stellar:
 # of other samples coexist (the transfer maps do not depend on the sample).
 # `data`: the beam-compensated measurement written by the lensing script.
 lensing:
-  config: configs/lensing/mass_ratio_noBeam_z05.yaml
+  config: configs/lensing/mass_ratio_noBeam_z05_mstar.yaml
   data: ../data/beam_compensated/beam_compensated_ionized_gas_total_z0.5.npz
   # SHAM density per simulation from the lensing fit (lensing/fit_dsigma_ksz.py)
   # instead of the noBeam config's single halo_abundance_target; stacks are
   # tagged 'lensfit' so they coexist with the 'lens' (5e-4) ones.
   sample_name: 'lensfit'
-  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+  abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_mstar.npz']
   overrides: {}
 
 plot:
@@ -177,5 +178,19 @@ simulations:
     name: 'L1_m9'
     snapshot: 67
     feedback: 'Jet_fgas-4sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+  # FLAMINGO stellar-mass variants (iteration 3, 2026-09-29): the same chain,
+  # drawn in the paper figure without their rescaled ends (bands: false).
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Mstar-1sigma'
+    n_pixels: 2000
+    dmo: *flamingo_dmo
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Mstar-1sigma_fgas-4sigma'
     n_pixels: 2000
     dmo: *flamingo_dmo

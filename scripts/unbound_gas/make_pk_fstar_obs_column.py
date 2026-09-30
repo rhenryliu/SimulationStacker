@@ -50,6 +50,8 @@ PAPER_LABEL = {
     ('FLAMINGO', 'L1_m9', 'L1_m9'): 'FLAMINGO L1_m9',
     ('FLAMINGO', 'L1_m9', 'fgas-8sigma'): r'FLAMINGO fgas$-8\sigma$',
     ('FLAMINGO', 'L1_m9', 'Jet_fgas-4sigma'): r'FLAMINGO Jet_fgas$-4\sigma$',
+    ('FLAMINGO', 'L1_m9', 'Mstar-1sigma'): r'FLAMINGO M$_\ast-\sigma$',
+    ('FLAMINGO', 'L1_m9', 'Mstar-1sigma_fgas-4sigma'): r'FLAMINGO M$_\ast-\sigma$_fgas$-4\sigma$',
 }
 # Symbol of each option's aggregate in the legends.
 AGG_SYMBOL = {'fstar': r'\bar{f}_\star', 'mstar_m200m': r'\bar{M}_\star/\bar{M}_{200m}'}
@@ -61,8 +63,12 @@ def paper_label(r: dict) -> str:
 
 
 def fig_column(results: list, option: str, kmax: float, path: Path, lens_data,
-               lens_xmax: float) -> None:
-    """Two stacked panels, one column wide."""
+               lens_xmax: float, no_band=frozenset()) -> None:
+    """Two stacked panels, one column wide.
+
+    Simulations whose (sim_type, name, feedback) is in ``no_band`` are drawn as
+    the simulation alone, without the rescaled ends and their band.
+    """
     lo, hi = f"{option}__low", f"{option}__high"
     have = [r for r in results if lo in r['ends']]
     if not have:
@@ -81,6 +87,8 @@ def fig_column(results: list, option: str, kmax: float, path: Path, lens_data,
         el, eh = r['ends'][lo], r['ends'][hi]
         ax1.plot(k, r['S0'][sel], color=col, lw=1.3,
                  label=rf"{paper_label(r)} (${sym}={format(r['obs'][own], fmt)}$)")
+        if (r['sim_type'], r['name'], r['feedback']) in no_band:
+            continue
         ax1.plot(k, el['S'][sel], color=col, lw=0.9, ls='--')
         ax1.plot(k, eh['S'][sel], color=col, lw=0.9, ls=':')
         ax1.fill_between(k, el['S'][sel], eh['S'][sel], color=col, alpha=0.2, lw=0)
@@ -94,10 +102,13 @@ def fig_column(results: list, option: str, kmax: float, path: Path, lens_data,
 
     for r, col in zip(have, colours):
         L, el, eh = r.get('lens'), r['ends'][lo], r['ends'][hi]
-        if L is None or el.get('f') is None or eh.get('f') is None:
+        banded = (r['sim_type'], r['name'], r['feedback']) not in no_band
+        if L is None or (banded and (el.get('f') is None or eh.get('f') is None)):
             raise SystemExit(f"{r['label']}: lensing stacks missing")
         th = L['theta']
         ax2.plot(th, L['f'], color=col, lw=1.3, marker='o', ms=2.5)
+        if not banded:
+            continue
         ax2.plot(th, el['f'], color=col, lw=0.9, ls='--')
         ax2.plot(th, eh['f'], color=col, lw=0.9, ls=':')
         ax2.fill_between(th, el['f'], eh['f'], color=col, alpha=0.2, lw=0)
@@ -153,9 +164,12 @@ def main() -> None:
 
     results = [r for r in (mfo.analyse(e, config, False) for e in select_sims(config))
                if r is not None]
+    # Simulations drawn without their rescaled ends (config: bands: false).
+    no_band = frozenset((e['sim_type'], e['name'], e.get('feedback'))
+                        for e in config['simulations'] if not e.get('bands', True))
     name = (f"{plot_cfg['fig_name']}_{args.option}_S_{obs['variant']['name']}_{obs['tag']}"
             f"_column.{ext}")
-    fig_column(results, args.option, args.kmax, out_dir / name, lens_data, lens_xmax)
+    fig_column(results, args.option, args.kmax, out_dir / name, lens_data, lens_xmax, no_band)
 
 
 if __name__ == '__main__':

@@ -141,6 +141,7 @@ simulations:
   # than TNG300-1's 205 ckpc/h at 1000.
   # ----------------------------------------------------------------
   - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO (AGN)'
     sims:
       - name: 'L1_m9'
         snapshot: 67
@@ -153,4 +154,21 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
+        n_pixels: 2000
+  # Second FLAMINGO row (iteration 3): the stellar-mass variants, with the
+  # fiducial run repeated as the reference (stacked once, see make_ratios3x2).
+  - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO ($M_\ast$)'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+        n_pixels: 2000
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'
         n_pixels: 2000

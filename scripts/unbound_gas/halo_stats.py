@@ -25,6 +25,7 @@ import numpy as np
 
 from halos import select_halos  # type: ignore
 from rprofiles import select_sham_subhalos  # type: ignore
+from utils import comoving_to_arcmin  # type: ignore
 
 
 # Name of the top-hat mass in each suite's own catalogue, used to label the
@@ -234,6 +235,39 @@ def select_sample(stacker, use_subhalos=False, halo_abundance_target=5e-4,
     return select_halos(haloes['GroupMass'], 'massive',
                         target_average_mass=halo_mass_avg,
                         upper_mass_bound=halo_mass_upper)
+
+
+def host_radius_arcmin(stacker, z, use_subhalos=False, halo_abundance_target=5e-4,
+                       halo_mass_avg=10 ** 13.22, halo_mass_upper=5 * 10 ** 14):
+    """Mean R200m of the stacked objects' host haloes, as an angle at z.
+
+    Averaged per stacked object (a host of several selected galaxies counts once
+    per galaxy), like ``sample_stats``' ``rad_mean``, and converted with the
+    simulation's own cosmology. Used for the guide lines of the masking figures.
+
+    Args:
+        stacker (SimulationStacker): The simulation.
+        z (float): Redshift of the projection.
+        use_subhalos, halo_abundance_target, halo_mass_avg, halo_mass_upper:
+            The selection, as in :func:`select_sample`.
+
+    Returns:
+        float: The mean host R200m in arcmin.
+    """
+    from astropy import units as u
+    from astropy.cosmology import FlatLambdaCDM
+
+    haloes = stacker.loadHalos()
+    subhalos = stacker.loadSubHalos() if use_subhalos else None
+    mask = select_sample(stacker, use_subhalos=use_subhalos,
+                         halo_abundance_target=halo_abundance_target,
+                         halo_mass_avg=halo_mass_avg, halo_mass_upper=halo_mass_upper,
+                         haloes=haloes, subhalos=subhalos)
+    rows = subhalos['SubhaloGrNr'][mask] if use_subhalos else mask
+    rad = float(np.mean(haloes['GroupRad'][np.asarray(rows, dtype=np.int64)]))  # ckpc/h
+    cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'],
+                          Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K)
+    return float(comoving_to_arcmin(rad, z, cosmo))
 
 
 def sample_stats(stacker, label, use_subhalos=False, halo_abundance_target=5e-4,

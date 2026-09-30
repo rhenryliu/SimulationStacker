@@ -19,7 +19,8 @@ stack:
   # (noisier) fit. The masked maps are built around the hosts of these samples
   # (unbound_gas/precompute_masked_sham_hosts.py).
   abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
-                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_simba50.npz']
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_simba50.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_mstar.npz']
 
 plot:
   plot_data: true
@@ -70,6 +71,7 @@ simulations:
       # - name: 'Illustris-2'
       #   snapshot: 103
   - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO (AGN)'
     sims:
       # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
       # Snapshot 67 is z=0.5, matching stack.redshift above.
@@ -82,3 +84,17 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
+  # Iteration 3: the stellar-mass variants, with L1_m9 as the reference
+  # (stacked once; simulated_kSZ_masked.py reuses its first-row stacks).
+  - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO ($M_\ast$)'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'

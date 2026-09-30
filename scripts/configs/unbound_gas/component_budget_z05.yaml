@@ -1,0 +1,26 @@
+# Unbound gas paper, component-budget figure (user item f.2, iteration 3): one
+# grid, a row per simulation, columns (a) 3D shells, (b) 3D cumulative,
+# (c) 2D Delta Sigma without beam. Plotting only, from the npz files that
+# make_baryonFraction.py (baryonFraction_z05.yaml) and make_stackArea.py
+# (stackArea_dsigma_z05.yaml) write next to their figures (job 59117699).
+# Run from the scripts/ directory:
+#   python unbound_gas/make_component_budget.py -p configs/unbound_gas/component_budget_z05.yaml
+
+baryonfraction_npz: '../figures/2026-09/09-30/combined_3D_shell_baryonFraction_profiles.npz'
+stackarea_npz: '../figures/2026-09/09-30/combined_z0.5_stackArea_profiles.npz'
+fig_path: '../figures/'
+fig_name: 'component_budget_z05'
+fig_type: 'pdf'
+width: 7.1
+row_height: 1.05
+rmax_ckpch: 4000.0
+thetamax_arcmin: 10.5
+simulations:
+  - {key: 'IllustrisTNG/TNG300-1', label: 'TNG300-1'}
+  - {key: 'IllustrisTNG/Illustris-1', label: 'Illustris-1'}
+  - {key: 'SIMBA/m100n1024/s50', label: 'SIMBA-100'}
+  - {key: 'FLAMINGO/L1_m9/L1_m9', label: 'FLAMINGO L1\_m9'}
+  - {key: 'FLAMINGO/L1_m9/fgas-8sigma', label: 'FLAMINGO fgas$-8\sigma$'}
+  - {key: 'FLAMINGO/L1_m9/Jet_fgas-4sigma', label: 'FLAMINGO Jet\_fgas$-4\sigma$'}
+  - {key: 'FLAMINGO/L1_m9/Mstar-1sigma', label: 'FLAMINGO M$_\ast-\sigma$'}
+  - {key: 'FLAMINGO/L1_m9/Mstar-1sigma_fgas-4sigma', label: 'FLAMINGO M$_\ast-\sigma$\_fgas$-4\sigma$'}

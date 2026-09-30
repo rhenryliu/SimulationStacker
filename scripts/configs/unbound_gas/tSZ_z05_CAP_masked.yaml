@@ -13,7 +13,8 @@ stack:
   use_subhalos: true # SHAM selection (like the kSZ Figure 7 config), for comparison with data
   # SHAM density per simulation, fitted to the HSC Y3 x DESI LRG bin-1 lensing
   # profile by lensing/fit_dsigma_ksz.py (a different lens sample from the tSZ data).
-  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+  abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_mstar.npz']
 
 plot:
   plot_data: true
@@ -28,6 +29,7 @@ plot:
   # Paper layout: no figure title, rows slightly shorter than the 4.5 in default.
   suptitle: false
   row_height: 3.8
+  row_labels: ['SIMBA + IllustrisTNG', 'FLAMINGO (AGN)', 'FLAMINGO ($M_\ast$)']
 
 
 
@@ -82,3 +84,16 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
+  # Iteration 3: the stellar-mass variants, with L1_m9 as the reference.
+  - sim_type: 'FLAMINGO'
+    row: 2
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'

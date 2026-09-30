@@ -9,7 +9,7 @@ projection: yz
 halo_mass_avg: 16595869000000.0
 halo_mass_upper: 500000000000000.0
 load: true
-load_path: ../figures/2026-09/09-29/star_fraction_particles_z0.5_merged.yaml
+load_path: ../figures/2026-09/09-30/star_fraction_particles_z0.5_merged.yaml  # iteration 3: + M*-sigma runs (job 59113570)
 fig_path: ../figures/
 fig_name: star_fraction_particles
 fig_type: png
@@ -59,5 +59,13 @@ simulations:
   - name: L1_m9
     snapshot: 67
     feedback: Jet_fgas-4sigma
+    n_pixels: 2000
+  - name: L1_m9
+    snapshot: 67
+    feedback: Mstar-1sigma
+    n_pixels: 2000
+  - name: L1_m9
+    snapshot: 67
+    feedback: Mstar-1sigma_fgas-4sigma
     n_pixels: 2000
 method: particles

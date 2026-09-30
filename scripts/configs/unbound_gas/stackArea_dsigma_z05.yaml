@@ -132,3 +132,18 @@ simulations:
     snapshot: 67
     feedback: 'Jet_fgas-4sigma'
     n_pixels: 2000
+
+  # FLAMINGO stellar-mass variants (iteration 3, 2026-09-29). The paper's
+  # component-budget figure is make_component_budget.py's grid, which reads the
+  # npz this script writes; its own two-column PDF now has four rows.
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Mstar-1sigma'
+    n_pixels: 2000
+
+  - sim_type: 'FLAMINGO'
+    name: 'L1_m9'
+    snapshot: 67
+    feedback: 'Mstar-1sigma_fgas-4sigma'
+    n_pixels: 2000

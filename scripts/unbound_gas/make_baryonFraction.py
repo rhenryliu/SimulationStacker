@@ -332,7 +332,7 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
                     projection, saveField, loadField, ax, colours,
                     radDistance, sphere=True, halo_mass_avg=10**13.22,
                     halo_mass_upper=5e14, derive_neutral_gas=True,
-                    dr=None, verbose=True):
+                    dr=None, verbose=True, store=None):
     """Build 3-D density fields and plot the baryon-fraction profile.
 
     The denominator is the sum of all baryon fields so the plotted fractions
@@ -492,6 +492,9 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
         # of dividing 0/0.
         means = {bt: np.mean(cumulative[bt], axis=1) for bt in baryon_types}
         fractions = safe_fractions(means, baryon_types)
+        if store is not None:  # plotted values, for the caller's npz
+            store.update(x=edges * radDistance, fractions=np.array(fractions),
+                         labels=list(baryon_types), mode='sphere')
         ax.stackplot(edges * radDistance, fractions, labels=baryon_types,
                      alpha=0.8, colors=colours)
     else:
@@ -512,6 +515,9 @@ def run_3d_stacking(stacker, baryon_types, nPixels, minRadius, maxRadius, nRadii
 
         left = edges[:-1] * radDistance          # inner edge of each shell
         widths = np.diff(edges) * radDistance    # shell width (per bar)
+        if store is not None:  # plotted values, for the caller's npz
+            store.update(edges=edges * radDistance, fractions=np.array(fractions),
+                         labels=list(baryon_types), mode='shell')
         bottom = np.zeros_like(left)
         for bt, frac, colour in zip(baryon_types, fractions, colours):
             ax.bar(left, frac, width=widths, bottom=bottom,
@@ -795,6 +801,8 @@ def main(path2config: str, verbose: bool = True):
         axes_2d[idx % n_rows, idx // n_rows].set_visible(False)
 
     t_total = time.time()
+    # Plotted 3-D profiles of every panel, written next to the figures.
+    profiles_out = {}
 
     for idx, sim in enumerate(sims):
         row, col = idx % n_rows, idx // n_rows   # column-major fill
@@ -810,6 +818,8 @@ def main(path2config: str, verbose: bool = True):
             print(f"  3D grid: {nPixels_sim} voxels per side")
 
         stacker, cosmo, sim_label = make_stacker(sim, redshift)
+        sim_key = '/'.join(str(k) for k in (sim_type, sim_name, sim.get('feedback')) if k is not None)
+        store_3d = {}
 
         def forward_arcmin(arcmin, _redshift=redshift, _cosmo=cosmo):
             return arcmin_to_comoving(arcmin, _redshift, _cosmo)
@@ -842,7 +852,11 @@ def main(path2config: str, verbose: bool = True):
             derive_neutral_gas=derive_neutral_gas,
             dr=dr,
             verbose=verbose,
+            store=store_3d,
         )
+        for k, v in store_3d.items():
+            profiles_out[f'{sim_key}/3D_{k}'] = v
+        profiles_out[f'{sim_key}/label'] = sim_label
         if col == 0:
             ax_3d.set_ylabel('Baryon fraction')
         ax_3d.set_xlim(0.0, maxRadius * radDistance)
@@ -952,6 +966,11 @@ def main(path2config: str, verbose: bool = True):
     fig_2d.savefig(out_2d, dpi=300)  # type: ignore
     plt.close(fig_2d)
 
+    profiles_out['sim_keys'] = np.array(['/'.join(str(k) for k in (s['sim_type'], s['name'], s.get('feedback'))
+                                                  if k is not None) for s in sims])
+    out_npz = figPath / f'{figName}_3D_{_TAG_3D[bool(sphere)]}_baryonFraction_profiles.npz'
+    np.savez(out_npz, **profiles_out)
+    print(f'Saved plotted 3-D profiles to {out_npz}')
     print(f'Done!  Total elapsed time: {time.time()-t_total:.1f}s')
 
 

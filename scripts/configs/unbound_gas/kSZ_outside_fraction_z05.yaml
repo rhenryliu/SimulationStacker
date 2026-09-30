@@ -6,7 +6,7 @@
 # Run from the scripts/ directory:
 #   python unbound_gas/make_kSZ_outside_fraction.py -p configs/unbound_gas/kSZ_outside_fraction_z05.yaml
 
-profiles_npz: '../figures/2026-09/09-29/profiles_xy_masked_flamingo_tau_z0.5_profiles.npz'
+profiles_npz: '../figures/2026-09/09-30/profiles_xy_masked_flamingo_tau_z0.5_profiles.npz'  # iteration 3 rerun (job 59117699)
 data_path: '../data/Fig2_sim.npz'
 data_label: 'Hadzhiyska 2024'
 fig_path: '../figures/'
@@ -26,5 +26,8 @@ rows:
     title: 'IllustrisTNG'
     sims: ['IllustrisTNG/TNG100-1', 'IllustrisTNG/TNG300-1', 'IllustrisTNG/Illustris-1']
   - suite: 'FLAMINGO'
-    title: 'FLAMINGO'
+    title: 'FLAMINGO (AGN)'
     sims: ['FLAMINGO/L1_m9/L1_m9', 'FLAMINGO/L1_m9/fgas-8sigma', 'FLAMINGO/L1_m9/Jet_fgas-4sigma']
+  - suite: 'FLAMINGO'
+    title: 'FLAMINGO ($M_\ast$)'
+    sims: ['FLAMINGO/L1_m9/L1_m9', 'FLAMINGO/L1_m9/Mstar-1sigma', 'FLAMINGO/L1_m9/Mstar-1sigma_fgas-4sigma']

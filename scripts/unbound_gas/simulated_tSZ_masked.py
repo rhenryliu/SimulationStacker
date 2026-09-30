@@ -28,7 +28,7 @@ from utils import arcmin_to_comoving, comoving_to_arcmin, flamingo_label
 from halos import select_massive_halos
 # Sibling module in this directory (Python puts the running script's own
 # directory on sys.path); must come after the '../src/' append above.
-from halo_stats import fit_label, load_fitted_abundances, require_masked_map
+from halo_stats import fit_label, host_radius_arcmin, load_fitted_abundances, require_masked_map
 
 sys.path.append('../../illustrisPython/')
 import illustris_python as il # type: ignore
@@ -62,6 +62,8 @@ _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
     'Jet_fgas-4sigma': '#C71585',  # magenta
+    'Mstar-1sigma':             '#17BECF',  # cyan
+    'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 
 # # Set matplotlib to use Computer Modern font
@@ -170,6 +172,10 @@ def main(path2config, verbose=True):
     # Stacked profiles, written next to the figure so the numbers quoted in the
     # text can be read back without restacking.
     profiles_out = {}
+    # Guide lines: n x the mean R200m of the stacked hosts of each row's first
+    # simulation, in arcmin (that simulation's own cosmology).
+    row_rad_arcmin = {}
+    stack_cache = {}  # FLAMINGO stacks, keyed by (feedback, snapshot, column)
     
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -301,11 +307,15 @@ def main(path2config, verbose=True):
                         # never let stackMap rebuild one around another sample.
                         require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                            sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
-                                                         numRadii=nRadii, pixelSize=pixelSize,
-                                                         save=saveField, load=loadField, radDistance=radDistance,
-                                                         projection=projection, mask=maskHaloes, maskRad=maskRadii,
-                                                         **sim_selection)
+                    # A FLAMINGO run listed in two rows is stacked once per column.
+                    cache_key = (feedback, snapshot, col_idx)
+                    if cache_key not in stack_cache:
+                        stack_cache[cache_key] = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                                                             numRadii=nRadii, pixelSize=pixelSize,
+                                                             save=saveField, load=loadField, radDistance=radDistance,
+                                                             projection=projection, mask=maskHaloes, maskRad=maskRadii,
+                                                             **sim_selection)
+                    radii0, profiles0 = stack_cache[cache_key]
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
                     # '-' instead of '_' so the name is plain text
@@ -317,6 +327,9 @@ def main(path2config, verbose=True):
                     plot_label = flamingo_label(feedback, prefix=not only_flamingo)
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
+
+                if row_idx not in row_rad_arcmin:
+                    row_rad_arcmin[row_idx] = host_radius_arcmin(stacker, redshift, **sim_selection)
 
                 # Plotting
                 T_CMB = 2.7255
@@ -375,8 +388,7 @@ def main(path2config, verbose=True):
             ax = axes[row_idx, col_idx]
             
             if col_idx != 3:
-                R200C_arcmin = comoving_to_arcmin(R200C * u.kpc / u.h, redshift, cosmo)
-                ax.axvline(R200C_arcmin * (col_idx + 1), color='k', linestyle='--', lw=1)
+                ax.axvline(row_rad_arcmin[row_idx] * (col_idx + 1), color='k', linestyle='--', lw=1)
             
             # Set x-label only on bottom row
             if row_idx == nRows - 1:

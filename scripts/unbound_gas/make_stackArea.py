@@ -254,7 +254,7 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
                     projection, saveField, loadField,
                     ax, colours, radDistance,
                     halo_mass_avg=10**13.22, halo_mass_upper=5e14,
-                    derive_neutral_gas=True, sim_label='', verbose=True):
+                    derive_neutral_gas=True, sim_label='', verbose=True, store=None):
     """Build 3-D density fields, cut out spheres around massive haloes, and plot
     the resulting baryon-fraction stacked-area profile.
 
@@ -393,6 +393,9 @@ def run_3d_stacking(stacker, OmegaBaryon, baryon_types, pType2,
     warn_negative_fractions(fractions, bt_labels, radii * radDistance,
                             f'{sim_label} (3D)')
 
+    # Plotted values, for the caller's npz (store=None: not kept)
+    if store is not None:
+        store.update(x=radii * radDistance, fractions=np.array(fractions), labels=bt_labels)
     # Draw the stacked-area plot on the provided axis
     ax.stackplot(radii * radDistance, fractions, labels=bt_labels, alpha=0.8, colors=colours)
 
@@ -407,7 +410,7 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
                     ax, colours, forward_arcmin, inverse_arcmin,
                     halo_mass_avg=10**13.22, halo_mass_upper=5e14,
                     pixelSize=0.5, beamSize=1.6, derive_neutral_gas=True,
-                    sim_label='', verbose=True):
+                    sim_label='', verbose=True, store=None):
     """Stack 2-D projected maps and plot the resulting baryon-fraction profile.
 
     The stacking radii are expressed in arcmin (converted from the comoving kpc/h
@@ -513,6 +516,10 @@ def run_2d_stacking(stacker, cosmo, OmegaBaryon, baryon_types, pType2,
     warn_negative_fractions(fractions, bt_labels, radii0[keep] * radDistance,
                             f'{sim_label} (2D {filterType})')
 
+    # Plotted values, for the caller's npz (store=None: not kept)
+    if store is not None:
+        store.update(x=radii0[keep] * radDistance, x_ckpch=forward_arcmin(radii0[keep]),
+                     fractions=np.array(fractions), labels=bt_labels)
     # x-axis: radii in arcmin scaled by radDistance
     ax.stackplot(radii0[keep] * radDistance, fractions, labels=bt_labels, alpha=0.8, colors=colours)
 
@@ -674,6 +681,8 @@ def main(path2config: str, verbose: bool = True):
         axes_2d[idx % n_rows, idx // n_rows].set_visible(False)
 
     t_total = time.time()
+    # Plotted profiles of every panel, written next to the figures.
+    profiles_out = {}
 
     for idx, sim in enumerate(sims):
         row, col = idx % n_rows, idx // n_rows   # column-major fill
@@ -684,6 +693,8 @@ def main(path2config: str, verbose: bool = True):
 
         # Build the shared stacker and cosmology for this simulation
         stacker, cosmo, OmegaBaryon, sim_label = make_stacker(sim, redshift)
+        sim_key = '/'.join(str(k) for k in (sim_type, sim_name, sim.get('feedback')) if k is not None)
+        store_3d, store_2d = {}, {}
 
         # 3-D grid: a simulation entry may override stack.n_pixels, since the
         # FLAMINGO box is ~3x TNG300-1's and needs a finer grid for comparable voxels.
@@ -722,7 +733,10 @@ def main(path2config: str, verbose: bool = True):
             derive_neutral_gas=derive_neutral_gas,
             sim_label=sim_label,
             verbose=verbose,
+            store=store_3d,
         )
+        for k, v in store_3d.items():
+            profiles_out[f'{sim_key}/3D_{k}'] = v
         # Style: 3-D subplot
         ax_3d.axhline(1.0, color='k', ls='--', lw=2)
         ax_3d.set_xlim(0.0, maxRadius * radDistance)
@@ -764,7 +778,11 @@ def main(path2config: str, verbose: bool = True):
             derive_neutral_gas=derive_neutral_gas,
             sim_label=sim_label,
             verbose=verbose,
+            store=store_2d,
         )
+        for k, v in store_2d.items():
+            profiles_out[f'{sim_key}/2D_{k}'] = v
+        profiles_out[f'{sim_key}/label'] = sim_label
         # Style: 2-D subplot
         ax_2d.axhline(1.0, color='k', ls='--', lw=2)
         ax_2d.set_xlim(0.0, maxRadius_arcmin * radDistance)
@@ -831,6 +849,11 @@ def main(path2config: str, verbose: bool = True):
     fig_2d.savefig(out_2d, dpi=300)  # type: ignore
     plt.close(fig_2d)
 
+    profiles_out['sim_keys'] = np.array(['/'.join(str(k) for k in (s['sim_type'], s['name'], s.get('feedback'))
+                                                  if k is not None) for s in sims])
+    out_npz = figPath / f'{figName}_z{redshift}_stackArea_profiles.npz'
+    np.savez(out_npz, **profiles_out)
+    print(f'Saved plotted profiles to {out_npz}')
     print(f'Done!  Total elapsed time: {time.time()-t_total:.1f}s')
 
 

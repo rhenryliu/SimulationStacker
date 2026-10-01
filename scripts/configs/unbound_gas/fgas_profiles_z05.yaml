@@ -33,15 +33,16 @@ stack:
 
   # Particle types defining f_gas = particle_type / particle_type_2
   particle_type:   'ionized_gas'
-  filter_type:     'CAP'        # options: 'CAP', 'cumulative', 'DSigma'
+  filter_type:     'DSigma'     # options: 'CAP', 'cumulative', 'DSigma' (iteration 3: DSigma, no beam; was CAP)
   particle_type_2: 'total'
-  filter_type_2:   'CAP'
+  filter_type_2:   'DSigma'
 
   # ------------------------------------------------------------------
   # 2D map parameters  (used when dim: '2D')
   # Beam convolution uses the stackMap default of 1.6 arcmin.
   # ------------------------------------------------------------------
-  pixel_size:    0.5          # map pixel size (arcmin)
+  pixel_size:    0.2          # map pixel size (arcmin); 0.2 with no beam, as the DSigma columns of Figs. 2-3
+  beam_size:     0            # arcmin FWHM; 0 = unconvolved (was the default 1.6)
   min_radius_2d: 1.0          # innermost radial bin (arcmin)
   max_radius_2d: 10.0         # outermost radial bin (arcmin)
   num_radii_2d:  11           # number of radial bins
@@ -77,7 +78,8 @@ stack:
   halo_abundance_target: 5.0e-4   # target number density (cMpc/h)^-3
   # Per-simulation SHAM densities fitted on the HSC Y3 x DESI LRG bin-1 lensing
   # profile (lensing/fit_dsigma_ksz.py); they replace halo_abundance_target.
-  abundance_from_fit: '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz'
+  abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_mstar.npz']
 
 
 plot:
@@ -116,3 +118,9 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'

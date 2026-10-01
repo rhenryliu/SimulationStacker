@@ -99,6 +99,8 @@ _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
     'Jet_fgas-4sigma': '#C71585',  # magenta
+    'Mstar-1sigma':             '#17BECF',  # cyan
+    'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 
 
@@ -356,6 +358,7 @@ def compute_fgas_2d(stacker: SimulationStacker, params: dict,
     pType2 = params['particle_type_2']
     fType2 = params['filter_type_2']
     pixelSize       = params['pixel_size']
+    beamSize        = params.get('beam_size', 1.6)  # arcmin FWHM; 0 or None: no beam
     minR            = params['min_radius_2d']
     maxR            = params['max_radius_2d']
     nRadii          = params['num_radii_2d']
@@ -384,7 +387,7 @@ def compute_fgas_2d(stacker: SimulationStacker, params: dict,
     _common = dict(
         minRadius=minR, maxRadius=maxR, numRadii=nRadii,
         z=z, projection=projection, save=save, load=load,
-        radDistance=radDist, pixelSize=pixelSize, subtract_mean=sub_mean,
+        radDistance=radDist, pixelSize=pixelSize, beamSize=beamSize, subtract_mean=sub_mean,
     )
 
     # ------------------------------------------------------------------
@@ -628,6 +631,7 @@ def main(path2config: str, verbose: bool = True):
         'filter_type_2':   stack_cfg.get('filter_type_2',   'CAP'),
         # 2D parameters
         'pixel_size':      stack_cfg.get('pixel_size',      0.5),
+        'beam_size':       stack_cfg.get('beam_size',       1.6),
         'min_radius_2d':   stack_cfg.get('min_radius_2d',   1.0),
         'max_radius_2d':   stack_cfg.get('max_radius_2d',   10.0),
         'num_radii_2d':    stack_cfg.get('num_radii_2d',    11),

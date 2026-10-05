@@ -151,7 +151,7 @@ def snapshot_curve(cal, filt, radius_range):
     }
 
 
-def load_pairs(npz_dir, labels, filt, radius_range):
+def load_pairs(npz_dir, labels, filt, radius_range, snapshots=None):
     """Load both snapshots of every requested run.
 
     Args:
@@ -159,18 +159,26 @@ def load_pairs(npz_dir, labels, filt, radius_range):
         labels (list): Run labels, in plotting order.
         filt (str): Filter variant name.
         radius_range (sequence): ``(min, max)`` apertures to keep, arcmin.
+        snapshots (dict, optional): Run label -> the two snapshot numbers to
+            use, for when the directory holds more snapshots of a run.  None,
+            or a label absent from it, keeps every file of that run.
 
     Returns:
         list: One dict per run with ``label``, ``meta`` (the higher-z file)
         and the snapshot curves ``hi`` and ``lo`` (by redshift).
 
     Raises:
-        SystemExit: If a run does not have exactly two snapshots on disk.
+        SystemExit: If a run does not have exactly two snapshots selected.
     """
+    snapshots = snapshots or {}
     by_label = {}
     for path in sorted(glob.glob(str(npz_dir / 'calibration_*.npz'))):
         cal = np.load(path, allow_pickle=True)
-        by_label.setdefault(str(cal['meta_label']), []).append(cal)
+        label = str(cal['meta_label'])
+        wanted = snapshots.get(label)
+        if wanted is not None and int(cal['meta_snapshot']) not in wanted:
+            continue
+        by_label.setdefault(label, []).append(cal)
 
     runs = []
     for label in labels:
@@ -178,7 +186,8 @@ def load_pairs(npz_dir, labels, filt, radius_range):
         if len(cals) != 2:
             raise SystemExit(
                 f'{label}: expected 2 snapshots in {npz_dir}, found '
-                f'{len(cals)}. Run make_calibration_factor.py first.')
+                f'{len(cals)}. Run make_calibration_factor.py first, or '
+                "name the pair under 'snapshots' in the config.")
         cals.sort(key=lambda c: float(c['meta_redshift']), reverse=True)
         runs.append({
             'label': label,
@@ -514,7 +523,8 @@ def main(path2config):
     npz_dir = Path(plot_cfg.get('npz_path', '../data/cross_corr_C/'))
     radius_range = config.get('radius_range_arcmin', [1.0, 9.75])
 
-    runs = load_pairs(npz_dir, config['runs'], filt, radius_range)
+    runs = load_pairs(npz_dir, config['runs'], filt, radius_range,
+                      config.get('snapshots'))
     for run in runs:
         analyse(run, config)
 

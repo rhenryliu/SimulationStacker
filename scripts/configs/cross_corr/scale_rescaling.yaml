@@ -6,7 +6,8 @@
 # which the two curves overlap best (beta = 0 comoving, beta = -1 physical).
 #
 # Post-processing only: reads the round-two data/cross_corr_C/calibration_*.npz
-# (both snapshots of every run) and computes nothing on the maps.  The R_nl
+# (the pair of snapshots per run named under 'snapshots' below) and computes
+# nothing on the maps.  The R_nl
 # candidate needs CAMB and the snapshot headers on scratch.
 #
 # Run with:
@@ -26,8 +27,16 @@ beta_step: 0.01
 n_overlap_grid: 50         # log-spaced points the two curves are compared on
 min_overlap_factor: 2.0    # a beta counts only if the overlap spans >= this factor in s
 
-# Runs, in plotting order; each label must have exactly two snapshots on disk.
+# Runs, in plotting order; each label must have exactly two snapshots selected.
 runs: ['TNG300-1', 'L1_m9_fiducial', 'L1_m9_Jet_fgas-4sigma', 'L1_m9_fgas-8sigma']
+
+# The pair of snapshots per run.  The npz directory also holds z ~ 0.75 and
+# z ~ 1.0 files, which scale_rescaling_multiz.yaml plots.
+snapshots:
+  TNG300-1: [67, 80]
+  L1_m9_fiducial: [67, 71]
+  L1_m9_Jet_fgas-4sigma: [67, 71]
+  L1_m9_fgas-8sigma: [67, 71]
 
 plot:
   npz_path: '../data/cross_corr_C/'

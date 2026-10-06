@@ -3,7 +3,8 @@
 The comoving versus physical scale test of ``x_F(R) = Y_bm / Y_mm`` at every
 redshift slice on disk: z ~ 0.26 (FLAMINGO 0.30), 0.5, 0.75 and 1.0.  It
 extends ``plot_scale_rescaling.py``, which compares two of them, to the
-snapshots listed per run in the config.
+snapshots listed per run in the config, for the filter the config names
+(Delta Sigma, Sigma or Upsilon with R0 = 1').
 
 For each run the curves are plotted against arcmin, comoving Mpc/h and
 physical Mpc/h, and the one-parameter family ``s = R_com (1+z)^beta`` is
@@ -36,21 +37,35 @@ Generalization to N snapshots (user, 2026-10-05):
   reported.
 - **Range of beta.**  The interval every curve covers shrinks quickly with
   beta across z = 0.26-1.0.  At the R_nl beta (~1.4) it spans less than
-  ``min_overlap_factor``, so the report prints NaN for that candidate.
+  ``min_overlap_factor`` for every filter, so that rms is NaN.  Upsilon is
+  masked at R <= R0 and starts at 1.625' for R0 = 1', so for TNG300-1 even
+  the comoving window falls short.  Such panels read "n/a".  A best-fit beta
+  (per run or common) where the window runs out is flagged as at the edge of
+  the scan or of the common window, with no error printed: it is set by the
+  window, not measured.
 
-Caveat: the Delta Sigma annulus width is fixed at 0.75 arcmin, so in comoving
+Caveat: the annulus width is fixed at 0.75 arcmin for every filter (Sigma is
+the mean over [R, R + 0.75'], Delta Sigma subtracts it from the disc mean,
+and Upsilon is built from Delta Sigma amplitudes), so in comoving
 units it grows with redshift: 0.16 (TNG300-1, z = 0.26) or 0.18 (FLAMINGO,
 z = 0.30), 0.29 (z ~ 0.5), 0.40-0.41 (z ~ 0.75) and 0.50 cMpc/h (z ~ 1.0), a
 factor of ~3 across the set against ~1.7 for the two-snapshot figure.  Even an
 exactly universal P_bm/P_mm would not make the aperture curves coincide in any
 single coordinate, and the larger spread here makes that limit tighter.  The
-report prints the width per snapshot.
+report prints the width per snapshot.  Upsilon carries a second fixed angular
+scale, R0 = 1', which is 0.21-0.67 cMpc/h across the set, so its curves need
+not overlap under any rescaling of s even for a universal P_bm/P_mm.
 
 Usage
 -----
     cd scripts/
     python cross_corr/plot_scale_rescaling_multiz.py \
         -p configs/cross_corr/scale_rescaling_multiz.yaml
+    # Sigma and Upsilon (R0 = 1') versions:
+    python cross_corr/plot_scale_rescaling_multiz.py \
+        -p configs/cross_corr/scale_rescaling_multiz_Sigma.yaml
+    python cross_corr/plot_scale_rescaling_multiz.py \
+        -p configs/cross_corr/scale_rescaling_multiz_Upsilon.yaml
 """
 
 import argparse
@@ -66,6 +81,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.ticker import FixedLocator, FormatStrFormatter, NullFormatter
 import yaml
 
 sys.path.append('../src/')
@@ -80,6 +96,12 @@ import theory as th
 from plot_scale_rescaling import (FILTER_LABELS, ROWS, RUN_TITLES, best_beta,
                                   coordinate, jk_sigma, nonlinear_radius,
                                   snapshot_curve)
+
+#: Display labels per filter variant, extending the two-snapshot script's map
+#: (Delta Sigma only).
+FILTER_LABELS = {**FILTER_LABELS,
+                 'Sigma': r'$\Sigma$',
+                 'Upsilon_R0=1': r"$\Upsilon$, $R_0 = 1'$"}
 
 #: Line colour per redshift slot, lowest z (light) to highest (dark): one
 #: blue ramp, validated as an ordinal palette on a white surface.
@@ -380,8 +402,9 @@ def make_figure(runs, cfg, out_path, filt):
     Same layout as the two-snapshot figure: each coordinate row is its own
     subfigure with one x label under it.  The shaded band is the interval
     every curve covers, over which the all-pairs rms is taken.  When every
-    run has the same number of snapshots, one redshift legend sits above the
-    top row, since four entries inside a panel collide with the curves.
+    run has the same number of snapshots, one legend for the redshifts and
+    the shading sits above the top row, since keys inside a panel collide
+    with the curves.
 
     Args:
         runs (list): Analysed runs.
@@ -419,9 +442,15 @@ def make_figure(runs, cfg, out_path, filt):
                         label=f"$z = {snap['z']:.2f}$")
             rms, s_lo, s_hi = overlap_rms(curves, n_grid, min_factor)
             ax.axvspan(s_lo, s_hi, color='0.92', zorder=0, lw=0)
-            ax.text(0.97, 0.05, rf'rms $\Delta x$ = {rms:.4f}',
-                    transform=ax.transAxes, ha='right', va='bottom',
-                    fontsize=9)
+            if np.isfinite(rms):
+                text = rf'rms $\Delta x$ = {rms:.4f}'
+            elif not s_hi >= s_lo * min_factor:
+                text = (r'rms $\Delta x$: n/a (overlap < '
+                        rf'{min_factor:g}$\times$)')
+            else:
+                text = r'rms $\Delta x$: n/a'
+            ax.text(0.97, 0.05, text, transform=ax.transAxes, ha='right',
+                    va='bottom', fontsize=9)
             ax.set_xscale('log')
             ax.set_ylim(*ylim)
             ax.grid(alpha=0.25, lw=0.5)
@@ -429,11 +458,20 @@ def make_figure(runs, cfg, out_path, filt):
                 ax.set_title(RUN_TITLES.get(run['label'], run['label']))
                 if not shared_legend:
                     ax.legend(loc='upper left', frameon=False)
-            elif kind == 'comoving' and col == 0:
+            elif kind == 'comoving' and col == 0 and not shared_legend:
                 # Here the shading does not fill the panel, so the key shows.
                 ax.legend(handles=[Patch(facecolor='0.92', edgecolor='0.6',
                                          label='range of rms')],
                           loc='upper left', frameon=False)
+        # Under one decade matplotlib also labels the minor log ticks, which
+        # collide (Upsilon's apertures start at 1.625'); use plain labels.
+        x_lo, x_hi = axes[0].get_xlim()
+        if np.log10(x_hi / x_lo) < 1.0:
+            for ax in axes:
+                ax.xaxis.set_major_locator(FixedLocator(
+                    [m * 10.0 ** k for k in range(-2, 3) for m in (1, 2, 3, 5)]))
+                ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+                ax.xaxis.set_minor_formatter(NullFormatter())
         axes[0].set_ylabel(r'$Y_{bm}/Y_{mm}$')
         subfig.supxlabel(xlabel)
 
@@ -441,9 +479,10 @@ def make_figure(runs, cfg, out_path, filt):
         n = len(runs[0]['snaps'])
         handles = [Line2D([], [], color=colour, ls=ls, lw=1.6, marker=marker,
                           ms=4.0) for colour, ls, marker in z_styles(n)]
-        subfigs[0].legend(handles, slot_labels(runs),
-                          loc='outside upper center', ncol=n, frameon=False,
-                          fontsize=10)
+        handles.append(Patch(facecolor='0.92', edgecolor='0.6'))
+        subfigs[0].legend(handles, slot_labels(runs) + ['range of rms'],
+                          loc='outside upper center', ncol=n + 1,
+                          frameon=False, fontsize=10)
 
     fig.suptitle(rf'$Y_{{bm}}/Y_{{mm}}$ ({FILTER_LABELS.get(filt, filt)}); '
                  r'rms $\Delta x$ over all redshift pairs', fontsize=14)
@@ -480,7 +519,7 @@ def report(runs):
                                  for k, v in run['resid'].items()))
 
     lines.append('')
-    lines.append('Delta Sigma annulus width (fixed in arcmin) in cMpc/h, '
+    lines.append('Filter annulus width (fixed in arcmin) in cMpc/h, '
                  'per snapshot (high z to low)')
     for run in runs:
         dr = float(run['meta']['meta_dr_arcmin'])
@@ -510,20 +549,28 @@ def report(runs):
     lines.append('')
     lines.append('Best-fit beta (jackknife error); R_nl in cMpc/h per snapshot '
                  '(sigma_lin = 1, literature n_s/sigma8), high z to low')
+    edge_note = '  ** at the edge of the scan or of the common window **'
     for run in runs:
-        edge = '  ** at the edge of the scan **' if run['beta_on_edge'] else ''
+        # A fit pinned where the window runs out is set by the window, so
+        # its jackknife scatter is not an error on a measurement.
+        edge = edge_note if run['beta_on_edge'] else ''
+        err = 'n/a' if run['beta_on_edge'] else f"{run['beta_err']:.3f}"
         rnl = ' / '.join(f'{r:.3f}' for r in run['cand']['R_nl_z'])
         lines.append(f"  {run['label']:24s} beta_hat = {run['beta_hat']:+.3f} "
-                     f"+/- {run['beta_err']:.3f}   R_nl = {rnl}{edge}")
+                     f"+/- {err}   R_nl = {rnl}{edge}")
 
     # One beta for every run: minimize the summed squared rms.
     betas = runs[0]['betas']
     total = np.sum([run['scan'] ** 2 for run in runs], axis=0)
     if np.any(np.isfinite(total)):
         i = int(np.nanargmin(total))
+        neighbours = total[[max(i - 1, 0), min(i + 1, len(betas) - 1)]]
+        on_edge = (i in (0, len(betas) - 1)
+                   or not np.all(np.isfinite(neighbours)))
         lines.append('')
         lines.append(f'  common beta over all runs (grid, step '
-                     f"{betas[1] - betas[0]:.2f}): {betas[i]:+.2f}")
+                     f"{betas[1] - betas[0]:.2f}): {betas[i]:+.2f}"
+                     f"{edge_note if on_edge else ''}")
     return lines
 
 

@@ -1,0 +1,44 @@
+# The Sigma version of scale_rescaling_multiz.yaml (Delta Sigma): x_F(R) =
+# Y_bm/Y_mm at z ~ 0.26 (FLAMINGO 0.30), 0.5, 0.75 and 1.0 with the Sigma
+# filter, the mean over the annulus [R, R + 0.75'].  Every other setting is
+# copied from it.
+#
+# The overlap rms runs over all snapshot pairs, on the interval every curve
+# covers (user, 2026-10-05); the script docstring has the details.
+#
+# Post-processing only: reads data/cross_corr_C/calibration_*.npz (the z ~ 0.75
+# and z ~ 1.0 files come from calibration_z075.yaml and calibration_z10.yaml)
+# and computes nothing on the maps.  The R_nl candidate needs CAMB and the
+# snapshot headers on scratch.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/plot_scale_rescaling_multiz.py -p configs/cross_corr/scale_rescaling_multiz_Sigma.yaml
+
+filter: 'Sigma'
+
+# Apertures plotted and entering the overlap metric, arcmin.
+radius_range_arcmin: [1.0, 9.75]
+
+# beta scan for s = R_com (1+z)^beta.
+beta_min: -4.0
+beta_max: 4.0
+beta_step: 0.01
+n_overlap_grid: 50         # log-spaced points the curves are compared on
+min_overlap_factor: 2.0    # a beta counts only if the common overlap spans >= this factor in s
+
+# Runs, in plotting order, each with the snapshots to compare.
+runs:
+  - label: 'TNG300-1'
+    snapshots: [50, 57, 67, 80]    # z = 1.00, 0.76, 0.50, 0.26
+  - label: 'L1_m9_fiducial'
+    snapshots: [57, 62, 67, 71]    # z = 1.00, 0.75, 0.50, 0.30
+  - label: 'L1_m9_Jet_fgas-4sigma'
+    snapshots: [57, 62, 67, 71]
+  - label: 'L1_m9_fgas-8sigma'
+    snapshots: [57, 62, 67, 71]
+
+plot:
+  npz_path: '../data/cross_corr_C/'
+  fig_path: '../figures/'
+  fig_name: 'scale_rescaling_multiz'

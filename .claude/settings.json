@@ -34,5 +34,9 @@
       "Edit(//pscratch/sd/r/rhliu/**)",
       "Read(**/.env*)"
     ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }

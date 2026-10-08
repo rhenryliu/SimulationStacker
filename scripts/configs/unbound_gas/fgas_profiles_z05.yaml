@@ -87,6 +87,9 @@ plot:
   fig_name: 'fgas_profiles_z05'
   fig_type: 'pdf'
   plot_error_bars: true
+  # One legend under both panels (paper figure, 2026-10-07; was inside the
+  # SHAM panel, where it covered the curves).
+  legend_position: 'below'
 
 
 simulations:

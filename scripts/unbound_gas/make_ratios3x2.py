@@ -385,7 +385,8 @@ def configure_subplot(ax, kind: str, title: str,
                       R200m_arcmin: float | None,
                       forward_arcmin, inverse_arcmin,
                       xlim_2d: float,
-                      panel_label: str):
+                      panel_label: str,
+                      top_axis: bool | None = None):
     """Apply axis decorations to a single subplot panel.
 
     Parameters
@@ -414,6 +415,9 @@ def configure_subplot(ax, kind: str, title: str,
         ``rad_distance`` and padded to avoid clipping any profile.
     panel_label : str
         Subplot letter, e.g. ``'(a)'``.
+    top_axis : bool, optional
+        Draw the secondary (comoving kpc/h) top axis; defaults to ``is_top``.
+        The column title is drawn on the top row only either way.
     """
     is_3d = kind == '3d'
 
@@ -440,7 +444,9 @@ def configure_subplot(ax, kind: str, title: str,
     # --- X axis label (bottom row) and secondary axis + title (top row) ---
     if is_bottom:
         ax.set_xlabel('R [comoving kpc/h]' if is_3d else 'R [arcmin]', fontsize=18)
-    if is_top:
+    if top_axis is None:
+        top_axis = is_top
+    if top_axis:
         if is_3d:
             # 3D column is already in comoving kpc/h: no conversion needed.
             secax = ax.secondary_xaxis('top')
@@ -448,6 +454,7 @@ def configure_subplot(ax, kind: str, title: str,
             secax = ax.secondary_xaxis('top',
                                        functions=(forward_arcmin, inverse_arcmin))
         secax.set_xlabel('R [comoving kpc/h]', fontsize=18)
+    if is_top:
         ax.set_title(title, fontsize=18)
 
     # --- Subplot panel label in top-left corner ---
@@ -610,10 +617,14 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
     # ------------------------------------------------------------------
     panel_width  = plot_cfg.get('panel_width', 6.0)   # inches
     panel_height = plot_cfg.get('panel_height', 4.5)  # inches
+    # plot.share_x: false gives every row its own x axes (bottom labels, the
+    # top comoving axis converted at that row's redshift and cosmology, and its
+    # own 2D x-range), for rows at different redshifts.
+    share_x = plot_cfg.get('share_x', True)
     legend_width = 2.8  # inches
     fig_width = panel_width * nCols + legend_width
     fig, axes = plt.subplots(nRows, nCols, figsize=(fig_width, panel_height * nRows),
-                             sharex='col', sharey='row', squeeze=False)
+                             sharex='col' if share_x else False, sharey='row', squeeze=False)
 
     # R200m per row, taken from the first sim processed in each row.
     R200m_kpch_per_row = [None] * nRows
@@ -627,6 +638,9 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
     # shared x-limit for the 2D columns (per-sim cosmologies map 4000 ckpc/h to
     # slightly different arcmin, and sharex='col' ties each column's rows).
     max_arcmin_2d = 0.0
+    # The same per row, and each row's converters (its first sim), for share_x: false.
+    row_max_arcmin = {}
+    row_converters = {}
 
     t0 = time.time()
 
@@ -666,6 +680,8 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
             fwd_sim, inv_sim = _make_converters(cosmo, sim_z)
             if forward_arcmin is None:
                 forward_arcmin, inverse_arcmin = fwd_sim, inv_sim
+            if row_idx not in row_converters:
+                row_converters[row_idx] = (fwd_sim, inv_sim)
 
             R200m_kpch = None
             sim_key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback'))
@@ -680,6 +696,7 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
                         R200m_kpch = R200m_cached
                     else:
                         max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                        row_max_arcmin[row_idx] = max(row_max_arcmin.get(row_idx, 0.0), float(np.max(radii)))
                 elif npz_in is not None:
                     # Redraw: the profiles as saved by the earlier run.
                     needed = [f'{sim_key}/{kind}_{q}' for q in ('radii', 'ratio', 'err')]
@@ -695,6 +712,7 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
                         R200m_kpch = float(npz_in[f'{sim_key}/R200m_kpch'])
                     else:
                         max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                        row_max_arcmin[row_idx] = max(row_max_arcmin.get(row_idx, 0.0), float(np.max(radii)))
                 elif kind == '3d':
                     if verbose:
                         print(f"    Computing 3D profiles...")
@@ -721,6 +739,7 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
                         params_3d['num_radii_3d'], inv_sim)
                     # Track the largest plotted arcmin radius for the shared 2D x-limit.
                     max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                    row_max_arcmin[row_idx] = max(row_max_arcmin.get(row_idx, 0.0), float(np.max(radii)))
                 results_cache[(cache_key, kind)] = (radii, ratio, err,
                                                   R200m_kpch if kind == '3d' else None)
                 profiles_out[f'{sim_key}/{kind}_radii'] = radii
@@ -757,15 +776,16 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
                 kind=kind,
                 title=col_titles[kind],
                 is_top=row_idx == 0,
-                is_bottom=row_idx == nRows - 1,
+                is_bottom=row_idx == nRows - 1 or not share_x,
                 is_left=col_idx == 0,
                 pType=pType,
                 pType2=pType2,
                 R200m_kpch=R200m_kpch_per_row[row_idx],
                 R200m_arcmin=R200m_arcmin_per_row[row_idx],
-                forward_arcmin=forward_arcmin,
-                inverse_arcmin=inverse_arcmin,
-                xlim_2d=xlim_2d,
+                forward_arcmin=forward_arcmin if share_x else row_converters[row_idx][0],
+                inverse_arcmin=inverse_arcmin if share_x else row_converters[row_idx][1],
+                xlim_2d=xlim_2d if share_x else row_max_arcmin.get(row_idx, max_arcmin_2d) + 0.5,
+                top_axis=(row_idx == 0) or not share_x,
                 panel_label=f'({chr(ord("a") + panel_idx)})',
             )
             panel_idx += 1

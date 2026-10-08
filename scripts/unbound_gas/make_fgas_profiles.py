@@ -595,13 +595,34 @@ def compute_fgas_3d(stacker: SimulationStacker, params: dict,
 # Main
 # ===========================================================================
 
-def main(path2config: str, verbose: bool = True):
+def masscut_r200m(stacker: SimulationStacker, params: dict, cosmo: FlatLambdaCDM,
+                  dim: str) -> float:
+    """Mean R200m of the mass-cut haloes, as compute_fgas_2d/_3d return it.
+
+    In arcmin for ``dim='2D'`` (at ``params['redshift']``), in comoving kpc/h
+    for ``'3D'``. Used to redraw the guide line from a saved profiles file.
+    """
+    haloes = stacker.loadHalos()
+    halo_mask = select_halos(haloes['GroupMass'], 'massive',
+                             target_average_mass=params['halo_mass_avg'],
+                             upper_mass_bound=params['halo_mass_upper'])
+    r200m_kpch = np.mean(haloes['GroupRad'][halo_mask])
+    if dim == '3D':
+        return float(r200m_kpch)
+    return float(comoving_to_arcmin(r200m_kpch, params['redshift'], cosmo=cosmo))
+
+
+def main(path2config: str, from_npz: str | None = None, verbose: bool = True):
     """Generate the two-panel f_gas profile figure.
 
     Parameters
     ----------
     path2config : str
         Path to the YAML configuration file.
+    from_npz : str, optional
+        Profiles file of an earlier run (``<fig_name>_<dim>_profiles.npz``);
+        if given, the profiles are read from it instead of being stacked (the
+        R200m guide line from it too if saved there, else from the catalogue).
     verbose : bool
         If True, print progress messages to stdout.
     """
@@ -730,7 +751,12 @@ def main(path2config: str, verbose: bool = True):
     # ------------------------------------------------------------------
     # Create figure — 1×2 panels, 9 × 7 inches, shared y-axis
     # ------------------------------------------------------------------
-    fig, axes = plt.subplots(1, 2, figsize=(9, 7), sharey=True)
+    # plot.legend_position: 'inside' (default; the SHAM panel) or 'below'
+    # (one legend under both panels, three columns; the figure grows to keep
+    # the panels' size).
+    legend_below = plot_cfg.get('legend_position', 'inside') == 'below'
+    legend_height = 1.0 if legend_below else 0.0  # inches
+    fig, axes = plt.subplots(1, 2, figsize=(9, 7 + legend_height), sharey=True)
     ax_mass = axes[0]   # left  panel: mass-cut selection
     ax_sham = axes[1]   # right panel: SHAM selection
 
@@ -740,6 +766,16 @@ def main(path2config: str, verbose: bool = True):
 
     t0 = time.time()
     profiles_out = {}
+
+    # Profiles of an earlier run, if redrawing instead of stacking. The keys
+    # name only the simulation, so insist on the file this config writes.
+    npz_in = None
+    if from_npz:
+        expected = f'{figName}_{dim}_profiles.npz'
+        if Path(from_npz).name != expected:
+            raise ValueError(f"--from-npz {from_npz!r} is not this config's profiles file ({expected!r})")
+        npz_in = dict(np.load(from_npz))
+        print(f"Redrawing from {from_npz} (no stacking)")
 
     # ------------------------------------------------------------------
     # Loop over all simulations in the order they appear in the config.
@@ -762,7 +798,7 @@ def main(path2config: str, verbose: bool = True):
 
             # SHAM density of this simulation: the lensing fit if given.
             sim_params = dict(params)
-            if fitted_abundances is not None:
+            if npz_in is None and fitted_abundances is not None:
                 label = fit_label(sim_type_name, sim)
                 if label not in fitted_abundances:
                     raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
@@ -771,10 +807,29 @@ def main(path2config: str, verbose: bool = True):
                 if verbose:
                     print(f"  SHAM density fitted on lensing: n = {fitted_abundances[label]:.4e} (cMpc/h)^-3")
 
-            if verbose:
+            key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
+            if npz_in is not None:
+                # Redraw: the saved profiles; the guide line only for the
+                # first IllustrisTNG run, which is the one drawn.
+                radii = npz_in['radii']
+                fgas_mass, err_mass = npz_in[f'{key}/fgas_masscut'], npz_in[f'{key}/err_masscut']
+                fgas_sham, err_sham = npz_in[f'{key}/fgas_sham'], npz_in[f'{key}/err_sham']
+                if f'{key}/R200m' in npz_in:
+                    R200m_val = float(npz_in[f'{key}/R200m'])
+                elif sim_type_name == 'IllustrisTNG' and R200m_ref is None:
+                    R200m_val = masscut_r200m(stacker, sim_params, cosmo, dim)
+                else:
+                    R200m_val = None
+                sim_params['halo_abundance_target'] = float(npz_in[f'{key}/abundance'])
+                if verbose:
+                    print(f"  SHAM density (from the profiles file): n = "
+                          f"{sim_params['halo_abundance_target']:.4e} (cMpc/h)^-3")
+            elif verbose:
                 _print_selection_stats(stacker, sim_params)
 
-            if dim == '2D':
+            if npz_in is not None:
+                pass  # profiles read above
+            elif dim == '2D':
                 if verbose:
                     pT  = params['particle_type']
                     pT2 = params['particle_type_2']
@@ -791,7 +846,7 @@ def main(path2config: str, verbose: bool = True):
                 radii, fgas_mass, err_mass, fgas_sham, err_sham, R200m_val = \
                     compute_fgas_3d(stacker, sim_params, OmegaBaryon)
 
-            if verbose:
+            if verbose and R200m_val is not None:
                 units = 'arcmin' if dim == '2D' else 'kpc/h'
                 print(f"  R200m(mass-cut) = {R200m_val:.3f} {units}")
 
@@ -801,8 +856,9 @@ def main(path2config: str, verbose: bool = True):
                 R200m_label = sim_label
 
             # Keep the plotted values for the npz written next to the figure.
-            key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
             profiles_out['radii'] = radii
+            if R200m_val is not None:
+                profiles_out[f'{key}/R200m'] = R200m_val
             profiles_out[f'{key}/fgas_masscut'] = fgas_mass
             profiles_out[f'{key}/err_masscut'] = err_mass
             profiles_out[f'{key}/fgas_sham'] = fgas_sham
@@ -863,13 +919,19 @@ def main(path2config: str, verbose: bool = True):
         fontsize=20,
     )
 
-    # Legend on right panel only.
-    ax_sham.legend(loc='best', fontsize=13)
+    # Legend on right panel only, or one legend under both panels.
+    if legend_below:
+        handles, labels = ax_sham.get_legend_handles_labels()
+        fig.tight_layout(rect=(0, legend_height / (7 + legend_height), 1, 1))
+        fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=13,
+                   frameon=False, bbox_to_anchor=(0.5, 0.0))
+    else:
+        ax_sham.legend(loc='best', fontsize=13)
+        fig.tight_layout()
 
     # ------------------------------------------------------------------
     # Save figure
     # ------------------------------------------------------------------
-    fig.tight_layout()
     out_path = figPath / f'{figName}_{dim}.{figType}'
     fig.savefig(out_path, dpi=300)  # type: ignore
     plt.close(fig)
@@ -892,6 +954,12 @@ if __name__ == "__main__":
         type=str,
         default='./configs/unbound_gas/fgas_profiles_z05.yaml',
         help='Path to the YAML configuration file.',
+    )
+    parser.add_argument(
+        '--from-npz',
+        type=str,
+        default=None,
+        help='Redraw from the profiles .npz of an earlier run instead of stacking.',
     )
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")

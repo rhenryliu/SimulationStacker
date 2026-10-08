@@ -40,6 +40,9 @@ plot:
   panel_height: 4.0
   fig_type: 'pdf'
   plot_error_bars: true
+  # Each row its own x axes (the FLAMINGO row is at z = 0.30, the top row at
+  # z = 0.26; 2026-10-08 user request).
+  share_x: false
 
 simulations:
   # Two rows (2026-10-07): TNG300-1, Illustris-1 and SIMBA-100 share the top

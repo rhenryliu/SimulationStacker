@@ -57,8 +57,9 @@ matplotlib.rcParams.update({
     "legend.fontsize": 12,
 })
 
-# Colours as in simulated_kSZ_masked.py: fixed FLAMINGO colours, and the TNG /
-# SIMBA suites sampled from a colour map over the sims of their row.
+# Colours as in simulated_kSZ_masked.py: fixed FLAMINGO colours, SIMBA sampled
+# from a colour map over the sims of its row (except SIMBA-100), and the
+# IllustrisTNG runs fixed to their three-run-row colours.
 _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)
     'fgas-8sigma':     '#FF7F0E',  # orange
@@ -68,6 +69,9 @@ _FLAMINGO_COLOURS = {
 }
 _SUITE_CMAPS = {'SIMBA': 'hsv', 'IllustrisTNG': 'twilight', 'FLAMINGO': 'plasma'}
 _SIMBA100_COLOUR = matplotlib.colormaps['hsv'](0.85)  # type: ignore
+# IllustrisTNG runs: the colours of the three-run row, whatever the row holds.
+_TNG_COLOURS = dict(zip(['TNG100-1', 'TNG300-1', 'Illustris-1'],
+                        matplotlib.colormaps['twilight'](np.linspace(0.2, 0.85, 3))))  # type: ignore
 _SIMBA_NAMES = {'m100n1024/s50': 'SIMBA-100', 'm50n512/s50noagn': 'SIMBA-50 no-AGN',
                 'm50n512/s50nox': 'SIMBA-50 no-X-ray', 'm50n512/s50nofb': 'SIMBA-50 no-feedback',
                 'm50n512/s50nojet': 'SIMBA-50 no-jet', 'm50n512/s50': 'SIMBA-50'}
@@ -87,8 +91,9 @@ def row_colours(row: dict) -> list:
     """Colours of the simulations of one row (which may mix suites).
 
     Each run takes its suite's colour map, sampled over that suite's runs in
-    the row; FLAMINGO runs and SIMBA-100 have fixed colours instead (SIMBA-100
-    the magenta it has as the last of the four SIMBA runs).
+    the row; FLAMINGO runs, SIMBA-100 and the IllustrisTNG runs have fixed
+    colours instead (SIMBA-100 the magenta it has as the last of the four
+    SIMBA runs, the IllustrisTNG runs those of the three-run row).
     """
     keys = row['sims']
     suites = [k.split('/')[0] for k in keys]
@@ -101,6 +106,8 @@ def row_colours(row: dict) -> list:
             colour = _FLAMINGO_COLOURS.get(key.split('/')[-1], colour)
         elif key == 'SIMBA/m100n1024/s50':
             colour = _SIMBA100_COLOUR
+        elif suite == 'IllustrisTNG':
+            colour = _TNG_COLOURS.get(key.split('/')[-1], colour)
         colours.append(colour)
     return colours
 

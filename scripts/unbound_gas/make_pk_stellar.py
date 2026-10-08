@@ -95,9 +95,12 @@ TAG_STYLE = ['-', '--', ':']
 # over the group's simulations (SIMBA: m100n1024; IllustrisTNG: TNG300-1,
 # Illustris-1), and the FLAMINGO variants have fixed colours. Copied rather
 # than imported: importing that script would override this script's rcParams.
+# Since 2026-10-07 the IllustrisTNG list includes TNG100-1, so that TNG300-1
+# has the colour it has in the unbound gas paper's other figures (unlike the
+# lensing figure); Illustris-1 is unchanged.
 _SUITE_COLOURS = {
     'SIMBA': ('plasma', ['m100n1024']),
-    'IllustrisTNG': ('twilight', ['TNG300-1', 'Illustris-1']),
+    'IllustrisTNG': ('twilight', ['TNG100-1', 'TNG300-1', 'Illustris-1']),
 }
 _FLAMINGO_COLOURS = {
     'L1_m9':           '#B30000',  # dark red (fiducial)

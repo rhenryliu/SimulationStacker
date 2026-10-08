@@ -87,6 +87,12 @@ _FLAMINGO_COLOURS = {
 # (hsv at 0.85), also when it is drawn alone or next to other suites.
 _SIMBA100_COLOUR = matplotlib.colormaps['hsv'](0.85)  # type: ignore
 
+# Likewise the IllustrisTNG runs keep the colours they have in the three-run
+# row (make_fgas_profiles.py's _TNG_REFERENCE_ORDER) in rows with fewer runs.
+_TNG_REFERENCE_ORDER = ['TNG100-1', 'TNG300-1', 'Illustris-1']
+_TNG_COLOURS = dict(zip(_TNG_REFERENCE_ORDER,
+                        matplotlib.colormaps['twilight'](np.linspace(0.2, 0.85, 3))))  # type: ignore
+
 # Column kinds (see module docstring) and their titles; the 2D titles name
 # the filter set in the config.
 _DEFAULT_COLUMNS = ['3d', 'col1', 'col2']
@@ -572,6 +578,8 @@ def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = Tru
             if name == 'SIMBA':
                 colours = [_SIMBA100_COLOUR if (s['name'], s.get('feedback')) == ('m100n1024', 's50')
                            else c for s, c in zip(sims, colours)]
+            elif name == 'IllustrisTNG':
+                colours = [_TNG_COLOURS.get(s['name'], c) for s, c in zip(sims, colours)]
         else:
             raise ValueError(f"Unknown simulation type: {name!r}")
         # An optional row_label lets one suite fill two rows (e.g. the FLAMINGO

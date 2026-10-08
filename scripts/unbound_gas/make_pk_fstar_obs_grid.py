@@ -216,7 +216,8 @@ def layout_C(have, option, kmin, kmax, lens_data, lens_xmax, path):
 
 def layout_D(have, option, kmin, kmax, lens_data, lens_xmax, path, edges='none'):
     sym, own, fmt = col.AGG_SYMBOL[option], _own(option), _fmt(option)
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 5.6), sharey='row',
+    # 7.0 x 4.5 in, the paper figure (2026-10-08; was 5.6 in tall).
+    fig, axes = plt.subplots(2, 2, figsize=(7.0, 4.5), sharey='row',
                              gridspec_kw=dict(hspace=0.32, wspace=0.08))
     (aS, bS), (af, bf) = axes
     for r in have:

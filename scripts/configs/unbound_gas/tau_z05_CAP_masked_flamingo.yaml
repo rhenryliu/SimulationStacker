@@ -70,8 +70,11 @@ simulations:
         snapshot: 103
       # - name: 'Illustris-2'
       #   snapshot: 103
+  # One FLAMINGO row (2026-10-07): the AGN variants and the stellar-mass
+  # variants (iteration 3) together; until then they had a row each, both
+  # with L1_m9 as the reference.
   - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO (AGN)'
+    row_label: 'FLAMINGO'
     sims:
       # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
       # Snapshot 67 is z=0.5, matching stack.redshift above.
@@ -84,14 +87,6 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
-  # Iteration 3: the stellar-mass variants, with L1_m9 as the reference
-  # (stacked once; simulated_kSZ_masked.py reuses its first-row stacks).
-  - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO ($M_\ast$)'
-    sims:
-      - name: 'L1_m9'
-        snapshot: 67
-        feedback: 'L1_m9'
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Mstar-1sigma'

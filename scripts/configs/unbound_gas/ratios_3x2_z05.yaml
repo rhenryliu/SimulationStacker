@@ -140,8 +140,11 @@ simulations:
   # column (1000 would give 681 ckpc/h, coarser than R200m); still coarser
   # than TNG300-1's 205 ckpc/h at 1000.
   # ----------------------------------------------------------------
+  # One FLAMINGO row (2026-10-07): the AGN variants and the stellar-mass
+  # variants (iteration 3) together; until then they had a row each, both
+  # with L1_m9 as the reference.
   - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO (AGN)'
+    row_label: 'FLAMINGO'
     sims:
       - name: 'L1_m9'
         snapshot: 67
@@ -154,15 +157,6 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
-        n_pixels: 2000
-  # Second FLAMINGO row (iteration 3): the stellar-mass variants, with the
-  # fiducial run repeated as the reference (stacked once, see make_ratios3x2).
-  - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO ($M_\ast$)'
-    sims:
-      - name: 'L1_m9'
-        snapshot: 67
-        feedback: 'L1_m9'
         n_pixels: 2000
       - name: 'L1_m9'
         snapshot: 67

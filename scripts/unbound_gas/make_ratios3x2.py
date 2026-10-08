@@ -6,7 +6,9 @@ cosmic baryon fraction (OmegaBaryon / OmegaMatter).
 Layout
 ------
 Rows:    one per simulation suite, in config order (IllustrisTNG, SIMBA,
-         FLAMINGO); the default config is TNG on top, SIMBA below.
+         FLAMINGO); the default config is TNG on top, SIMBA below. Suites
+         with the same optional ``row`` key share a row (e.g. TNG and SIMBA
+         together); its legend title is the ``row_label`` of the first.
 Columns: chosen by ``stack.columns`` (default ``['3d', 'col1', 'col2']``):
          '3d'   = 3D spherical profiles        (radius in comoving kpc/h)
          'col1' = 2D projected, filter_type_col1 (cumulative; arcmin)
@@ -20,6 +22,10 @@ approach the resolution the other suites get at 1000.
 Usage
 -----
     python unbound_gas/make_ratios3x2.py -p configs/unbound_gas/ratios_3x2_z05.yaml
+
+``--from-npz <profiles.npz>`` redraws the figure from the profiles file of an
+earlier run (written next to each figure) instead of stacking, e.g. after a
+layout change; every run in the config must be in that file.
 """
 
 import sys
@@ -76,6 +82,10 @@ _FLAMINGO_COLOURS = {
     'Mstar-1sigma':             '#17BECF',  # cyan
     'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
+
+# SIMBA-100 keeps the magenta it has as the last of the four SIMBA runs
+# (hsv at 0.85), also when it is drawn alone or next to other suites.
+_SIMBA100_COLOUR = matplotlib.colormaps['hsv'](0.85)  # type: ignore
 
 # Column kinds (see module docstring) and their titles; the 2D titles name
 # the filter set in the config.
@@ -444,7 +454,7 @@ def configure_subplot(ax, kind: str, title: str,
 # Main
 # ===========================================================================
 
-def main(path2config: str, ptype: str, verbose: bool = True):
+def main(path2config: str, ptype: str, from_npz: str = None, verbose: bool = True):
     """Generate the particle-fraction ratio figure grid.
 
     Parameters
@@ -453,6 +463,9 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         Path to the YAML configuration file.
     ptype : str
         Particle type to plot (overrides config).
+    from_npz : str, optional
+        Profiles file of an earlier run (``<fig_name>_<ptype>_profiles.npz``);
+        if given, the profiles are read from it instead of being stacked.
     verbose : bool
         If True, print progress messages to stdout.
     """
@@ -541,10 +554,12 @@ def main(path2config: str, ptype: str, verbose: bool = True):
         col_titles[k] = f'2D {_FILTER_TITLES.get(ft, ft)}, {beam_str}'
 
     # ------------------------------------------------------------------
-    # One row per simulation suite, in config order.
+    # One row per simulation suite, in config order; suites with the same
+    # optional `row` key share a row.
     # ------------------------------------------------------------------
     suites = []
-    for suite in config['simulations']:
+    suite_row_ids = []
+    for k_suite, suite in enumerate(config['simulations']):
         name = suite['sim_type']
         sims = suite['sims']
         if name == 'FLAMINGO':
@@ -553,13 +568,32 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                        for k, s in enumerate(sims)]
         elif name in _COLOURMAPS:
             cmap = matplotlib.colormaps[_COLOURMAPS[name]]  # type: ignore
-            colours = cmap(np.linspace(0.2, 0.85, len(sims)))
+            colours = list(cmap(np.linspace(0.2, 0.85, len(sims))))
+            if name == 'SIMBA':
+                colours = [_SIMBA100_COLOUR if (s['name'], s.get('feedback')) == ('m100n1024', 's50')
+                           else c for s, c in zip(sims, colours)]
         else:
             raise ValueError(f"Unknown simulation type: {name!r}")
         # An optional row_label lets one suite fill two rows (e.g. the FLAMINGO
         # AGN and stellar-mass variants, each with L1_m9 as the reference).
         suites.append((name, sims, colours, suite.get('row_label', name)))
-    nRows, nCols = len(suites), len(columns)
+        suite_row_ids.append(suite.get('row', f'_suite{k_suite}'))
+    row_order = list(dict.fromkeys(suite_row_ids))
+    suite_rows = [row_order.index(r) for r in suite_row_ids]
+    # Legend title of each row: the row_label of its first suite.
+    row_labels = [next(suites[k][3] for k in range(len(suites)) if suite_rows[k] == r)
+                  for r in range(len(row_order))]
+    nRows, nCols = len(row_order), len(columns)
+
+    # Profiles of an earlier run, if redrawing instead of stacking. The keys
+    # name only the simulation, so insist on the file this config writes.
+    npz_in = None
+    if from_npz:
+        expected = f'{plot_cfg.get("fig_name", "ratios_3x2")}_{pType}_profiles.npz'
+        if Path(from_npz).name != expected:
+            raise ValueError(f"--from-npz {from_npz!r} is not this config's profiles file ({expected!r})")
+        npz_in = dict(np.load(from_npz))
+        print(f"Redrawing from {from_npz} (no stacking)")
 
     # ------------------------------------------------------------------
     # Create figure: plot.panel_width x plot.panel_height per panel (default
@@ -573,7 +607,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     fig, axes = plt.subplots(nRows, nCols, figsize=(fig_width, panel_height * nRows),
                              sharex='col', sharey='row', squeeze=False)
 
-    # R200m per row, taken from the first sim processed in each suite.
+    # R200m per row, taken from the first sim processed in each row.
     R200m_kpch_per_row = [None] * nRows
     R200m_arcmin_per_row = [None] * nRows
 
@@ -593,7 +627,8 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # Plotted profiles, written next to the figure for quoting in the text.
     profiles_out = {}
 
-    for row_idx, (sim_type_name, sims, colours, _) in enumerate(suites):
+    for suite_idx, (sim_type_name, sims, colours, _) in enumerate(suites):
+        row_idx = suite_rows[suite_idx]
         if verbose:
             print(f"\n{'='*60}")
             print(f"Suite: {sim_type_name}  (row {row_idx})")
@@ -635,6 +670,21 @@ def main(path2config: str, ptype: str, verbose: bool = True):
                     radii, ratio, err, R200m_cached = results_cache[(cache_key, kind)]
                     if kind == '3d':
                         R200m_kpch = R200m_cached
+                    else:
+                        max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
+                elif npz_in is not None:
+                    # Redraw: the profiles as saved by the earlier run.
+                    needed = [f'{sim_key}/{kind}_{q}' for q in ('radii', 'ratio', 'err')]
+                    if kind == '3d':
+                        needed.append(f'{sim_key}/R200m_kpch')
+                    missing = [k for k in needed if k not in npz_in]
+                    if missing:
+                        raise KeyError(f"not in {from_npz}: {missing}")
+                    radii = npz_in[f'{sim_key}/{kind}_radii']
+                    ratio = npz_in[f'{sim_key}/{kind}_ratio']
+                    err = npz_in[f'{sim_key}/{kind}_err']
+                    if kind == '3d':
+                        R200m_kpch = float(npz_in[f'{sim_key}/R200m_kpch'])
                     else:
                         max_arcmin_2d = max(max_arcmin_2d, float(np.max(radii)))
                 elif kind == '3d':
@@ -717,7 +767,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # -----------------------------------------------------------------------
     # Row labels placed as text on the leftmost axes so that shared-y axes do
     # not duplicate the y-label on every panel
-    for row_idx, (_, _, _, row_label) in enumerate(suites):
+    for row_idx, row_label in enumerate(row_labels):
         axes[row_idx, 0].annotate(row_label, xy=(-0.25, 0.5), xycoords='axes fraction',
                                   ha='right', va='center', rotation=90, fontsize=14,
                                   fontweight='bold')
@@ -725,7 +775,7 @@ def main(path2config: str, ptype: str, verbose: bool = True):
     # Lay out the panels first, then put one legend per row (handles from its
     # rightmost panel) in the strip to the right of that row.
     fig.tight_layout(rect=[0, 0, 1 - legend_width / fig_width, 1]) # type: ignore
-    for row_idx, (_, _, _, row_label) in enumerate(suites):
+    for row_idx, row_label in enumerate(row_labels):
         handles, labels = axes[row_idx, -1].get_legend_handles_labels()
         bbox = axes[row_idx, -1].get_position()
         fig.legend(handles, labels,
@@ -766,6 +816,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help='Override particle type from config (e.g. "ionized_gas").',
+    )
+    parser.add_argument(
+        '--from-npz',
+        type=str,
+        default=None,
+        help='Redraw from the profiles .npz of an earlier run instead of stacking.',
     )
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")

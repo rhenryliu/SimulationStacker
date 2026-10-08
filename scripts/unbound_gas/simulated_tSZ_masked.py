@@ -72,11 +72,16 @@ _FLAMINGO_COLOURS = {
 # plt.rcParams['text.usetex'] = True
 # plt.rcParams['mathtext.fontset'] = 'cm'
 
-def main(path2config, verbose=True):
+def main(path2config, from_npz=None, verbose=True):
     """Main function to process the simulation maps.
 
     Args:
         path2config (str): Path to the configuration file.
+        from_npz (str, optional): Profiles file of an earlier run
+            (``..._profiles.npz``); if given, the profiles are read from it
+            instead of being stacked. The guide-line radius of each row is read
+            from it too if saved there (since 2026-10-07), otherwise
+            recomputed from the halo catalogues. Defaults to None.
         verbose (bool, optional): If True, prints detailed information. Defaults to True.
 
     Raises:
@@ -176,6 +181,15 @@ def main(path2config, verbose=True):
     # simulation, in arcmin (that simulation's own cosmology).
     row_rad_arcmin = {}
     stack_cache = {}  # FLAMINGO stacks, keyed by (feedback, snapshot, column)
+    # Profiles of an earlier run, if redrawing instead of stacking. The keys
+    # name only the simulation, so insist on the file this config writes.
+    npz_in = None
+    if from_npz:
+        expected = f'{pType}_{figName}_z{redshift}_profiles.npz'
+        if Path(from_npz).name != expected:
+            raise ValueError(f"--from-npz {from_npz!r} is not this config's profiles file ({expected!r})")
+        npz_in = dict(np.load(from_npz))
+        print(f"Redrawing from {from_npz} (no stacking)")
     
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -241,12 +255,12 @@ def main(path2config, verbose=True):
                     stacker = SimulationStacker(sim_name, snapshot, z=redshift, 
                                                 simType=sim_type_name)
 
-                    if maskHaloes:
+                    if maskHaloes and npz_in is None:
                         # The cached masked maps are built around the stacked SHAM hosts;
                         # never let stackMap rebuild one around another sample.
                         require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                            sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                    radii0, profiles0 = (None, None) if npz_in is not None else stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii,
@@ -277,12 +291,12 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name, 
                                                 feedback=feedback)
                     
-                    if maskHaloes:
+                    if maskHaloes and npz_in is None:
                         # The cached masked maps are built around the stacked SHAM hosts;
                         # never let stackMap rebuild one around another sample.
                         require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                            sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
+                    radii0, profiles0 = (None, None) if npz_in is not None else stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                          numRadii=nRadii, pixelSize=pixelSize,
                                                          save=saveField, load=loadField, radDistance=radDistance,
                                                          projection=projection, mask=maskHaloes, maskRad=maskRadii,
@@ -302,20 +316,20 @@ def main(path2config, verbose=True):
                                                 simType=sim_type_name,
                                                 feedback=feedback)
 
-                    if maskHaloes:
+                    if maskHaloes and npz_in is None:
                         # The cached masked maps are built around the stacked SHAM hosts;
                         # never let stackMap rebuild one around another sample.
                         require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                            sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None)
                     # A FLAMINGO run listed in two rows is stacked once per column.
                     cache_key = (feedback, snapshot, col_idx)
-                    if cache_key not in stack_cache:
+                    if npz_in is None and cache_key not in stack_cache:
                         stack_cache[cache_key] = stacker.stackMap(pType, filterType=filterType, minRadius=minRadius, maxRadius=maxRadius, # type: ignore
                                                              numRadii=nRadii, pixelSize=pixelSize,
                                                              save=saveField, load=loadField, radDistance=radDistance,
                                                              projection=projection, mask=maskHaloes, maskRad=maskRadii,
                                                              **sim_selection)
-                    radii0, profiles0 = stack_cache[cache_key]
+                    radii0, profiles0 = stack_cache.get(cache_key, (None, None))
 
                     OmegaBaryon = stacker.header['OmegaBaryon']
                     # '-' instead of '_' so the name is plain text
@@ -328,28 +342,45 @@ def main(path2config, verbose=True):
                 else:
                     raise ValueError(f"Unknown simulation type: {sim_type_name}")
 
+                out_key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
                 if row_idx not in row_rad_arcmin:
-                    row_rad_arcmin[row_idx] = host_radius_arcmin(stacker, redshift, **sim_selection)
+                    # Saved by the earlier run if redrawing (and it has it).
+                    rad_key = f'{out_key}/rad_mean_arcmin'
+                    if npz_in is not None and rad_key in npz_in:
+                        row_rad_arcmin[row_idx] = float(npz_in[rad_key])
+                    else:
+                        row_rad_arcmin[row_idx] = host_radius_arcmin(stacker, redshift, **sim_selection)
+                    profiles_out[rad_key] = row_rad_arcmin[row_idx]
 
                 # Plotting
                 T_CMB = 2.7255
                 v_c = 300000 / 299792458 # velocity over speed of light.
-                
-                profiles_plot = np.mean(profiles0, axis=1)
+
                 col_key = f"mask{maskRadii:.0f}" if maskHaloes else 'unmasked'
-                out_key = '/'.join(str(k) for k in (sim_type_name, sim['name'], sim.get('feedback')) if k is not None)
-                profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
-                profiles_out[f'{out_key}/{col_key}_sem'] = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                profiles_out[f'{out_key}/n_objects'] = profiles0.shape[1]
-                _n = sim_selection['halo_abundance_target']
-                profiles_out[f'{out_key}/abundance'] = np.nan if _n is None else _n
-                profiles_out['radii_arcmin'] = radii0 * radDistance
-                ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
-                if plotErrorBars:
+                if npz_in is not None:
+                    # Redraw: mean, standard error and size of the saved stack.
+                    radii_plot = npz_in['radii_arcmin']
+                    profiles_plot = npz_in[f'{out_key}/{col_key}_mean']
+                    profiles_err = npz_in[f'{out_key}/{col_key}_sem']
+                    n_objects = int(npz_in[f'{out_key}/n_objects'])
+                    abundance = float(npz_in[f'{out_key}/abundance'])
+                else:
+                    radii_plot = radii0 * radDistance
+                    profiles_plot = np.mean(profiles0, axis=1)
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                    n_objects = profiles0.shape[1]
+                    _n = sim_selection['halo_abundance_target']
+                    abundance = np.nan if _n is None else _n
+                profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
+                profiles_out[f'{out_key}/{col_key}_sem'] = profiles_err
+                profiles_out[f'{out_key}/n_objects'] = n_objects
+                profiles_out[f'{out_key}/abundance'] = abundance
+                profiles_out['radii_arcmin'] = radii_plot
+                ax.plot(radii_plot, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
+                if plotErrorBars:
                     upper = profiles_plot + profiles_err
                     lower = profiles_plot - profiles_err
-                    ax.fill_between(radii0 * radDistance, 
+                    ax.fill_between(radii_plot,
                                     lower, 
                                     upper, 
                                     color=colours[j], alpha=0.2)
@@ -448,6 +479,8 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
     parser.add_argument('-p', '--path2config', type=str, default='./configs/unbound_gas/tSZ_z05_CAP_masked.yaml', help='Path to the configuration file.')
+    parser.add_argument('--from-npz', type=str, default=None,
+                        help='Redraw from the profiles .npz of an earlier run instead of stacking.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

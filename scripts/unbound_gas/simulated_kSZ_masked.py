@@ -73,11 +73,43 @@ _FLAMINGO_COLOURS = {
 # plt.rcParams['text.usetex'] = True
 # plt.rcParams['mathtext.fontset'] = 'cm'
 
-def main(path2config, verbose=True):
+def saved_rad_mean(npz_in, npz_path, out_key, table_label):
+    """Mean host R200m (ckpc/h) of one simulation's sample in an earlier run.
+
+    Read from the profiles file (``<key>/rad_mean_ckpch``, written since
+    2026-10-07) or, for older runs, from the ``<R200m>`` column of the
+    halo-masses table written next to it (rounded to 0.1 ckpc/h).
+
+    Args:
+        npz_in (dict): Contents of the earlier run's profiles file.
+        npz_path (str): Its path, ``..._profiles.npz``.
+        out_key (str): The simulation's key in the profiles file.
+        table_label (str): The simulation's name in the halo-masses table.
+
+    Returns:
+        float: Mean R200m of the stacked hosts in comoving kpc/h.
+    """
+    if f'{out_key}/rad_mean_ckpch' in npz_in:
+        return float(npz_in[f'{out_key}/rad_mean_ckpch'])
+    stats_path = Path(str(npz_path).replace('_profiles.npz', '_halo_masses.txt'))
+    for line in stats_path.read_text().splitlines():
+        # Table rows: the label (padded to 32 characters, longer ones overflow),
+        # whitespace, then the numbers; <R200m> is the second-to-last field.
+        rest = line[len(table_label):]
+        if line.startswith(table_label) and rest[:1].isspace() and len(rest.split()) > 2:
+            return float(rest.split()[-2])
+    raise KeyError(f"no <R200m> for {table_label!r} in {stats_path}")
+
+
+def main(path2config, from_npz=None, verbose=True):
     """Main function to process the simulation maps.
 
     Args:
         path2config (str): Path to the configuration file.
+        from_npz (str, optional): Profiles file of an earlier run
+            (``..._profiles.npz``); if given, the figure is redrawn from it
+            (and the ``<R200m>`` guide lines from its halo-masses table)
+            instead of selecting and stacking. Defaults to None.
         verbose (bool, optional): If True, prints detailed information. Defaults to True.
 
     Raises:
@@ -173,6 +205,15 @@ def main(path2config, verbose=True):
     cosmo = None
     # A simulation listed in two rows is stacked once per column.
     stack_cache = {}
+    # Profiles of an earlier run, if redrawing instead of stacking. The keys
+    # name only the simulation, so insist on the file this config writes.
+    npz_in = None
+    if from_npz:
+        expected = f'{figName}_{pType}_z{redshift}_profiles.npz'
+        if Path(from_npz).name != expected:
+            raise ValueError(f"--from-npz {from_npz!r} is not this config's profiles file ({expected!r})")
+        npz_in = dict(np.load(from_npz))
+        print(f"Redrawing from {from_npz} (no selection or stacking)")
 
     # Loop over mask configurations (columns)
     for col_idx, mask_config in enumerate(mask_configs):
@@ -288,7 +329,19 @@ def main(path2config, verbose=True):
                 # Select the sample (and report its halo masses) once per
                 # simulation, then reuse it for every masking column.
                 sim_key = (sim_type_name, sim['name'], sim.get('feedback'))
-                if sim_key not in halo_masks:
+                out_key = '/'.join(str(k) for k in sim_key if k is not None)
+                if sim_key not in halo_masks and npz_in is not None:
+                    # Redraw: the earlier run's sample, through its mean R200m.
+                    halo_masks[sim_key] = None
+                    sim_stats = None
+                    sim_cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'],
+                                              Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K)
+                    rad_mean = saved_rad_mean(npz_in, from_npz, out_key, sim_name)
+                    profiles_out[f'{out_key}/rad_mean_ckpch'] = rad_mean
+                    sim_rad_arcmin[sim_key] = comoving_to_arcmin(rad_mean, redshift, sim_cosmo)
+                    if cosmo is None:
+                        cosmo = sim_cosmo
+                elif sim_key not in halo_masks:
                     if verbose and fitted_abundances is not None:
                         print(f"SHAM density fitted on lensing: n = {sim_abundance:.4e} (cMpc/h)^-3")
                     densities[sim_name] = sim_abundance if use_subhalos else None
@@ -298,6 +351,7 @@ def main(path2config, verbose=True):
                         halo_mass_avg=halo_mass_avg,
                         halo_mass_upper=halo_mass_upper)
                     stats_rows.append(sim_stats)
+                    profiles_out[f'{out_key}/rad_mean_ckpch'] = sim_stats['rad_mean']
                     sim_cosmo = FlatLambdaCDM(H0=100 * stacker.header['HubbleParam'],
                                               Om0=stacker.header['Omega0'], Tcmb0=2.7255 * u.K)
                     sim_rad_arcmin[sim_key] = comoving_to_arcmin(sim_stats['rad_mean'],
@@ -306,46 +360,56 @@ def main(path2config, verbose=True):
                         cosmo = sim_cosmo
                 if row_idx not in row_rad_arcmin:
                     row_rad_arcmin[row_idx] = sim_rad_arcmin[sim_key]
-                    if verbose:
+                    if verbose and npz_in is None:
                         print(format_stats(sim_stats), flush=True)
 
-                if maskHaloes:
+                if maskHaloes and npz_in is None:
                     # The cached masked maps are built around the stacked SHAM
                     # hosts; never let stackMap rebuild one around another sample.
                     require_masked_map(stacker, pType, projection, maskRadii, redshift, pixelSize,
                                        sim_abundance if use_subhalos else None)
-                if (sim_key, col_idx) in stack_cache:
-                    radii0, profiles0 = stack_cache[(sim_key, col_idx)]
+                col_key = f"mask{maskRadii:.0f}" if maskHaloes else 'unmasked'
+                if npz_in is not None:
+                    # Redraw: mean, standard error and size of the saved stack.
+                    radii_plot = npz_in['radii_arcmin']
+                    profiles_plot = npz_in[f'{out_key}/{col_key}_mean']
+                    profiles_err = npz_in[f'{out_key}/{col_key}_sem']
+                    n_objects = int(npz_in[f'{out_key}/n_objects'])
+                    abundance = float(npz_in[f'{out_key}/abundance'])
                 else:
-                    radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
-                                            save=saveField, load=loadField, radDistance=radDistance,
-                                            use_subhalos=use_subhalos,
-                                            halo_abundance_target=sim_abundance,
-                                            halo_mass_avg=halo_mass_avg,
-                                            halo_mass_upper=halo_mass_upper,
-                                            halo_mask=halo_masks[sim_key],
-                                            projection=projection, mask=maskHaloes, maskRad=maskRadii)
-                    stack_cache[(sim_key, col_idx)] = (radii0, profiles0)
+                    if (sim_key, col_idx) in stack_cache:
+                        radii0, profiles0 = stack_cache[(sim_key, col_idx)]
+                    else:
+                        radii0, profiles0 = stacker.stackMap(pType, filterType=filterType, minRadius=1.0, maxRadius=6.0, pixelSize=pixelSize, # type: ignore
+                                                save=saveField, load=loadField, radDistance=radDistance,
+                                                use_subhalos=use_subhalos,
+                                                halo_abundance_target=sim_abundance,
+                                                halo_mass_avg=halo_mass_avg,
+                                                halo_mass_upper=halo_mass_upper,
+                                                halo_mask=halo_masks[sim_key],
+                                                projection=projection, mask=maskHaloes, maskRad=maskRadii)
+                        stack_cache[(sim_key, col_idx)] = (radii0, profiles0)
+                    radii_plot = radii0 * radDistance
+                    profiles_plot = np.mean(profiles0, axis=1)
+                    profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
+                    n_objects = profiles0.shape[1]
+                    abundance = np.nan if sim_abundance is None else sim_abundance
 
                 # Plotting
                 T_CMB = 2.7255
                 v_c = 300000 / 299792458 # velocity over speed of light.
-                
-                profiles_plot = np.mean(profiles0, axis=1)
-                col_key = f"mask{maskRadii:.0f}" if maskHaloes else 'unmasked'
-                out_key = '/'.join(str(k) for k in sim_key if k is not None)
+
                 profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
-                profiles_out[f'{out_key}/{col_key}_sem'] = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
-                profiles_out[f'{out_key}/n_objects'] = profiles0.shape[1]
-                profiles_out[f'{out_key}/abundance'] = np.nan if sim_abundance is None else sim_abundance
-                profiles_out['radii_arcmin'] = radii0 * radDistance
-                ax.plot(radii0 * radDistance, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
+                profiles_out[f'{out_key}/{col_key}_sem'] = profiles_err
+                profiles_out[f'{out_key}/n_objects'] = n_objects
+                profiles_out[f'{out_key}/abundance'] = abundance
+                profiles_out['radii_arcmin'] = radii_plot
+                ax.plot(radii_plot, profiles_plot, label=plot_label or sim_name, color=colours[j], lw=2, marker='o')
                 if plotErrorBars:
-                    profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
                     upper = profiles_plot + profiles_err
                     lower = profiles_plot - profiles_err
-                    ax.fill_between(radii0 * radDistance, 
-                                    lower, 
+                    ax.fill_between(radii_plot,
+                                    lower,
                                     upper, 
                                     color=colours[j], alpha=0.2)
 
@@ -431,6 +495,13 @@ def main(path2config, verbose=True):
     fig.savefig(figPath / f'{figName}_{pType}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
     plt.close(fig)
 
+    if npz_in is not None:
+        # Redrawn: the samples are those of the earlier run, listed next to it.
+        np.savez(figPath / f'{figName}_{pType}_z{redshift}_profiles.npz', **profiles_out)
+        print(f"Halo samples: as in {str(from_npz).replace('_profiles.npz', '_halo_masses.txt')}")
+        print('Done!!! time taken = ', time.time() - t0, ' seconds')
+        return
+
     # Halo-sample summary: to stdout (so it lands in the SLURM .out) and to a
     # text file alongside the figure.
     if fitted_abundances is not None:
@@ -462,6 +533,8 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process config.')
     parser.add_argument('-p', '--path2config', type=str, default='./configs/unbound_gas/tau_z05_CAP_masked.yaml', help='Path to the configuration file.')
+    parser.add_argument('--from-npz', type=str, default=None,
+                        help='Redraw from the profiles .npz of an earlier run instead of stacking.')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

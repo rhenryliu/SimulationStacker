@@ -1,6 +1,7 @@
 """make_kSZ_outside_fraction.py
 
-Exploratory figures (not in the paper) re-expressing the kSZ masking figure
+Figures (exploratory at z = 0.5; the z ~ 0.26 grid is in the unbound gas
+paper's appendix) re-expressing the kSZ masking figure
 (simulated_kSZ_masked.py) as the fraction of the CAP-filtered signal that comes
 from gas outside the retained spheres,
 
@@ -66,6 +67,7 @@ _FLAMINGO_COLOURS = {
     'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
 _SUITE_CMAPS = {'SIMBA': 'hsv', 'IllustrisTNG': 'twilight', 'FLAMINGO': 'plasma'}
+_SIMBA100_COLOUR = matplotlib.colormaps['hsv'](0.85)  # type: ignore
 _SIMBA_NAMES = {'m100n1024/s50': 'SIMBA-100', 'm50n512/s50noagn': 'SIMBA-50 no-AGN',
                 'm50n512/s50nox': 'SIMBA-50 no-X-ray', 'm50n512/s50nofb': 'SIMBA-50 no-feedback',
                 'm50n512/s50nojet': 'SIMBA-50 no-jet', 'm50n512/s50': 'SIMBA-50'}
@@ -82,12 +84,25 @@ def sim_label(key: str) -> str:
 
 
 def row_colours(row: dict) -> list:
-    """Colours of the simulations of one row."""
+    """Colours of the simulations of one row (which may mix suites).
+
+    Each run takes its suite's colour map, sampled over that suite's runs in
+    the row; FLAMINGO runs and SIMBA-100 have fixed colours instead (SIMBA-100
+    the magenta it has as the last of the four SIMBA runs).
+    """
     keys = row['sims']
-    cmap = matplotlib.colormaps[_SUITE_CMAPS[row['suite']]]  # type: ignore
-    fallback = cmap(np.linspace(0.2, 0.85, len(keys)))
-    return [_FLAMINGO_COLOURS.get(k.split('/')[-1], fallback[i]) if row['suite'] == 'FLAMINGO'
-            else fallback[i] for i, k in enumerate(keys)]
+    suites = [k.split('/')[0] for k in keys]
+    colours = []
+    for key, suite in zip(keys, suites):
+        same = [k for k, s in zip(keys, suites) if s == suite]
+        cmap = matplotlib.colormaps[_SUITE_CMAPS[suite]]  # type: ignore
+        colour = cmap(np.linspace(0.2, 0.85, len(same)))[same.index(key)]
+        if suite == 'FLAMINGO':
+            colour = _FLAMINGO_COLOURS.get(key.split('/')[-1], colour)
+        elif key == 'SIMBA/m100n1024/s50':
+            colour = _SIMBA100_COLOUR
+        colours.append(colour)
+    return colours
 
 
 def outside_fraction(prof, key: str, n: int) -> np.ndarray:

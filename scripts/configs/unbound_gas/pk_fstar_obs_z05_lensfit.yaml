@@ -99,19 +99,20 @@ simulations:
     feedback: 'Jet_fgas-4sigma'
     n_pixels: 2000
     dmo: *flamingo_dmo
-  # FLAMINGO stellar-mass variants (iteration 3, 2026-09-29): the same chain,
-  # drawn in the paper figure without their rescaled ends (bands: false).
+  # FLAMINGO stellar-mass variants (iteration 3, 2026-09-29): the same chain.
+  # Drawn with their rescaled ends since 2026-10-07 (user decision); set
+  # bands: false to draw them as plain lines, as in iteration 3.
   - sim_type: 'FLAMINGO'
     name: 'L1_m9'
     snapshot: 67
     feedback: 'Mstar-1sigma'
     n_pixels: 2000
     dmo: *flamingo_dmo
-    bands: false
+    bands: true
   - sim_type: 'FLAMINGO'
     name: 'L1_m9'
     snapshot: 67
     feedback: 'Mstar-1sigma_fgas-4sigma'
     n_pixels: 2000
     dmo: *flamingo_dmo
-    bands: false
+    bands: true

@@ -13,10 +13,8 @@ fig_type: 'pdf'
 row_height: 3.6
 fraction_ylim: [-0.2, 1.0]
 summary_theta: [2.0, 4.0, 6.0]
+# One row (2026-10-07): SIMBA-100 with TNG300-1 and Illustris-1 (until then
+# SIMBA and IllustrisTNG had a row each).
 rows:
-  - suite: 'SIMBA'
-    title: 'SIMBA'
-    sims: ['SIMBA/m100n1024/s50']
-  - suite: 'IllustrisTNG'
-    title: 'IllustrisTNG'
-    sims: ['IllustrisTNG/TNG300-1', 'IllustrisTNG/Illustris-1']
+  - title: 'SIMBA + IllustrisTNG'
+    sims: ['SIMBA/m100n1024/s50', 'IllustrisTNG/TNG300-1', 'IllustrisTNG/Illustris-1']

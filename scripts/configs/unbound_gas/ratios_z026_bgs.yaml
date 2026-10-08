@@ -42,19 +42,26 @@ plot:
   plot_error_bars: true
 
 simulations:
+  # Two rows (2026-10-07): TNG300-1, Illustris-1 and SIMBA-100 share the top
+  # row (row: 0); the five FLAMINGO runs share the bottom row (until then the
+  # AGN and stellar-mass variants had a row each, with L1_m9 in both).
   - sim_type: 'IllustrisTNG'
+    row: 0
+    row_label: 'IllustrisTNG + SIMBA'
     sims:
       - name: 'TNG300-1'
         snapshot: 80
       - name: 'Illustris-1'
         snapshot: 116
   - sim_type: 'SIMBA'
+    row: 0
     sims:
       - name: 'm100n1024'
         snapshot: 136
         feedback: 's50'
   - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO (AGN)'
+    row: 1
+    row_label: 'FLAMINGO'
     sims:
       - name: 'L1_m9'
         snapshot: 71
@@ -69,14 +76,6 @@ simulations:
       - name: 'L1_m9'
         snapshot: 71
         feedback: 'Jet_fgas-4sigma'
-        n_pixels: 2000
-        redshift: 0.3
-  - sim_type: 'FLAMINGO'
-    row_label: 'FLAMINGO ($M_\ast$)'
-    sims:
-      - name: 'L1_m9'
-        snapshot: 71
-        feedback: 'L1_m9'
         n_pixels: 2000
         redshift: 0.3
       - name: 'L1_m9'

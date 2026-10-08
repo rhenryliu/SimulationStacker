@@ -29,7 +29,7 @@ plot:
   # Paper layout: no figure title, rows slightly shorter than the 4.5 in default.
   suptitle: false
   row_height: 3.8
-  row_labels: ['SIMBA + IllustrisTNG', 'FLAMINGO (AGN)', 'FLAMINGO ($M_\ast$)']
+  row_labels: ['SIMBA + IllustrisTNG', 'FLAMINGO']
 
 
 
@@ -70,6 +70,9 @@ simulations:
         snapshot: 103
       # - name: 'Illustris-2'
       #   snapshot: 103
+  # One FLAMINGO row (2026-10-07): the AGN variants and the stellar-mass
+  # variants (iteration 3) together; until then they had a row each (rows 1
+  # and 2), both with L1_m9 as the reference.
   - sim_type: 'FLAMINGO'
     row: 1
     sims:
@@ -84,13 +87,6 @@ simulations:
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Jet_fgas-4sigma'
-  # Iteration 3: the stellar-mass variants, with L1_m9 as the reference.
-  - sim_type: 'FLAMINGO'
-    row: 2
-    sims:
-      - name: 'L1_m9'
-        snapshot: 67
-        feedback: 'L1_m9'
       - name: 'L1_m9'
         snapshot: 67
         feedback: 'Mstar-1sigma'

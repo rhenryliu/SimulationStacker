@@ -11,19 +11,32 @@ measurement). The denominator is the unmasked total-matter profile in every
 column, as lensing measures it, so the columns differ only through the
 numerator.
 
-Numerator: the beam-convolved tau maps (0.5' pixels, 1.6' beam) -- the masked
-ones built by precompute_masked_sham_hosts.py around the hosts of the
-lensing-fit SHAM galaxies, and the unmasked one -- converted to ionized-gas
-mass. Per particle tau = sigma_T N_e / A_pix and M_ion = N_e m_p mu_e
-(mapMaker.make_sz_field, mapMaker.ionized_gas_masses), so a tau map times
+Denominator: the unconvolved 0.2' total-matter field. Numerator, chosen by
+``stack.numerator``:
 
-    K = A_pix,phys * m_p * mu_e * h / (sigma_T * M_sun)
+- ``'tau_map'`` (default): the beam-convolved tau maps (0.5' pixels, 1.6'
+  beam) -- the masked ones built by precompute_masked_sham_hosts.py around the
+  hosts of the lensing-fit SHAM galaxies, and the unmasked one -- converted to
+  ionized-gas mass. Per particle tau = sigma_T N_e / A_pix and
+  M_ion = N_e m_p mu_e (mapMaker.make_sz_field, mapMaker.ionized_gas_masses),
+  so a tau map times
 
-is the ionized_gas map in Msun/h per pixel; the script checks this against the
-cached unmasked ionized_gas map. Denominator: the unconvolved 0.2' total-matter
-field. This is compare_data_ratio.py's convention (beam on the kSZ side only,
-as in the measurement), so the measured ratio is shown as it is, without beam
-compensation. Both are filtered with the 'DSigma' kernel (0.75' annulus) on the
+      K = A_pix,phys * m_p * mu_e * h / (sigma_T * M_sun)
+
+  is the ionized_gas map in Msun/h per pixel; the script checks this against
+  the cached unmasked ionized_gas map. This is compare_data_ratio.py's
+  convention (beam on the kSZ side only, as in the measurement), shown with
+  the measured ratio as it is.
+- ``'ionized_gas_field'``: unconvolved ionized-gas fields at the denominator's
+  0.2' pixels -- the masked ones built by precompute_masked_particles.py
+  (particles kept in exact spheres around the same hosts, binned like the
+  cached fields), and the cached unmasked field. This is the beam-compensated
+  comparison of beam_compensated_ratio_v2.py, shown with the beam-compensated
+  measurement. With ``beam_factor.beamed_npz`` (the profiles of a 'tau_map'
+  run) the script also reports the beam factor of these samples, beamed over
+  unbeamed unmasked numerator, against the published one.
+
+Both are filtered with the 'DSigma' kernel (0.75' annulus) on the
 measurement's 9 radii from 1' to 6', in the yz projection of the cached
 total-matter fields.
 
@@ -32,7 +45,8 @@ Every map is loaded by explicit path, and the stacks go through
 
 - ``stackMap(mask=True)`` rebuilds a missing masked map around the mass-cut
   sample and saves it at the shared path; here a missing or mismatched masked
-  map is an error (``halo_stats.require_masked_map``).
+  map is an error (``halo_stats.require_masked_map`` for the tau maps, the same
+  test on the ``.sample.json`` record for the ionized-gas fields).
 - ``stackMap`` multiplies tau profiles by T_CMB v/c and the pixel area (muK
   units); ``stack_on_array`` returns the bare kernel sums.
 - ``makeMap`` loads ``..._map.npy`` whatever the beam requested, since the map
@@ -44,17 +58,24 @@ Error bars: standard error of the mean of each profile, combined in quadrature
 same galaxies and are positively correlated, so this overestimates the error
 of the ratio.
 
-Known offset between the columns: the masked maps are projections of the 3D
-TSC tau cubes (precompute_masked_sham_hosts.py), the unmasked map is binned in
-2D. Projecting the unmasked cube the same way raises the DeltaSigma stack by
-2-4% at 1', ~1% at 1.6' and <0.6% beyond (SIMBA-100, Illustris-1, TNG100-1;
-2026-10-11), with the map sums equal to 1e-6. So at the smallest radii the
-masked columns can sit slightly above the unmasked one for that reason alone,
-as in the kSZ figure, which shares the maps' construction.
+Known offset between the columns ('tau_map' only): the masked maps are
+projections of the 3D TSC tau cubes (precompute_masked_sham_hosts.py), the
+unmasked map is binned in 2D. Projecting the unmasked cube the same way raises
+the DeltaSigma stack by 2-4% at 1', ~1% at 1.6' and <0.6% beyond (SIMBA-100,
+Illustris-1, TNG100-1; 2026-10-11), with the map sums equal to 1e-6. So at the
+smallest radii the masked columns can sit slightly above the unmasked one for
+that reason alone, as in the kSZ figure, which shares the maps' construction.
+In 'ionized_gas_field' mode all four columns share one binning.
 
 Outputs, in ``<fig_path>/<YYYY-MM>/<MM-DD>/``:
 ``<fig_name>_z<z>_masking_comparison.<ext>``, the profiles
 (``..._profiles.npz``) and the halo-sample table (``..._halo_masses.txt``).
+The profiles hold ``radii_arcmin`` and, per simulation ``<suite>/<name>[/<feedback>]``:
+``<col>_{ratio,ratio_err,num_mean,num_sem}`` for col in mask1-3 and unmasked,
+``den_{mean,sem}``, ``n_objects``, ``abundance``, ``rad_mean_ckpch``,
+``omega_b_over_omega_m``; 'tau_map' runs add ``K_tau`` and ``K_check_offset``,
+beam-factor reports add ``beam_factor`` per simulation and
+``beam_factor/{beam_factor_mean,beam_factor_published,R_compensated_lensfit}``.
 
 Usage, from the scripts/ directory:
     python unbound_gas/simulated_dsigma_ratio_masked.py -p configs/unbound_gas/dsigma_ratio_z05_masked.yaml --workers 12
@@ -234,8 +255,9 @@ def map_paths(stacker, p, density):
 
     Never builds anything: a missing map is an error. Each masked map must
     have been built around the hosts of the SHAM galaxies at ``density``
-    (``halo_stats.require_masked_map``), with the beam and the parent-mass
-    cap of this run (its ``.sample.json`` record).
+    (``halo_stats.require_masked_map`` for the tau maps; the same test on the
+    record for the ionized-gas fields), with the beam and the parent-mass cap
+    of this run (its ``.sample.json`` record).
 
     Args:
         stacker (SimulationStacker): The simulation.
@@ -259,24 +281,36 @@ def map_paths(stacker, p, density):
         return _get_data_filepath(stacker.simType, stacker.sim, stacker.snapshot, stacker.feedback,
                                   p_type, n, proj, data_type, '2D', mask, mask_rad, stacker.base_path)
 
-    # The denominator is read from the field file: the map cache path does not
+    # Unbeamed products are read from field files: the map cache path does not
     # record the beam, so a '_map.npy' at this size could be beam-convolved.
+    num_type = 'map' if p['numerator'] == 'tau_map' else 'field'
     paths = {'den': path(p['particle_type_2'], n_den, 'field'),
-             'unmasked': path(p['particle_type'], n_num, 'map'), 'meta': {}}
+             'unmasked': path(p['particle_type'], n_num, num_type), 'meta': {}}
     for key in ('den', 'unmasked'):
         if not paths[key].exists():
             raise FileNotFoundError(f"{paths[key]} is missing; refusing to build it here")
     for mask_rad in p['mask_radii']:
         col = f"mask{mask_rad:.0f}"
-        require_masked_map(stacker, p['particle_type'], proj, mask_rad, z, p['pixel_size'], density)
-        paths[col] = path(p['particle_type'], n_num, 'map', True, mask_rad)
+        paths[col] = path(p['particle_type'], n_num, num_type, True, mask_rad)
+        if num_type == 'map':
+            require_masked_map(stacker, p['particle_type'], proj, mask_rad, z, p['pixel_size'],
+                               density)
+        elif not (paths[col].exists() and Path(str(paths[col]) + '.sample.json').exists()):
+            raise FileNotFoundError(f"{paths[col]} or its sample record is missing; build it "
+                                    f"with unbound_gas/precompute_masked_particles.py first")
         with open(str(paths[col]) + '.sample.json') as f:
             meta = json.load(f)
-        if not (np.isclose(meta['beam'], p['beam_size'])
-                and np.isclose(meta['halo_mass_upper'], p['halo_mass_upper'])):
-            raise ValueError(f"{paths[col]} was built with beam {meta['beam']}' and parent-mass cap "
-                             f"{meta['halo_mass_upper']:.3e}; this run uses {p['beam_size']}' and "
-                             f"{p['halo_mass_upper']:.3e}")
+        if num_type == 'field' and not (meta.get('sample') == 'sham-hosts'
+                                        and np.isclose(meta.get('density', np.nan), density)
+                                        and np.isclose(meta.get('pixel_size', np.nan), p['pixel_size'])):
+            raise ValueError(f"{paths[col]} was built around sample {meta.get('sample')!r} at "
+                             f"n = {meta.get('density')} and {meta.get('pixel_size')}' pixels; "
+                             f"this run stacks SHAM at n = {density} on {p['pixel_size']}' pixels")
+        if not (np.isclose(meta.get('beam', np.nan), p['beam_size'])
+                and np.isclose(meta.get('halo_mass_upper', np.nan), p['halo_mass_upper'])):
+            raise ValueError(f"{paths[col]} was built with beam {meta.get('beam')}' and parent-mass "
+                             f"cap {meta.get('halo_mass_upper')}; this run uses {p['beam_size']}' "
+                             f"and {p['halo_mass_upper']:.3e}")
         paths['meta'][col] = meta
     return paths
 
@@ -331,8 +365,8 @@ def stack_run(task):
     paths = map_paths(stacker, p, density)
     for col, meta in paths['meta'].items():
         # The density matches (map_paths); the galaxy count must too.
-        if meta['n_galaxies'] != len(halo_mask):
-            raise ValueError(f"{paths[col]} was built around {meta['n_galaxies']} galaxies; "
+        if meta.get('n_galaxies') != len(halo_mask):
+            raise ValueError(f"{paths[col]} was built around {meta.get('n_galaxies')} galaxies; "
                              f"this run stacks {len(halo_mask)}")
 
     # Denominator: the unconvolved total-matter field.
@@ -341,16 +375,20 @@ def stack_run(task):
     out['den_mean'], out['den_sem'] = den_mean, den_sem
     print(f"[{tag}] denominator stacked ({paths['den'].name}), {time.time() - t0:.0f} s", flush=True)
 
-    # Numerator: tau maps (0.5', beam), converted to ionized-gas mass by K.
+    # Numerator: tau maps (0.5', beam) converted to ionized-gas mass by K, or
+    # ionized-gas fields (already in Msun/h per pixel).
     n_num, _ = map_geometry(stacker, p['redshift'], p['pixel_size'])
-    k_factor = tau_to_ionized_mass(stacker, n_num)
-    out['K_tau'] = k_factor
+    if p['numerator'] == 'tau_map':
+        k_factor = tau_to_ionized_mass(stacker, n_num)
+        out['K_tau'] = k_factor
+    else:
+        k_factor = 1.0
     for col in [f"mask{r:.0f}" for r in p['mask_radii']] + ['unmasked']:
-        tau_map = np.load(paths[col])
-        if col == 'unmasked':
-            out['K_check_offset'] = check_conversion(stacker, tau_map, n_num, p['projection'],
+        num_map = np.load(paths[col])
+        if col == 'unmasked' and p['numerator'] == 'tau_map':
+            out['K_check_offset'] = check_conversion(stacker, num_map, n_num, p['projection'],
                                                      k_factor)
-        radii_num, num = _stack(stacker, tau_map, halo_mask, p, p['pixel_size'])
+        radii_num, num = _stack(stacker, num_map, halo_mask, p, p['pixel_size'])
         if not np.allclose(radii_num, radii):
             raise ValueError("numerator and denominator radii differ")
         num_mean, num_sem = _mean_sem(num * k_factor)  # Msun/h per arcmin^2
@@ -385,6 +423,8 @@ def main(path2config, from_npz=None, workers=1):
     params = {
         'redshift': stack_config.get('redshift', 0.5),
         'projection': stack_config.get('projection', 'yz'),
+        # 'tau_map' (beamed tau maps x K) or 'ionized_gas_field' (unbeamed).
+        'numerator': stack_config.get('numerator', 'tau_map'),
         'particle_type': stack_config.get('particle_type', 'tau'),
         'pixel_size': stack_config.get('pixel_size', 0.5),
         # Beam of the numerator maps, checked against the masked maps' records.
@@ -402,8 +442,13 @@ def main(path2config, from_npz=None, workers=1):
         'halo_mass_avg': stack_config.get('halo_mass_avg', 10 ** 13.22),
         'halo_mass_upper': stack_config.get('halo_mass_upper', 5 * 10 ** 14),
     }
-    if params['particle_type'] != 'tau':
-        raise ValueError("the numerator is converted from tau maps; particle_type must be 'tau'")
+    expected_ptype = {'tau_map': 'tau', 'ionized_gas_field': 'ionized_gas'}.get(params['numerator'])
+    if expected_ptype is None:
+        raise ValueError(f"stack.numerator must be 'tau_map' or 'ionized_gas_field', "
+                         f"got {params['numerator']!r}")
+    if params['particle_type'] != expected_ptype:
+        raise ValueError(f"numerator {params['numerator']!r} needs particle_type "
+                         f"{expected_ptype!r}, got {params['particle_type']!r}")
     redshift = params['redshift']
     # The masked maps are built around the hosts of the lensing-fit SHAM
     # galaxies, so the SHAM densities must come from the same fits.
@@ -429,6 +474,35 @@ def main(path2config, from_npz=None, workers=1):
             out_key = '/'.join(str(k) for k in (suite['sim_type'], sim['name'], sim.get('feedback'))
                                if k is not None)
             entries.append((row_idx, j, suite['sim_type'], sim, out_key))
+
+    # Beam-factor report (unbeamed numerator only): inputs checked here, before
+    # any stacking. A redraw reuses the factors stored in its profiles file.
+    bf_config = stack_config.get('beam_factor')
+    if bf_config and params['numerator'] != 'ionized_gas_field':
+        print("Note: stack.beam_factor is used only with numerator 'ionized_gas_field'; ignored")
+        bf_config = None
+    beamed = published = None
+    if bf_config:
+        radii_cfg = np.linspace(params['min_radius'], params['max_radius'], params['num_radii'])
+        with np.load(bf_config['published_npz']) as f:
+            published = dict(f)
+        if not np.allclose(published['theta_arcmin'], radii_cfg):
+            raise ValueError(f"{bf_config['published_npz']} has other radii than this run")
+        missing = set(bf_config['average_over']) - {e[-1] for e in entries}
+        if missing:
+            raise KeyError(f"beam_factor.average_over names runs not in this config: {sorted(missing)}")
+        if not from_npz:
+            with np.load(bf_config['beamed_npz']) as f:
+                beamed = dict(f)
+            if not np.allclose(beamed['radii_arcmin'], radii_cfg):
+                raise ValueError(f"{bf_config['beamed_npz']} has other radii than this run")
+            for _, _, sim_type_name, sim, out_key in entries:
+                # K_tau: the file is a 'tau_map' run; the density: same galaxies.
+                if f'{out_key}/K_tau' not in beamed:
+                    raise ValueError(f"{bf_config['beamed_npz']} has no 'tau_map' profiles of {out_key}")
+                if not np.isclose(beamed[f'{out_key}/abundance'],
+                                  fitted_abundances[fit_label(sim_type_name, sim)]):
+                    raise ValueError(f"{bf_config['beamed_npz']} stacked {out_key} at another SHAM density")
 
     t0 = time.time()
     results = {}  # out_key -> dict of npz entries (without the key prefix)
@@ -472,10 +546,39 @@ def main(path2config, from_npz=None, workers=1):
             results[task['key']] = res['out']
             stats_rows.append(res['stats'])
 
+    radii = next(iter(results.values()))['radii_arcmin']
+    # Beam factor of these samples: the beamed unmasked numerator of a
+    # 'tau_map' run over this run's, per simulation, against the published one
+    # (the mean over the runs of the lensing paper). Nothing here may fail
+    # before the profiles are saved, so a sample mismatch is only reported.
+    if bf_config and (beamed is not None or all('beam_factor' in results[e[-1]] for e in entries)):
+        print(f"\nBeam factor, beamed / unbeamed unmasked numerator (theta = {radii} arcmin):")
+        for *_, out_key in entries:
+            res = results[out_key]
+            if beamed is not None:
+                res['beam_factor'] = beamed[f'{out_key}/unmasked_num_mean'] / res['unmasked_num_mean']
+                if int(beamed[f'{out_key}/n_objects']) != int(res['n_objects']):
+                    print(f"  WARNING: {out_key} has {int(beamed[f'{out_key}/n_objects'])} galaxies "
+                          f"in the beamed run and {int(res['n_objects'])} here")
+            print(f"  {out_key:40s} {np.array2string(res['beam_factor'], precision=3)}")
+        b_mean = np.mean([results[k]['beam_factor'] for k in bf_config['average_over']], axis=0)
+        print(f"  mean over {len(bf_config['average_over'])} runs           "
+              f"{np.array2string(b_mean, precision=3)}")
+        print(f"  published                                {np.array2string(published['beam_factor'], precision=3)}")
+        r_lensfit = published['ratio'] / b_mean
+        print(f"  data / this mean - published compensated, in published sigma: "
+              f"{np.array2string((r_lensfit - published['R_compensated']) / published['sigma_compensated'], precision=2)}")
+        results['beam_factor'] = {'beam_factor_mean': b_mean,
+                                  'beam_factor_published': published['beam_factor'],
+                                  'R_compensated_lensfit': r_lensfit}
+    elif bf_config:
+        print("Note: the profiles file holds no beam factors; not reported")
+
     # Profiles and halo-sample table first, so a plotting failure loses no
     # stacking (redraw with --from-npz). A redraw never overwrites its source.
-    radii = next(iter(results.values()))['radii_arcmin']
     profiles_out = {'radii_arcmin': radii}
+    if 'beam_factor' in results:
+        profiles_out.update({f'beam_factor/{k}': v for k, v in results.pop('beam_factor').items()})
     for *_, out_key in entries:
         for k, v in results[out_key].items():
             if k != 'radii_arcmin' and v is not None:
@@ -489,11 +592,13 @@ def main(path2config, from_npz=None, workers=1):
     if from_npz:
         print(f"Halo samples: as in {str(from_npz).replace('_profiles.npz', '_halo_masses.txt')}")
     else:
+        numerator = (f"{params['particle_type']} x K (ionized gas)" if params['numerator'] == 'tau_map'
+                     else f"{params['particle_type']} fields, masked at particle level")
         preamble = [
             f'Halo samples for {fig_file.name}',
             f'config          : {path2config}',
-            f"numerator       : {params['particle_type']} x K (ionized gas), {params['pixel_size']}' "
-            f"pixels, {params['beam_size']}' beam; masks around the SHAM hosts",
+            f"numerator       : {numerator}, {params['pixel_size']}' pixels, "
+            f"{params['beam_size']}' beam; masks around the SHAM hosts",
             f"denominator     : {params['particle_type_2']}, {params['pixel_size_2']}' pixels, no beam",
             f"filter          : DSigma, annulus {params['annulus']}'    projection: {params['projection']}",
             f'redshift        : {redshift}',
@@ -539,13 +644,17 @@ def main(path2config, from_npz=None, workers=1):
     if cosmo_axis is None:
         cosmo_axis = sim_cosmology(make_stacker(entries[0][2], entries[0][3], redshift)[0])
 
-    # The measurement, on the unmasked column only (as in the kSZ figure).
+    # The measurement, on the unmasked column only (as in the kSZ figure). The
+    # default keys are those of the raw ratio file; plot.data_keys overrides
+    # them (e.g. for the beam-compensated file).
     if plot_config.get('plot_data', False):
         data = np.load(plot_config['data_path'])
         key = plot_config.get('data_key', 'source_bin_0')
+        dk = {'theta': f'{key}/ksz_theta_arcmin', 'value': f'{key}/ratio', 'error': f'{key}/ratio_err'}
+        dk.update(plot_config.get('data_keys', {}))
         for row_idx in range(nRows):
-            axes[row_idx, -1].errorbar(data[f'{key}/ksz_theta_arcmin'], data[f'{key}/ratio'],
-                                       yerr=data[f'{key}/ratio_err'], fmt='s', color='k',
+            axes[row_idx, -1].errorbar(data[dk['theta']], data[dk['value']],
+                                       yerr=data[dk['error']], fmt='s', color='k',
                                        label=plot_config.get('data_label', 'data'),
                                        markersize=5, zorder=10)
 

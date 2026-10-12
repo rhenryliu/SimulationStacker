@@ -53,6 +53,18 @@ Every map is loaded by explicit path, and the stacks go through
   cache path does not record the beam; the denominator is read from the field
   file (``..._yz.npy``) instead.
 
+Layout and samples (all optional; the defaults are the z = 0.5 figures'):
+one row per suite of ``simulations``, or the suite's ``row`` to put several
+suites on one row (as in ratios_z026_bgs.yaml; rows in order of first
+appearance, labelled by their first suite, whose guide lines use the row's
+first simulation's mean R200m); a simulation's ``redshift``
+overrides ``stack.redshift`` for its projection (FLAMINGO's z = 0.30 output
+next to z = 0.26 runs); ``plot.top_axis: 'every_row'`` draws the comoving
+axis on every row at that row's redshift; ``max_objects`` (in ``stack`` or
+per simulation) with ``stack.subsample_seed`` stacks a fixed-seed random
+subsample of larger SHAM samples, drawn as lensing/fit_dsigma_ksz.py does (the
+masks still surround the hosts of the whole sample).
+
 Error bars: standard error of the mean of each profile, combined in quadrature
 (as in compare_data_ratio.py). Numerator and denominator are stacked on the
 same galaxies and are positively correlated, so this overestimates the error
@@ -72,8 +84,10 @@ Outputs, in ``<fig_path>/<YYYY-MM>/<MM-DD>/``:
 (``..._profiles.npz``) and the halo-sample table (``..._halo_masses.txt``).
 The profiles hold ``radii_arcmin`` and, per simulation ``<suite>/<name>[/<feedback>]``:
 ``<col>_{ratio,ratio_err,num_mean,num_sem}`` for col in mask1-3 and unmasked,
-``den_{mean,sem}``, ``n_objects``, ``abundance``, ``rad_mean_ckpch``,
-``omega_b_over_omega_m``; 'tau_map' runs add ``K_tau`` and ``K_check_offset``,
+``den_{mean,sem}``, ``n_objects`` (galaxies stacked), ``abundance``,
+``rad_mean_ckpch`` (of the whole sample, as the halo-sample table),
+``omega_b_over_omega_m``, and ``n_sample`` (whole sample) when a subsample was
+stacked; 'tau_map' runs add ``K_tau`` and ``K_check_offset``,
 beam-factor reports add ``beam_factor`` per simulation and
 ``beam_factor/{beam_factor_mean,beam_factor_published,R_compensated_lensfit}``.
 
@@ -131,6 +145,15 @@ _FLAMINGO_COLOURS = {
     'Mstar-1sigma':             '#17BECF',  # cyan
     'Mstar-1sigma_fgas-4sigma': '#2E8B57',  # sea green
 }
+
+# Fixed colours of the IllustrisTNG runs and SIMBA-100, as in make_ratios3x2.py,
+# so a run keeps its colour in rows that mix suites. They equal the colour-map
+# positions of the one-suite rows of the two z = 0.5 configs (TNG100-1,
+# TNG300-1, Illustris-1; SIMBA-100 last of four SIMBA runs), so their rows are
+# unchanged.
+_TNG_COLOURS = dict(zip(['TNG100-1', 'TNG300-1', 'Illustris-1'],
+                        matplotlib.colormaps['twilight'](np.linspace(0.2, 0.85, 3))))  # type: ignore
+_SIMBA100_COLOUR = matplotlib.colormaps['hsv'](0.85)  # type: ignore
 
 # Omega_b fallbacks, as in make_fgas_profiles.py: Illustris-1 does not store
 # OmegaBaryon in its header, SIMBA never does.
@@ -256,12 +279,13 @@ def map_paths(stacker, p, density):
     Never builds anything: a missing map is an error. Each masked map must
     have been built around the hosts of the SHAM galaxies at ``density``
     (``halo_stats.require_masked_map`` for the tau maps; the same test on the
-    record for the ionized-gas fields), with the beam and the parent-mass cap
-    of this run (its ``.sample.json`` record).
+    record for the ionized-gas fields), with the beam, the parent-mass cap and
+    the redshift of this run (its ``.sample.json`` record).
 
     Args:
         stacker (SimulationStacker): The simulation.
-        p (dict): The stacking parameters of main().
+        p (dict): The stacking parameters of main(), with ``p['redshift']``
+            this simulation's own.
         density (float): SHAM number density in (cMpc/h)^-3.
 
     Returns:
@@ -311,6 +335,9 @@ def map_paths(stacker, p, density):
             raise ValueError(f"{paths[col]} was built with beam {meta.get('beam')}' and parent-mass "
                              f"cap {meta.get('halo_mass_upper')}; this run uses {p['beam_size']}' "
                              f"and {p['halo_mass_upper']:.3e}")
+        if not np.isclose(meta.get('z', np.nan), p['redshift']):
+            raise ValueError(f"{paths[col]} was projected at z = {meta.get('z')}; this run "
+                             f"projects at z = {p['redshift']}")
         paths['meta'][col] = meta
     return paths
 
@@ -329,6 +356,16 @@ def _stack(stacker, array, halo_mask, p, pixel_size):
         halo_mask=halo_mask, dr=p['annulus'])
 
 
+def _max_objects(value):
+    """A config's ``max_objects`` as a positive int, or None (no subsample)."""
+    if value is None:
+        return None
+    n = int(float(value))
+    if n < 1 or n != float(value):
+        raise ValueError(f"max_objects must be a positive integer, got {value!r}")
+    return n
+
+
 def _mean_sem(profiles):
     """Mean over the galaxies and its standard error."""
     return (np.mean(profiles, axis=1),
@@ -343,14 +380,16 @@ def stack_run(task):
 
     Args:
         task (dict): 'sim_type', 'sim', 'density' (SHAM density in
-            (cMpc/h)^-3) and 'params' (the stacking parameters of main()).
+            (cMpc/h)^-3), 'redshift' (of the projection, this simulation's)
+            and 'params' (the stacking parameters of main()).
 
     Returns:
         dict: Arrays and scalars for the profiles npz, under 'out' (keys
-        without the simulation prefix), plus 'stats' (halo_stats.sample_stats).
+        without the simulation prefix), plus 'stats' (halo_stats.sample_stats,
+        over the whole SHAM sample).
     """
     t0 = time.time()
-    p = task['params']
+    p = dict(task['params'], redshift=task['redshift'])
     stacker, table_label, _, omega_b = make_stacker(task['sim_type'], task['sim'], p['redshift'])
     tag = table_label
     density = task['density']
@@ -359,15 +398,25 @@ def stack_run(task):
                                     halo_abundance_target=density,
                                     halo_mass_avg=p['halo_mass_avg'],
                                     halo_mass_upper=p['halo_mass_upper'])
-    out = {'n_objects': int(len(halo_mask)), 'abundance': density,
-           'rad_mean_ckpch': stats['rad_mean'],
-           'omega_b_over_omega_m': omega_b / stacker.header['Omega0']}
     paths = map_paths(stacker, p, density)
     for col, meta in paths['meta'].items():
-        # The density matches (map_paths); the galaxy count must too.
+        # The density matches (map_paths); the galaxy count must too. The masks
+        # surround the hosts of the whole sample, also when a subsample is stacked.
         if meta.get('n_galaxies') != len(halo_mask):
             raise ValueError(f"{paths[col]} was built around {meta.get('n_galaxies')} galaxies; "
                              f"this run stacks {len(halo_mask)}")
+    out = {}
+    if p['max_objects'] is not None and len(halo_mask) > p['max_objects']:
+        # Fixed-seed random subsample, drawn as lensing/fit_dsigma_ksz.py does.
+        # The mean profile is unbiased; only its standard error grows.
+        out['n_sample'] = int(len(halo_mask))
+        rng = np.random.default_rng(p['subsample_seed'])
+        halo_mask = np.sort(rng.choice(halo_mask, size=p['max_objects'], replace=False))
+        print(f"[{tag}] stacking a random {len(halo_mask)} of {out['n_sample']} galaxies "
+              f"(seed {p['subsample_seed']})", flush=True)
+    out.update({'n_objects': int(len(halo_mask)), 'abundance': density,
+                'rad_mean_ckpch': stats['rad_mean'],
+                'omega_b_over_omega_m': omega_b / stacker.header['Omega0']})
 
     # Denominator: the unconvolved total-matter field.
     radii, den = _stack(stacker, np.load(paths['den']), halo_mask, p, p['pixel_size_2'])
@@ -441,6 +490,10 @@ def main(path2config, from_npz=None, workers=1):
         # passed on as simulated_kSZ_masked.py does.
         'halo_mass_avg': stack_config.get('halo_mass_avg', 10 ** 13.22),
         'halo_mass_upper': stack_config.get('halo_mass_upper', 5 * 10 ** 14),
+        # Optional fixed-seed random subsample of larger SHAM samples, as the
+        # lensing fits (lensing/fit_dsigma_ksz.py's max_objects); None: all.
+        'max_objects': _max_objects(stack_config.get('max_objects')),
+        'subsample_seed': stack_config.get('subsample_seed', 0),
     }
     expected_ptype = {'tau_map': 'tau', 'ionized_gas_field': 'ionized_gas'}.get(params['numerator'])
     if expected_ptype is None:
@@ -467,13 +520,37 @@ def main(path2config, from_npz=None, workers=1):
     rowHeight = plot_config.get('row_height', 4.5)
     stem = f'{figName}_z{redshift}'
 
-    # Simulations in config order; a simulation listed in two rows is stacked once.
-    entries = []  # (row index, position in row, sim_type, sim, out_key)
-    for row_idx, suite in enumerate(config['simulations']):
+    # Simulations in config order; a simulation listed in two rows is stacked
+    # once. Suites with the same 'row' share a row (as in ratios_z026_bgs.yaml);
+    # a suite without one has its own. Rows are ordered by first appearance and
+    # labelled by their first suite, as in make_ratios3x2.py. A simulation's
+    # 'redshift' overrides stack.redshift: the redshift of its projection, at
+    # which its maps were made.
+    row_keys = [suite.get('row', f'_suite{k}') for k, suite in enumerate(config['simulations'])]
+    row_of_key = {key: i for i, key in enumerate(dict.fromkeys(row_keys))}
+    rows = list(range(len(row_of_key)))
+    entries = []  # (row index, position in its suite, sim_type, sim, out_key)
+    suite_of = {}  # (row index, out_key) -> the suite's config entry
+    row_labels = {}  # row index -> the row_label (else sim_type) of its first suite
+    for suite, key in zip(config['simulations'], row_keys):
+        row_idx = row_of_key[key]
+        row_labels.setdefault(row_idx, suite.get('row_label', suite['sim_type']))
         for j, sim in enumerate(suite['sims']):
             out_key = '/'.join(str(k) for k in (suite['sim_type'], sim['name'], sim.get('feedback'))
                                if k is not None)
             entries.append((row_idx, j, suite['sim_type'], sim, out_key))
+            suite_of[(row_idx, out_key)] = suite
+
+    # Comoving top axis: on the top row at stack.redshift ('top_row', default),
+    # or on every row at the redshift of its first simulation ('every_row', for
+    # rows at different redshifts).
+    top_axis = plot_config.get('top_axis', 'top_row')
+    if top_axis not in ('top_row', 'every_row'):
+        raise ValueError(f"plot.top_axis must be 'top_row' or 'every_row', got {top_axis!r}")
+    if top_axis == 'top_row' and any(e[3].get('redshift', redshift) != redshift
+                                     for e in entries if e[0] == 0):
+        raise ValueError("plot.top_axis 'top_row' converts at stack.redshift, but the top row has "
+                         "simulations at other redshifts; use 'every_row'")
 
     # Beam-factor report (unbeamed numerator only): inputs checked here, before
     # any stacking. A redraw reuses the factors stored in its profiles file.
@@ -527,13 +604,18 @@ def main(path2config, from_npz=None, workers=1):
             if label not in fitted_abundances:
                 raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
                                f"fitted: {sorted(fitted_abundances)}")
+            # A simulation's 'max_objects' overrides stack.max_objects (the
+            # lensing fits subsampled only the FLAMINGO BGS samples).
             tasks.append({'key': out_key, 'sim_type': sim_type_name, 'sim': sim,
-                          'density': fitted_abundances[label], 'params': params})
+                          'density': fitted_abundances[label],
+                          'redshift': sim.get('redshift', redshift),
+                          'params': dict(params, max_objects=_max_objects(
+                              sim.get('max_objects', params['max_objects'])))})
         # Check every map before stacking anything, so a missing or mismatched
         # one stops the run here rather than after hours of stacking.
         for task in tasks:
-            map_paths(make_stacker(task['sim_type'], task['sim'], redshift)[0], params,
-                      task['density'])
+            map_paths(make_stacker(task['sim_type'], task['sim'], task['redshift'])[0],
+                      dict(params, redshift=task['redshift']), task['density'])
         print(f"All maps present and matching their samples ({len(tasks)} simulations)", flush=True)
         if workers > 1:
             # spawn, not fork: the parent may already hold numba/OpenMP threads.
@@ -601,40 +683,56 @@ def main(path2config, from_npz=None, workers=1):
             f"{params['beam_size']}' beam; masks around the SHAM hosts",
             f"denominator     : {params['particle_type_2']}, {params['pixel_size_2']}' pixels, no beam",
             f"filter          : DSigma, annulus {params['annulus']}'    projection: {params['projection']}",
-            f'redshift        : {redshift}',
+            f'redshift        : {redshift}' + ''.join(
+                f"; {t['key']}: {t['redshift']}" for t in tasks if t['redshift'] != redshift),
             f"selection       : SHAM on SubhaloMStar, n fitted on lensing per simulation ({fit_path}), "
             f"parent-mass cap {params['halo_mass_upper']:.3e} Msun/h",
-        ] + [f"SHAM density    : {s['label']}: {results[t['key']]['abundance']:.4e} (cMpc/h)^-3"
-             for s, t in zip(stats_rows, tasks)]
+        ] + ([f"subsample       : fixed-seed random subsamples (seed {params['subsample_seed']}) "
+              f"where marked below; the table is of the whole samples"]
+             if any('n_sample' in results[t['key']] for t in tasks) else []) + [
+            f"SHAM density    : {s['label']}: {results[t['key']]['abundance']:.4e} (cMpc/h)^-3"
+            + (f", {results[t['key']]['n_objects']} of {results[t['key']]['n_sample']} stacked"
+               if 'n_sample' in results[t['key']] else '')
+            for s, t in zip(stats_rows, tasks)]
         print('\n' + '\n'.join(preamble) + '\n\n' + format_table(stats_rows) + '\n', flush=True)
         write_stats_file(figPath / f'{stem}_halo_masses.txt', stats_rows, preamble=preamble)
 
     # ------------------------------------------------------------------
-    # Figure: one row per suite, columns = mask radii, then unmasked.
+    # Figure: one row per suite (or per 'row'), columns = mask radii, then
+    # unmasked.
     # ------------------------------------------------------------------
     columns = [f"mask{r:.0f}" for r in params['mask_radii']] + ['unmasked']
-    nRows, nCols = len(config['simulations']), len(columns)
+    nRows, nCols = len(rows), len(columns)
     fig, axes = plt.subplots(nRows, nCols, figsize=(18, rowHeight * nRows), sharex=True, sharey=True)
     axes = np.atleast_2d(axes)
 
     row_rad_arcmin = {}  # mean host R200m of each row's first simulation, arcmin
-    cosmo_axis = None  # cosmology of the comoving top axis: the first IllustrisTNG run's
+    row_axis = {}  # (cosmology, redshift) of each row's first simulation
+    cosmo_axis = None  # cosmology of the 'top_row' comoving axis: the first IllustrisTNG run's
     for row_idx, j, sim_type_name, sim, out_key in entries:
-        suite = config['simulations'][row_idx]
-        # Colours as in simulated_kSZ_masked.py.
+        suite = suite_of[(row_idx, out_key)]
+        sim_z = sim.get('redshift', redshift)
+        # Colours as in simulated_kSZ_masked.py, with the fixed colours of the
+        # IllustrisTNG runs and SIMBA-100 of make_ratios3x2.py (the same as the
+        # colour-map positions of the one-suite rows of the z = 0.5 figures).
         if sim_type_name == 'FLAMINGO':
             fallback = matplotlib.colormaps['plasma'](np.linspace(0.2, 0.85, len(suite['sims'])))  # type: ignore
             colour = _FLAMINGO_COLOURS.get(sim['feedback'], fallback[j])
         else:
             cmap = matplotlib.colormaps[{'SIMBA': 'hsv', 'IllustrisTNG': 'twilight'}[sim_type_name]]  # type: ignore
             colour = cmap(np.linspace(0.2, 0.85, len(suite['sims'])))[j]
-        stacker, _, legend_label, _ = make_stacker(sim_type_name, sim, redshift)
+            if sim_type_name == 'IllustrisTNG':
+                colour = _TNG_COLOURS.get(sim['name'], colour)
+            elif (sim['name'], sim.get('feedback')) == ('m100n1024', 's50'):
+                colour = _SIMBA100_COLOUR
+        stacker, _, legend_label, _ = make_stacker(sim_type_name, sim, sim_z)
         cosmo = sim_cosmology(stacker)
         if cosmo_axis is None and sim_type_name == 'IllustrisTNG':
             cosmo_axis = cosmo
         res = results[out_key]
         if row_idx not in row_rad_arcmin:
-            row_rad_arcmin[row_idx] = comoving_to_arcmin(float(res['rad_mean_ckpch']), redshift, cosmo)
+            row_rad_arcmin[row_idx] = comoving_to_arcmin(float(res['rad_mean_ckpch']), sim_z, cosmo)
+            row_axis[row_idx] = (cosmo, sim_z)
         for col_idx, col in enumerate(columns):
             ax = axes[row_idx, col_idx]
             ratio, err = res[f'{col}_ratio'], res[f'{col}_ratio_err']
@@ -642,7 +740,8 @@ def main(path2config, from_npz=None, workers=1):
             if plotErrorBars:
                 ax.fill_between(radii, ratio - err, ratio + err, color=colour, alpha=0.2)
     if cosmo_axis is None:
-        cosmo_axis = sim_cosmology(make_stacker(entries[0][2], entries[0][3], redshift)[0])
+        cosmo_axis = sim_cosmology(make_stacker(entries[0][2], entries[0][3],
+                                                entries[0][3].get('redshift', redshift))[0])
 
     # The measurement, on the unmasked column only (as in the kSZ figure). The
     # default keys are those of the raw ratio file; plot.data_keys overrides
@@ -658,11 +757,10 @@ def main(path2config, from_npz=None, workers=1):
                                        label=plot_config.get('data_label', 'data'),
                                        markersize=5, zorder=10)
 
-    def forward_arcmin(arcmin):
-        return arcmin_to_comoving(arcmin, redshift, cosmo_axis)
-
-    def inverse_arcmin(comoving):
-        return comoving_to_arcmin(comoving, redshift, cosmo_axis)
+    def comoving_axis(cosmo, z):
+        """The (forward, inverse) arcmin <-> comoving kpc/h functions at redshift z."""
+        return (lambda arcmin: arcmin_to_comoving(arcmin, z, cosmo),
+                lambda comoving: comoving_to_arcmin(comoving, z, cosmo))
 
     for row_idx in range(nRows):
         for col_idx, col in enumerate(columns):
@@ -675,9 +773,12 @@ def main(path2config, from_npz=None, workers=1):
                 ax.set_xlabel('R [arcmin]')
             if col_idx == 0:
                 ax.set_ylabel(plot_config.get('ylabel', r'$f_{\rm gas}^{\rm obs}$'))
-            if row_idx == 0:
-                secax_x = ax.secondary_xaxis('top', functions=(forward_arcmin, inverse_arcmin))
+            if row_idx == 0 or top_axis == 'every_row':
+                functions = (comoving_axis(*row_axis[row_idx]) if top_axis == 'every_row'
+                             else comoving_axis(cosmo_axis, redshift))
+                secax_x = ax.secondary_xaxis('top', functions=functions)
                 secax_x.set_xlabel('R [ckpc/h]')
+            if row_idx == 0:
                 ax.set_title(r'No Masking' if col == 'unmasked' else
                              f'Masked ($R_{{mask}} = {params["mask_radii"][col_idx]:.0f} R_{{200m}}$)')
             ax.set_xlim(0.0, params['max_radius'] + 0.5)
@@ -685,18 +786,20 @@ def main(path2config, from_npz=None, workers=1):
                 ax.set_ylim(*plot_config['ylim'])
             ax.grid(True)
         # Each row's legend (simulations and the data) goes in plot.legend_column
-        # (default: the unmasked column, as in the kSZ figure).
+        # (default: the unmasked column, as in the kSZ figure), at
+        # plot.legend_fontsize (default 12).
         handles, labels = axes[row_idx, -1].get_legend_handles_labels()
         axes[row_idx, plot_config.get('legend_column', -1)].legend(
-            handles, labels, loc=plot_config.get('legend_loc', 'upper left'), fontsize=12)
+            handles, labels, loc=plot_config.get('legend_loc', 'upper left'),
+            fontsize=plot_config.get('legend_fontsize', 12))
 
     showSuptitle = plot_config.get('suptitle', False)
     if showSuptitle:
         fig.suptitle(rf'Stacked $\Delta\Sigma$ ratio profiles, z={redshift}', fontsize=22)
     fig.tight_layout(rect=(0.03, 0, 1, 0.97 if showSuptitle else 1))
-    for row_idx, suite in enumerate(config['simulations']):
+    for row_idx in range(nRows):
         bbox = axes[row_idx, 0].get_position()
-        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), suite.get('row_label', suite['sim_type']),
+        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), row_labels[row_idx],
                  fontsize=20, va='center', rotation=90, ha='center')
     fig.savefig(fig_file, dpi=300)  # type: ignore
     plt.close(fig)

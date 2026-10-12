@@ -40,6 +40,12 @@ Both are filtered with the 'DSigma' kernel (0.75' annulus) on the
 measurement's 9 radii from 1' to 6', in the yz projection of the cached
 total-matter fields.
 
+SHAM density, exactly one of: ``stack.abundance_from_fit`` (the density fitted
+on lensing per simulation, lensing/fit_dsigma_ksz.py's npz files) or
+``stack.halo_abundance_target`` (one fixed density for every simulation, as the
+SHAM samples of Liu et al. 2026). The masked maps must have been built at the
+same density (their ``.sample.json`` record).
+
 Every map is loaded by explicit path, and the stacks go through
 ``stack_on_array`` rather than ``stackMap``:
 
@@ -503,13 +509,28 @@ def main(path2config, from_npz=None, workers=1):
         raise ValueError(f"numerator {params['numerator']!r} needs particle_type "
                          f"{expected_ptype!r}, got {params['particle_type']!r}")
     redshift = params['redshift']
-    # The masked maps are built around the hosts of the lensing-fit SHAM
-    # galaxies, so the SHAM densities must come from the same fits.
+    # SHAM density: fitted on lensing per simulation, or one fixed density.
+    # The masked maps record theirs, checked against it in map_paths.
     fit_path = stack_config.get('abundance_from_fit')
-    if fit_path is None:
-        raise ValueError("stack.abundance_from_fit is required: the masked maps are built around "
-                         "the hosts of the lensing-fit SHAM galaxies")
-    fitted_abundances = load_fitted_abundances(fit_path)
+    fixed_density = stack_config.get('halo_abundance_target')
+    if (fit_path is None) == (fixed_density is None):
+        raise ValueError("give exactly one of stack.abundance_from_fit (lensing-fit densities) and "
+                         "stack.halo_abundance_target (a fixed density)")
+    if fixed_density is not None:
+        fixed_density = float(fixed_density)
+        if not fixed_density > 0:
+            raise ValueError(f"stack.halo_abundance_target must be positive, got {fixed_density}")
+    fitted_abundances = load_fitted_abundances(fit_path) if fit_path is not None else None
+
+    def sham_density(sim_type_name, sim):
+        """The SHAM density of one simulation, in (cMpc/h)^-3."""
+        if fixed_density is not None:
+            return fixed_density
+        label = fit_label(sim_type_name, sim)
+        if label not in fitted_abundances:
+            raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
+                           f"fitted: {sorted(fitted_abundances)}")
+        return fitted_abundances[label]
 
     now = datetime.now()
     figPath = Path(plot_config.get('fig_path', '../figures/')) / now.strftime("%Y-%m") / now.strftime("%m-%d")
@@ -577,8 +598,7 @@ def main(path2config, from_npz=None, workers=1):
                 # K_tau: the file is a 'tau_map' run; the density: same galaxies.
                 if f'{out_key}/K_tau' not in beamed:
                     raise ValueError(f"{bf_config['beamed_npz']} has no 'tau_map' profiles of {out_key}")
-                if not np.isclose(beamed[f'{out_key}/abundance'],
-                                  fitted_abundances[fit_label(sim_type_name, sim)]):
+                if not np.isclose(beamed[f'{out_key}/abundance'], sham_density(sim_type_name, sim)):
                     raise ValueError(f"{bf_config['beamed_npz']} stacked {out_key} at another SHAM density")
 
     t0 = time.time()
@@ -590,24 +610,24 @@ def main(path2config, from_npz=None, workers=1):
                              f"({stem + '_profiles.npz'!r})")
         npz_in = dict(np.load(from_npz))
         print(f"Redrawing from {from_npz} (no selection or stacking)")
-        for *_, out_key in entries:
+        for _, _, sim_type_name, sim, out_key in entries:
             prefix = out_key + '/'
             results[out_key] = {k[len(prefix):]: v for k, v in npz_in.items() if k.startswith(prefix)}
             results[out_key]['radii_arcmin'] = npz_in['radii_arcmin']
+            # The file name records fig_name and redshift only, not the sample.
+            if not np.isclose(results[out_key]['abundance'], sham_density(sim_type_name, sim)):
+                raise ValueError(f"{from_npz} stacked {out_key} at n = {results[out_key]['abundance']}, "
+                                 f"not this config's {sham_density(sim_type_name, sim)}")
     else:
         tasks, seen = [], set()
         for _, _, sim_type_name, sim, out_key in entries:
             if out_key in seen:
                 continue
             seen.add(out_key)
-            label = fit_label(sim_type_name, sim)
-            if label not in fitted_abundances:
-                raise KeyError(f"No lensing fit for {label!r} in {fit_path}; "
-                               f"fitted: {sorted(fitted_abundances)}")
             # A simulation's 'max_objects' overrides stack.max_objects (the
             # lensing fits subsampled only the FLAMINGO BGS samples).
             tasks.append({'key': out_key, 'sim_type': sim_type_name, 'sim': sim,
-                          'density': fitted_abundances[label],
+                          'density': sham_density(sim_type_name, sim),
                           'redshift': sim.get('redshift', redshift),
                           'params': dict(params, max_objects=_max_objects(
                               sim.get('max_objects', params['max_objects'])))})
@@ -685,8 +705,10 @@ def main(path2config, from_npz=None, workers=1):
             f"filter          : DSigma, annulus {params['annulus']}'    projection: {params['projection']}",
             f'redshift        : {redshift}' + ''.join(
                 f"; {t['key']}: {t['redshift']}" for t in tasks if t['redshift'] != redshift),
-            f"selection       : SHAM on SubhaloMStar, n fitted on lensing per simulation ({fit_path}), "
-            f"parent-mass cap {params['halo_mass_upper']:.3e} Msun/h",
+            f"selection       : SHAM on SubhaloMStar, "
+            + (f"n fitted on lensing per simulation ({fit_path})" if fixed_density is None
+               else f"fixed n = {fixed_density:.4e} (cMpc/h)^-3")
+            + f", parent-mass cap {params['halo_mass_upper']:.3e} Msun/h",
         ] + ([f"subsample       : fixed-seed random subsamples (seed {params['subsample_seed']}) "
               f"where marked below; the table is of the whole samples"]
              if any('n_sample' in results[t['key']] for t in tasks) else []) + [

@@ -1,8 +1,8 @@
 """precompute_masked_particles.py
 
 Build masked 2D ionized-gas maps by masking the gas particles themselves: keep
-the particles within n x R200m of the host haloes of the lensing-fit SHAM
-galaxies (exact periodic spheres, ``halo_transfer.ApertureLabeller``), and bin
+the particles within n x R200m of the host haloes of the SHAM galaxies (exact
+periodic spheres, ``halo_transfer.ApertureLabeller``), and bin
 them in 2D exactly as the cached unmasked fields are binned
 (``mapMaker.make_mass_field``: ``ionized_gas_masses`` weights,
 ``binned_statistic_2d`` sums over [0, BoxSize)). All radii come from one pass
@@ -14,6 +14,12 @@ which for FLAMINGO at 0.2' is 8869^3. It also shares its binning with the
 unmasked 2D fields, so ``--keep-all`` (no mask) reproduces the cached unmasked
 field, which the script checks.
 
+SHAM density: by default the simulation's lensing-fitted density, read from
+the ``--fit`` npz files of lensing/fit_dsigma_ksz.py (the three z = 0.5 fits if
+``--fit`` is not given); or a fixed density for every simulation with
+``--density`` (e.g. 5e-4 for the DESI LRGs at z = 0.5, 1e-3 for the BGS at
+z ~ 0.26, as in Liu et al. 2026). The two options exclude each other.
+
 Differences from the cube-based masks: the spheres are exact (the cube masks
 round the host centres to a cell and keep whole cells), and particles are
 binned to the nearest pixel rather than spread by TSC.
@@ -22,9 +28,10 @@ Output, for the default no-beam maps: the standard 2D masked-field path
 (``..._ionized_gas_<n>_<proj>_masked<r>R200c.npy``; the "R200c" is historical)
 with a ``.sample.json`` record of the sample, each written via a temporary
 file, the record first; a map counts as done only with its record. As with
-the tau maps, the path does not encode the sample: these maps surround the
-SHAM hosts at the lensing-fitted density. Beam-convolved maps (tests) are only
-written to ``--out-dir``, never to the cache.
+the tau maps, the path does not encode the sample: the record holds the SHAM
+density and where it came from (``density_source``: 'fit' or 'fixed'), and the
+stacking script checks it. Beam-convolved maps (tests) are only written to
+``--out-dir``, never to the cache.
 
 Keep-all check: with ``--keep-all`` and a complete pass, a keep-all map that
 differs from the cached unmasked map by more than 1e-10 (relative) stops the
@@ -33,6 +40,8 @@ script with exit code 1 before anything is saved.
 Usage (from the scripts/ directory):
     python unbound_gas/precompute_masked_particles.py --sim-type SIMBA --name m100n1024 \\
         --snapshot 125 --feedback s50
+    # at a fixed SHAM density instead of the lensing fit:
+    python unbound_gas/precompute_masked_particles.py ... --density 5e-4
     # check against the cached unmasked field, save nothing:
     python unbound_gas/precompute_masked_particles.py ... --keep-all --dry-run
     # test maps on the 0.5' beamed grid, written elsewhere:
@@ -68,9 +77,21 @@ _AXES = {'xy': (0, 1), 'xz': (0, 2), 'yz': (1, 2)}  # map axes, as make_mass_fie
 _KEEP_ALL_RTOL = 1e-10  # keep-all vs cached map (same particles; summation order only)
 
 
-def _done(path):
-    """A map is done only with its sample record (a crash between the two leaves neither usable)."""
-    return path.exists() and Path(str(path) + '.sample.json').exists()
+def _done(path, density):
+    """A map is done only with its sample record (a crash between the two leaves neither usable).
+
+    The path does not encode the sample, so a finished map built at another
+    SHAM density is an error rather than a map to skip.
+    """
+    record = Path(str(path) + '.sample.json')
+    if not (path.exists() and record.exists()):
+        return False
+    meta = json.loads(record.read_text())
+    if not np.isclose(meta.get('density', np.nan), density):
+        raise ValueError(f"{path} was built at n = {meta.get('density')} "
+                         f"({meta.get('density_source', 'fit')}); this run is at n = {density}: "
+                         f"move the old map aside first, or pass --overwrite")
+    return True
 
 
 def main() -> None:
@@ -82,8 +103,12 @@ def main() -> None:
     ap.add_argument('--feedback', default=None)
     ap.add_argument('--projection', default='yz', choices=list(_AXES))
     ap.add_argument('--radii', type=float, nargs='+', default=[1.0, 2.0, 3.0])
-    ap.add_argument('--fit', nargs='+', default=_DEFAULT_FITS,
-                    help='lensing-fit npz file(s) of lensing/fit_dsigma_ksz.py')
+    sample = ap.add_mutually_exclusive_group()
+    sample.add_argument('--fit', nargs='+', default=None,
+                        help='lensing-fit npz file(s) of lensing/fit_dsigma_ksz.py '
+                             '(default: the three z = 0.5 fits)')
+    sample.add_argument('--density', type=float, default=None,
+                        help='fixed SHAM number density [(cMpc/h)^-3] instead of a lensing fit')
     ap.add_argument('--halo-mass-upper', type=float, default=5e14,
                     help='SHAM parent-mass cap [Msun/h], as the figure configs')
     ap.add_argument('--z', type=float, default=0.5)
@@ -99,19 +124,24 @@ def main() -> None:
     args = ap.parse_args()
     if args.beam > 0 and args.out_dir is None and not args.dry_run:
         ap.error('beam-convolved maps are test products: give --out-dir or --dry-run')
+    if args.density is not None and not (np.isfinite(args.density) and args.density > 0):
+        ap.error(f'--density must be positive and finite, got {args.density}')
     save = not (args.dry_run or args.max_chunks is not None)
 
     t0 = time.time()
     st = SimulationStacker(args.name, args.snapshot, z=args.z, simType=args.sim_type,
                            feedback=args.feedback)
-    # The default list may name fits that do not exist yet; explicit ones must.
-    fit_files = ([f for f in args.fit if Path(f).exists()] if args.fit == _DEFAULT_FITS
-                 else args.fit)
-    fitted = load_fitted_abundances(fit_files)
-    label = fit_label(args.sim_type, {'name': args.name, 'feedback': args.feedback})
-    if label not in fitted:
-        raise KeyError(f"No lensing fit for {label!r} in {args.fit}; fitted: {sorted(fitted)}")
-    density = fitted[label]
+    if args.density is not None:
+        density, density_source, fit_files = args.density, 'fixed', []
+    else:
+        # The default list may name fits that do not exist yet; explicit ones must.
+        fit_files = ([f for f in _DEFAULT_FITS if Path(f).exists()] if args.fit is None
+                     else args.fit)
+        fitted = load_fitted_abundances(fit_files)
+        label = fit_label(args.sim_type, {'name': args.name, 'feedback': args.feedback})
+        if label not in fitted:
+            raise KeyError(f"No lensing fit for {label!r} in {fit_files}; fitted: {sorted(fitted)}")
+        density, density_source = fitted[label], 'fit'
     n_pix, arcpp = map_geometry(st, args.z, args.pixel_size)
     box = float(st.header['BoxSize'])
 
@@ -128,7 +158,7 @@ def main() -> None:
                                   True, mask_rad, st.base_path)
 
     radii = [r for r in args.radii
-             if args.overwrite or not save or not _done(out_path(r))]
+             if args.overwrite or not save or not _done(out_path(r), density)]
     for r in sorted(set(args.radii) - set(radii)):
         print(f"  exists, skipping: {out_path(r)}")
     if not radii and not args.keep_all:
@@ -140,7 +170,7 @@ def main() -> None:
     labellers = {r: ApertureLabeller(h['GroupPos'], r * np.asarray(h['GroupRad'], dtype=np.float64),
                                      h['GroupMass'], box, rows=hosts) for r in radii}
     print(f"{args.sim_type} {args.name} {args.feedback or ''} ionized_gas ({args.projection}, "
-          f"{n_pix}^2 at {args.pixel_size}', beam {args.beam}'): n={density} -> {info} "
+          f"{n_pix}^2 at {args.pixel_size}', beam {args.beam}'): n={density} ({density_source}) -> {info} "
           f"({time.time() - t0:.0f} s)", flush=True)
 
     # Bin numbers once per chunk (binned_statistic_2d's own 'sum' is a bincount
@@ -219,7 +249,8 @@ def main() -> None:
         if r is not None:
             # Record first, each via a temporary file: a map is done only with
             # its record, so a crash leaves at worst a record to overwrite.
-            meta = dict(sample='sham-hosts', density=density, fit_files=fit_files, radius_R200m=r,
+            meta = dict(sample='sham-hosts', density=density, density_source=density_source,
+                        fit_files=fit_files, radius_R200m=r,
                         method='particles (exact periodic spheres, nearest-pixel binning)',
                         centre='loader GroupPos (CAESAR pos for SIMBA)', ptype='ionized_gas',
                         projection=args.projection, pixel_size=args.pixel_size, beam=args.beam,

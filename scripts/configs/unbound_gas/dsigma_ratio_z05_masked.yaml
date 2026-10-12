@@ -1,0 +1,101 @@
+# Config for simulated_dsigma_ratio_masked.py (unbound gas paper, exploratory,
+# 2026-10-11): the kSZ masking figure (tau_z05_CAP_masked_flamingo.yaml) recast
+# as the ratio of DeltaSigma-filtered ionized-gas and total-matter profiles,
+# normalized by Omega_b / Omega_m, with the Liu et al. 2026 measurement on the
+# unmasked column.
+#
+# Same simulations, rows and lensing-fit SHAM samples as the kSZ figure, but in
+# the yz projection of the cached total-matter fields: the yz masked tau maps
+# are built by runINT_masked_tau_yz.sh (precompute_masked_sham_hosts.py
+# --projection yz) around the same SHAM hosts.
+# Run from the scripts/ directory:
+#   python unbound_gas/simulated_dsigma_ratio_masked.py -p configs/unbound_gas/dsigma_ratio_z05_masked.yaml --workers 12
+
+stack:
+  redshift: 0.5
+  projection: 'yz'
+  # Numerator: beam-convolved tau maps (0.5' pixels, 1.6' beam), converted to
+  # ionized-gas mass in the script. The beam stays on, as in the measured kSZ.
+  particle_type: 'tau'
+  pixel_size: 0.5            # arcmin
+  beam_size: 1.6             # arcmin FWHM; checked against the masked maps
+  # Denominator: unconvolved total-matter field, unmasked in every column.
+  particle_type_2: 'total'
+  pixel_size_2: 0.2          # arcmin
+  # The measurement's radii (9 points, 1' to 6') and the 0.75' DSigma annulus
+  # of all the DSigma ratio stacks (user decision 2026-10-07).
+  min_radius: 1.0            # arcmin
+  max_radius: 6.0            # arcmin
+  num_radii: 9
+  annulus: 0.75              # arcmin
+  # Gas kept within these multiples of each host's R200m (columns 1-3).
+  mask_radii: [1.0, 2.0, 3.0]
+  # SHAM parent-mass cap, as the kSZ figure and the masked maps (Msun/h).
+  halo_mass_upper: 5.0e+14
+  # SHAM density per simulation, fitted to the HSC Y3 x DESI LRG bin-1 lensing
+  # profile (lensing/fit_dsigma_ksz.py); the masked maps are built around the
+  # hosts of these samples. Same files as tau_z05_CAP_masked_flamingo.yaml.
+  abundance_from_fit: ['../data/fit_dsigma_ksz/fit_dsigma_ksz_z05.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_simba50.npz',
+                       '../data/fit_dsigma_ksz/fit_dsigma_ksz_z05_mstar.npz']
+
+plot:
+  plot_data: true
+  # Measured ratio (kSZ with the ACT beam / lensing), as in compare_data_ratio.py.
+  data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz'
+  data_key: 'source_bin_0'
+  data_label: 'Liu et al. 2026'
+  fig_path: '../figures/'
+  fig_name: 'dsigma_ratio_yz_masked'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  suptitle: false
+  row_height: 3.8
+  # Legends in the 1 R200m column, empty above f ~ 0.6 in every row (in the
+  # unmasked column they covered the data or the curves).
+  legend_column: 0
+  legend_loc: 'upper right'
+  # ylim: [-0.2, 1.4]
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50noagn'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nox'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nofb'
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+  - sim_type: 'FLAMINGO'
+    row_label: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'

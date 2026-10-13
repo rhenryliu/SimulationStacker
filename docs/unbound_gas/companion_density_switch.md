@@ -1,6 +1,7 @@
 # SHAM samples at the companion paper's number densities (unbound gas paper)
 
-**Status: not started.** Plan written 2026-10-12 on the Mac from a read-only
+**Status (2026-10-12, NERSC): Steps 1-6 done, stopped at the checkpoint
+(Sec. 12, Results); the paper is untouched.** Plan written 2026-10-12 on the Mac from a read-only
 look at this repo (at `21138f0`) and at the paper (`~/overleaf/Unbound_Gas`,
 at `47e2ac4`), for an agent on NERSC to carry out. Nothing here has been run.
 Statements the Mac session could not check (scratch files, job outputs,
@@ -474,3 +475,252 @@ sections, then commit (no push) and report the change list to the user.
 
 Update this file's status line and add the job IDs, products and decisions
 taken along the way; commit it with the configs and runners in this repo.
+
+## 12. Results (checkpoint, 2026-10-12, NERSC)
+
+Steps 1-6 as planned, with the corrections below. Numbers come from the
+reports of `unbound_gas/compare_sham_density.py` in
+`figures/2026-10/10-12/compare_sham_density_{fgas_z05,pk_z05,ratio_z05,ratio_z026}.txt`
+(`figures/` is not tracked), the halo tables
+`figures/2026-10/10-12/dsigma_ratio_yz_masked_nobeam_{n5e-4_z0.5,n1e-3_z0.26}_halo_masses.txt`
+and the Fig. 7 log `Outputs_Perlmutter/figs_n5e-4-59721807_fgas.log`.
+f_gas values are in units of Omega_b/Omega_m. "out_n" is the outside
+fraction 1 - f_n/f_unmasked. "LF" is the lensing-fit sample.
+
+### 12.1 Decisions (user, Step 1 answers) and corrections to this plan
+
+- Commits follow the standing rule: diff and message shown, user approves.
+- The checkpoint numbers come from a committed script (`compare_sham_density.py`).
+- The moved Table II drops its chi2 column.
+- App. B drops the "fitted densities are 2.4-6 times the LRG density" sentence
+  and its `[AUTHOR: explain why ...]` placeholder.
+- `make_unboundGas_plots.sh` is rewritten in full: one command per draft figure,
+  Figs. 1-10, with the new configs.
+- Discussion l.1304 ("direct amplitude comparisons ... on the CAP profiles
+  themselves", the user's proofread text): to be discussed at this checkpoint.
+- Two interactive slots allowed (user, during the runs).
+- Corrections to the plan:
+  - The 1e-3 BGS host masses were not unknown. The companion's job log
+    (`~/projects/DESIxHSC-Lensing/Outputs_Perlmutter/plot-paper-figures-58732702.out`)
+    has them, and the runs here reproduce them.
+  - Fig. 5 needed new 'lens' stacks only for the two M*-sigma runs. The other
+    five runs' stacks matched the requested settings exactly.
+  - A copy of `runCPU_fig6_lensfit.sh` would have overwritten the nine-transfer
+    'lens' stellar stacks. Hence the `--sims` restriction; the 20 existing
+    'lens' stacks were md5-unchanged afterwards.
+  - Fig. 7's "all apertures" spans 1-10' (the figure's range).
+
+### 12.2 Products, jobs, commits
+
+- **Commit `ef162ec`:** the `--density` option of `precompute_masked_particles.py`
+  and the `stack.halo_abundance_target` option of `simulated_dsigma_ratio_masked.py`
+  (defaults unchanged). Validated as follows:
+  - SIMBA-100 with `--density` at its fitted value reproduces the LF maps
+    bit for bit (job 59720595);
+  - the default path picks the fitted density;
+  - both LF figures redraw identically with `--from-npz`.
+- **Moved:** the 60 LF masked ionized-gas fields and their records
+  (36 at z = 0.5, 24 at z ~ 0.26), from `<suite>/products/2D/masked/` to
+  `<suite>/products/2D/masked/lensfit_sham_hosts/`. The list is in
+  `MANIFEST.txt` there. Sizes were checked; the 108 tau/tSZ maps were untouched.
+  The LF Fig. 6/9 configs now fail their map check by design; redraw them with
+  `--from-npz`.
+- **New masked fields** (records: `density_source: 'fixed'`):
+
+  | job | redshift | density | runs | time | peak per node | unmasked-map checks (exact or 1e-15) |
+  |---|---|---|---|---|---|---|
+  | 59720790 | z = 0.5 | 5e-4 | 12 | 47 min | 204 GB | TNG100-1, SIMBA-100 |
+  | 59721077 | z ~ 0.26 | 1e-3 | 8 | 50 min | 188 GB | Illustris-1, SIMBA-100 |
+
+  Galaxies stacked:
+  - z = 0.5: SIMBA-50 62 each, TNG100-1 and Illustris-1 210, SIMBA-100 500,
+    TNG300-1 4,307, FLAMINGO 157,910;
+  - z ~ 0.26: Illustris-1 421, SIMBA-100 1,000, TNG300-1 8,615, FLAMINGO 315,821
+    (no subsample).
+
+  Job 59720790 also ran the z ~ 0.26 runner, which found no file (exit 127):
+  the runner was held aside while job 59721077 built z ~ 0.26 in parallel.
+- **Stacks and figures:**
+  - Job 59721807 (1 node, 62 min) made Fig. 5 (M*-sigma 'lens' stacks, grid,
+    table), Fig. 6 (7 min) and Fig. 7 (62 min, 28 GB). Its Fig. 9 step stopped
+    at the map check (the z ~ 0.26 maps were still being built; nothing was
+    built or saved).
+  - Job 59722181 (13 min, 90 GB) made Fig. 9.
+- **Outputs in `figures/2026-10/10-12/`:**
+  - Fig. 5: `pk_fstar_obs_z05_n5e-4_fstar_grid_D.pdf` and `pk_fstar_obs_z05_n5e-4_table.txt`.
+  - Fig. 6: `dsigma_ratio_yz_masked_nobeam_n5e-4_z0.5_{masking_comparison.pdf,profiles.npz,halo_masses.txt}`.
+  - Fig. 7: `fgas_profiles_z05_n5e-4_2D{.pdf,_profiles.npz}`.
+  - Fig. 9: `dsigma_ratio_yz_masked_nobeam_n1e-3_z0.26_{...}`.
+- **New 'lens' stacks:** `L1_m9_Mstar-1sigma{,_fgas-4sigma}_67_lensing_{stellar,fstar_obs}_lens.npz`.
+  Their stellar stacks hold only the ap1/M13 transfer.
+- **Test products** in `/pscratch/sd/r/rhliu/claude_jobs/density_switch_check/` (40 MB):
+  - `maps/`: the SIMBA-100 `--density` validation maps;
+  - `redraw/`: the redraw and error-path test configs and outputs;
+  - `move_list.tsv` (the move);
+  - `lens_stacks_md5_before.txt`;
+  - the copy of the z ~ 0.26 runner that job 59721077 ran (md5-identical to
+    the repo's).
+
+  Left in place; the user decides.
+
+### 12.3 A. Fig. 7 / Sec. IV D (l.1157-1165, caption l.1181)
+
+| claim (location) | LF (draft) | SHAM 5e-4 |
+|---|---|---|
+| \|f_gas(SHAM) - f_gas(mass cut)\| "within about 0.05 at all apertures except SIMBA-100" (l.1163, caption) | max 0.016-0.046 | TNG300-1 0.026; Illustris-1 0.046 (0.038 within 6'); FLAMINGO 0.024-0.041 |
+| SIMBA-100 "above the mass cut by 0.06-0.09 at 1-5 arcmin" (l.1165) | 0.059-0.087 | 0.08-0.11 at 1-4.6'; 0.05 at 5.5-6.4'; \|d\| <= 0.02 at 7-10' |
+| SIMBA-100's difference at least the 0.06 measurement uncertainty, the others smaller (l.1165) | holds | holds (others <= 0.046) |
+| satellite fractions "23-28%, about twice the 11-14%" (l.1159) | 23.4-27.9% | 15.4-18.6%. "About twice" no longer holds. |
+
+Satellite fractions per run at 5e-4: SIMBA-100 15.4%, TNG300-1 17.4%,
+FLAMINGO 17.7-18.4%, Illustris-1 18.6%.
+
+Host masses against the mass cut (1.665e13). The draft's "somewhat more
+massive" (l.1158) cites Table II, which averages the parent mass per galaxy.
+
+| definition | LF | SHAM 5e-4 |
+|---|---|---|
+| parent FoF mass, averaged per galaxy | 1.93-2.07e13 | 2.77-3.61e13 (Illustris-1 2.77, SIMBA-100 2.87, TNG300-1 3.52, FLAMINGO 3.38-3.61) |
+| mean over unique hosts (`make_fgas_profiles.py` print) | 0.72-1.11e13 (below the mass cut) | 1.86-2.33e13 |
+
+### 12.4 B. Fig. 5 / Sec. IV B 3, abstract, conclusions, Discussion
+
+| claim (location) | LF (draft) | SHAM 5e-4 |
+|---|---|---|
+| largest f_gas shift at 1' from the stellar rescaling, "up to about 1.4 times" the 0.0601 uncertainty (l.106, l.1022, l.1285) | 0.0822, 1.37x (TNG300-1, f* = 0.30) | 0.1151, **1.92x** (TNG300-1, f* = 0.30) |
+| spread across simulations at 1', "0.15-0.53" (l.1022, l.1289) | 0.147-0.534 | **0.131-0.517** (Illustris-1 to TNG300-1) |
+| "the stellar content alone can shift the prediction by about the size of the measurement uncertainty" (l.1289) | up to 1.37 sigma | up to 1.92 sigma |
+| L1_m9 vs M*-sigma lensing f_gas, "almost no difference" (l.1028); values at 1' / 6' | 0.289 vs 0.275 / 0.789 vs 0.795 | 0.302 vs 0.282 / 0.799 vs 0.806 |
+
+Per-run shifts at 1', in sigma, at 5e-4, f* = 0.05 / 0.30:
+
+| run | f* = 0.05 | f* = 0.30 |
+|---|---|---|
+| TNG300-1 | +0.45 | -1.92 |
+| Illustris-1 | +0.98 | +0.13 |
+| L1_m9 | +0.90 | -0.77 |
+| fgas-8sigma | +0.96 | -0.17 |
+| Jet | +0.81 | -0.45 |
+| M*-sigma | +0.70 | -0.84 |
+| M*-sigma_fgas | +0.71 | -0.55 |
+
+S(k) does not depend on the sample.
+
+### 12.5 C. Fig. 6 / Sec. IV C, abstract l.109, conclusions (iii)
+
+The old claims are for the CAP tau maps on the LF samples (draft). The "LF,
+DeltaSigma" column is the LF no-beam DeltaSigma-ratio run
+(`10-12/dsigma_ratio_yz_masked_nobeam_z0.5_profiles.npz`), which separates
+the change of filter from the change of sample.
+
+| quantity (location) | CAP, LF (draft) | DeltaSigma, LF | DeltaSigma, SHAM 5e-4 |
+|---|---|---|---|
+| mean host R200m (l.1092, "1.3-1.5 arcmin") | 1.3-1.5' | 1.28-1.44' | **1.64-1.86'** (632-716 ckpc/h) |
+| out_1 at 1', "less than a tenth except SIMBA-100 (0.30)" (l.1092) | <0.1; SIMBA-100 0.30 | -0.03 to 0.07; SIMBA-100 0.22 | -0.07 to 0.01; SIMBA-100 0.18 |
+| out_1 at 6', "up to about three quarters" (abstract l.109, l.1092) | up to ~0.75 | 0.33-0.72 | 0.26-0.71 |
+| out_2 at 1' / 6' (no draft claim) | | -0.04 to 0.05 / 0.10-0.36 | -0.03 to 0.04 / 0.00-0.29 |
+| out_3 at 6', "less than a tenth" (l.1092) | <0.1 | 0.01-0.06 | **-0.06 to 0.00** |
+| out_1 at 6': Illustris-1 "0.74", IllustrisTNG "about half" (l.1097) | 0.74; ~0.5 | 0.72; 0.47-0.48 | 0.71; 0.45 (TNG300-1), 0.46 (TNG100-1) |
+| out_1 at 6': stronger FLAMINGO feedback gives a larger fraction than L1_m9 (l.1097) | holds | L1_m9 0.56, fgas 0.61, Jet 0.58 | L1_m9 0.53, fgas-8sigma 0.60, Jet 0.56, M*-sigma 0.54, M*-sigma_fgas 0.57 |
+| SIMBA-50 "no clear ordering"; "a few hundred galaxies each" (l.1097) | | 0.33 / 0.43 / 0.38 | no-AGN 0.27, no-X-ray 0.33, no-feedback 0.26 (62 galaxies each) |
+
+Notes on the 5e-4 values:
+- Several outside fractions are negative (a masked DeltaSigma_ion above the
+  unmasked one):
+  - out_1 at 1'-1.6' in most runs, down to -0.07 (SIMBA-50 no-X-ray) and
+    -0.06 (Illustris-1);
+  - out_2 at 2-3' in several runs (Illustris-1 down to -0.15);
+  - out_3 at 6' in all 12 runs (-0.002 to -0.061).
+
+  Not interpreted. The "fraction" wording may need care.
+
+### 12.6 D. Fig. 9 / App. A (l.1421-1423, l.1448, caption l.1453)
+
+The old claims are CAP on the BGS LF samples, three runs, no FLAMINGO.
+
+| quantity (location) | CAP, LF (draft) | DeltaSigma, LF | DeltaSigma, SHAM 1e-3 |
+|---|---|---|---|
+| mean host FoF mass, "(1.2-1.4)e13" (l.1423) | 1.2-1.4e13 | 1.23-1.56e13 (Table II) | **2.99-3.56e13** (TNG300-1 3.56, Illustris-1 3.36, SIMBA-100 2.99; FLAMINGO 3.06-3.29) |
+| mean host R200m, "1.5-1.75 arcmin" (l.1448) | 1.5-1.75' | 1.37-1.74' | **2.46-3.04'** (599-647 ckpc/h; FLAMINGO 2.46-2.57' at z = 0.30) |
+| out_1 at 6', "0.26-0.64" (l.1447/1448) | 0.26-0.64 | 0.24-0.63 | 0.25-0.56 (TNG300-1 0.25, Illustris-1 0.32, SIMBA-100 0.56, FLAMINGO 0.34-0.35) |
+| largest out_1 is SIMBA-100's | holds | holds | holds |
+| out_2 at 1' / 6' (no draft claim) | | -0.04 to 0.03 / 0.06-0.28 | 0.01-0.06 / 0.01-0.13 |
+| out_3 at 6', "at most 0.09" (l.1448) | <= 0.09 | 0.00 to 0.08 | **-0.07 to -0.01** |
+| fraction smaller than at z = 0.5 at a given aperture (l.1448) | holds | | holds for every shared run (out_1 at 6': TNG300-1 0.25 vs 0.45, Illustris-1 0.32 vs 0.71, SIMBA-100 0.56 vs 0.71, FLAMINGO 0.34-0.35 vs 0.53-0.60) |
+| R200m in arcmin larger than at z = 0.5 (l.1448) | holds | | holds (2.46-3.04' vs 1.64-1.86') |
+| "the hosts of the BGS SHAM samples are less massive than those of the LRG SHAM samples" (l.1448) | holds | | **no longer holds**: 1e-3 BGS vs 5e-4 LRG per-galaxy FoF mass is TNG300-1 3.56 vs 3.52, Illustris-1 3.36 vs 2.77, SIMBA-100 2.99 vs 2.87, FLAMINGO 3.06-3.29 vs 3.38-3.61 |
+
+Other App. A changes:
+- FLAMINGO is now included ("We omit FLAMINGO ..." goes).
+- The TNG300-1 non-convergence sentence goes.
+- Figure layout: the 3 R200m guide line (about 7.5-9') lies outside the plotted
+  6.5' range, and the 2 R200m line is at the right edge of the top row.
+
+### 12.7 E. Robustness, for the user only (SHAM 5e-4 or 1e-3 vs LF)
+
+- **Fig. 7(b):** f_gas(SHAM) changes by at most 0.007-0.025 per run over 1-10'
+  (largest: L1_m9 0.025, SIMBA-100 0.023, Illustris-1 0.021). The mass-cut
+  panel is identical.
+- **Fig. 6 (z = 0.5):**
+
+  | quantity | run(s) | change from LF |
+  |---|---|---|
+  | f_unmasked | all runs | -0.017 to +0.035 |
+  | out_1 at 6' | SIMBA-50 | -0.06 to -0.12 |
+  | out_1 at 6' | the other runs | -0.01 to -0.03 |
+  | out_1 at 1' | all runs | -0.06 to -0.02 |
+  | out_3 at 6' | all runs | -0.05 to -0.08 |
+- **Fig. 9 (z ~ 0.26):**
+
+  | quantity | run(s) | change from LF |
+  |---|---|---|
+  | f_unmasked | all runs, all radii | negative, -0.011 to -0.146 (TNG300-1 at 1') |
+  | out_1 at 6' | all runs | -0.08 to +0.02 |
+  | out_2 at 6' | all runs | -0.03 to -0.15 |
+  | out_3 at 6' | all runs | -0.02 to -0.12 |
+- **Fig. 5:** f_sim at 1' changes by -0.017 to +0.014. The largest shift goes
+  from 1.37 to 1.92 sigma.
+
+### 12.8 F. Consistency with the companion
+
+The unmasked columns of the new Figs. 6 and 9 reproduce the companion's
+published simulated curves for the six shared runs
+(`~/projects/DESIxHSC-Lensing/zenodo/fig16b.csv`, z = 0.5, and `fig16a.csv`,
+z = 0.26): max |Delta f| <= 1.1e-16 and max |Delta err| <= 1.4e-17.
+
+Where each run lies relative to the beam-compensated data, as (f_sim - data)/sigma
+over the 9 radii (count = radii with |pull| <= 1):
+
+| run | z = 0.5 range | count | z ~ 0.26 range | count |
+|---|---|---|---|---|
+| L1_m9 | -0.3 to +1.1 | 8/9 | -2.2 to 0.0 | 8/9 (only the 1' point at -2.2) |
+| M*-sigma | -0.6 to +1.1 | 8/9 | -2.4 to -0.2 | 8/9 |
+| SIMBA-100 | -1.3 to +0.7 | 8/9 | -2.5 to -1.1 | 0/9 |
+| TNG300-1 | +0.4 to +3.9 | 3/9 (above at 1-2.25' by 3.3-3.9) | -0.1 to +2.8 | 5/9 (above at 1.6-3.5') |
+| TNG100-1 | +0.2 to +4.1 | 3/9 | | |
+| Illustris-1 | -4.4 to +0.8 | 3/9 (below at 1-2.9' by 3.0-4.4) | -4.1 to -1.9 | 0/9 |
+| fgas-8sigma | -3.4 to +0.7 | 5/9 (below at 1-2.9') | -3.6 to -1.3 | 0/9 |
+| Jet | -2.1 to +0.7 | 5/9 | -2.9 to -1.1 | 0/9 |
+| M*-sigma_fgas | -2.1 to +0.9 | 5/9 | -3.1 to -0.9 | 1/9 |
+| SIMBA-50 no-AGN | -0.4 to +4.8 | 6/9 | | |
+| SIMBA-50 no-X-ray | -1.0 to +0.7 | 9/9 | | |
+| SIMBA-50 no-feedback | -1.2 to +2.4 | 7/9 | | |
+
+These positions are the companion's own comparison (same samples and curves);
+no ranking is derived here.
+
+### 12.9 G. Other
+
+- The z = 0.5 LF masked-field records (written before `8f58cb4`) have no
+  `n_pixels` key. Harmless.
+- The draft's IV C keeps some of the author's own (non-agent) sentences that
+  describe CAP kSZ amplitudes:
+  - l.1076: "we plot the kSZ profiles themselves";
+  - l.1083-1084: per-simulation CAP amplitudes;
+  - l.1104: "CAP-filtered signal".
+
+  The Discussion's l.1295 and l.1304 do the same. They need `\areplace` in
+  Step 7. l.1304 is the open question in 12.1.
+- The companion's C_beam caption (l.1161) and text (l.1227) describe the
+  average differently. A subagent puts the difference at about 0.15% at 1';
+  that number has not been checked. Outside this task.

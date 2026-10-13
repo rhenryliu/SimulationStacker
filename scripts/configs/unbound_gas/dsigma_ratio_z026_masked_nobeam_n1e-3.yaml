@@ -1,0 +1,98 @@
+# Config for simulated_dsigma_ratio_masked.py at z ~ 0.26: the z ~ 0.26
+# DeltaSigma ratio masking figure (dsigma_ratio_z026_masked_nobeam.yaml) on the
+# SHAM samples of Liu et al. 2026's BGS comparison, at the fixed density
+# n = 1e-3 (cMpc/h)^-3 instead of the BGS lensing-fit densities (unbound gas
+# paper, 2026-10-12). TNG300-1, Illustris-1 and SIMBA-100 (z = 0.26) on the top
+# row, the five FLAMINGO runs (snapshot 71, z = 0.30) on the bottom row.
+#
+# Masks around the hosts of these galaxies, built at particle level by
+# runINT_masked_ionized_gas_particles_z026_n1e-3.sh. All galaxies are stacked:
+# a FLAMINGO box holds 315,821 at this density, so the 4e5 subsample of the
+# lensing-fit config (max_objects) is dropped.
+# Run from the scripts/ directory:
+#   python unbound_gas/simulated_dsigma_ratio_masked.py -p configs/unbound_gas/dsigma_ratio_z026_masked_nobeam_n1e-3.yaml --workers 8
+
+stack:
+  redshift: 0.26             # FLAMINGO entries override it with 0.3
+  projection: 'yz'
+  # Numerator: unconvolved ionized-gas fields, masked at particle level.
+  numerator: 'ionized_gas_field'
+  particle_type: 'ionized_gas'
+  pixel_size: 0.2            # arcmin
+  beam_size: 0               # arcmin FWHM; checked against the masked maps
+  # Denominator: unconvolved total-matter field, unmasked in every column.
+  particle_type_2: 'total'
+  pixel_size_2: 0.2          # arcmin
+  # The measurement's radii (9 points, 1' to 6') and the 0.75' DSigma annulus.
+  min_radius: 1.0            # arcmin
+  max_radius: 6.0            # arcmin
+  num_radii: 9
+  annulus: 0.75              # arcmin
+  # Gas kept within these multiples of each host's R200m (columns 1-3).
+  mask_radii: [1.0, 2.0, 3.0]
+  # SHAM parent-mass cap (Msun/h), as the companion and the masked maps.
+  halo_mass_upper: 5.0e+14
+  # Fixed SHAM density (cMpc/h)^-3 for every simulation, as Liu et al. 2026
+  # for the DESI BGS.
+  halo_abundance_target: 1.0e-3
+
+plot:
+  plot_data: true
+  # Beam-compensated BGS measurement (beam_compensated_ratio_v2.py with
+  # beam_compensated_z026.yaml, use_sim_scatter false).
+  data_path: '../data/beam_compensated/beam_compensated_ionized_gas_total_z0.26.npz'
+  data_keys: {theta: 'theta_arcmin', value: 'R_compensated', error: 'sigma_compensated'}
+  data_label: 'Liu et al. 2026 (BGS, beam-corrected)'
+  fig_path: '../figures/'
+  fig_name: 'dsigma_ratio_yz_masked_nobeam_n1e-3'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  suptitle: false
+  row_height: 3.8
+  # The rows are at different redshifts, so each gets its own comoving axis.
+  top_axis: 'every_row'
+  legend_column: 0
+  legend_loc: 'upper right'
+  # Six entries in the FLAMINGO row: 10 pt keeps them above the 1 R200m curves.
+  legend_fontsize: 10
+
+simulations:
+  - sim_type: 'IllustrisTNG'
+    row: 0
+    row_label: 'IllustrisTNG + SIMBA'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+      - name: 'Illustris-1'
+        snapshot: 116
+  - sim_type: 'SIMBA'
+    row: 0
+    sims:
+      - name: 'm100n1024'
+        snapshot: 136
+        feedback: 's50'
+  - sim_type: 'FLAMINGO'
+    row: 1
+    row_label: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Mstar-1sigma'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Mstar-1sigma_fgas-4sigma'
+        redshift: 0.3

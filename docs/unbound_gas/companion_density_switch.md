@@ -1,7 +1,7 @@
 # SHAM samples at the companion paper's number densities (unbound gas paper)
 
-**Status (2026-10-12, NERSC): Steps 1-6 done, stopped at the checkpoint
-(Sec. 12, Results); the paper is untouched.** Plan written 2026-10-12 on the Mac from a read-only
+**Status (2026-10-12, NERSC): done. Steps 1-6 in this repo (Sec. 12,
+Results), Step 7 in the paper at `3fc68eb`, not pushed (Sec. 13).** Plan written 2026-10-12 on the Mac from a read-only
 look at this repo (at `21138f0`) and at the paper (`~/overleaf/Unbound_Gas`,
 at `47e2ac4`), for an agent on NERSC to carry out. Nothing here has been run.
 Statements the Mac session could not check (scratch files, job outputs,
@@ -724,3 +724,89 @@ no ranking is derived here.
 - The companion's C_beam caption (l.1161) and text (l.1227) describe the
   average differently. A subagent puts the difference at about 0.15% at 1';
   that number has not been checked. Outside this task.
+
+## 13. Step 7: the draft update (2026-10-12, NERSC)
+
+Paper commit `3fc68eb` ("Use the companion paper's SHAM densities"), not
+pushed. It changes `main.tex`, `CLAUDE.md`, `AGENTS.md` and four figures:
+- Figs. 5 and 7 are replaced in place;
+- `figures/dsigma_ratio_masked_z05.pdf` (Fig. 6) and
+  `figures/dsigma_ratio_masked_z026.pdf` (Fig. 9) are new.
+
+Build: latexmk exit 0. The only undefined reference is pre-existing:
+`\ref{fig:fgas_baryon_profiles show the 2D cumulative profiles.}` at l.653,
+from `47e2ac4`, not touched.
+
+### 13.1 User decisions on the draft plan
+
+| # | decision |
+|---|---|
+| 1 | Review with latex-reviewer-diff and outside-reader (now synced to NERSC). |
+| 2 | Struck references to App. C are written as plain "Appendix~C". |
+| 3 | Figs. 5 and 7 are replaced in place; Figs. 6 and 9 are new files. |
+| 4 | The Fig. 6/9 legends ("beam-corrected") and Fig. 9's off-axis 3 R200m guide line are left as they are. |
+| 5 | `TODO.md` is untouched. |
+| 6 | "About 1.4 times" becomes "about twice" (1.92 sigma). |
+| 7 | l.1289 and l.1332 swap in "up to about twice". |
+| 8 | "About three quarters" is kept (largest value 0.71). |
+| 9 | III A adds "approximately the comoving number density of the DESI LRGs~\cite{Zhou2023_DESI_LRG}". |
+| 10 | IV D keeps "somewhat more massive" (only the Table II reference removed). |
+| 11 | Satellites: "15-19%, slightly higher than the 11-14%". |
+| 12 | Small or negative outside fractions are given as bounds on the size of the change. |
+| 13 | SIMBA-100 explanation: re-checked (Sec. 13.2) and kept. |
+| 14 | App. A host mass (3.0-3.6)e13; "similar" masses for BGS and LRG. |
+| 15 | App. B's "As for the kSZ effect" lead-in goes. |
+| 16 | App. B fit paragraph without chi^2, SIMBA-50 or satellite sentences; single-column table after the tSZ paragraph. |
+| 17 | The III B "quoting ... T_kSZ units" clause is deleted. |
+| 18 | The Discussion's "CAP profiles themselves" sentence is deleted. |
+
+### 13.2 SIMBA-100 centre test (decision 13)
+
+`scripts/unbound_gas/test_simba_centres_masked.py`, job 59724086 (4 min);
+output `figures/2026-10/10-12/test_simba_centres_m100n1024_s50_n0.0005.npz`,
+log `Outputs_Perlmutter/simba_centres-salloc-20261012-192311.log`.
+
+The test rebuilds SIMBA-100's 5e-4 particle masks centred on CAESAR `pos`
+(as the paper) and on `minpotpos`. The `pos` masks reproduce the Fig. 6
+numerators exactly (relative difference 0.0).
+
+| centre | out_1 at 1' | 1.625' | 6' |
+|---|---|---|---|
+| CAESAR `pos` | 0.18 | 0.32 | 0.71 |
+| `minpotpos` | -0.02 | 0.02 | 0.46 |
+
+With `minpotpos`, SIMBA-100 falls within the other runs' small-aperture
+range (-0.07 to 0.05), so the draft's centring explanation is kept.
+
+Host offsets |pos - minpotpos|: median 0.21 R200m (16-84%: 0.08-0.55).
+This is per host, not per galaxy, and one host is a 63 R200m outlier
+(likely a bridged CAESAR halo).
+
+### 13.3 Reviews
+
+- **latex-reviewer-diff:** no critical items; its nested-`\areplace`
+  warning (Fig. 10 caption, App. B) was fixed by flattening.
+- **outside-reader:** six points, none acted on (reported to the user):
+
+  | point | status |
+  |---|---|
+  | "somewhat more massive" has no number | decision 10 |
+  | "about three quarters" vs the largest value 0.71 | decision 8 |
+  | "lensing-matched" used one paragraph before App. B's new paragraph defines it | the paragraph could move up one |
+  | the 1 - S_n/S_unmasked relation comes late in IV C's first paragraph | `\arev` text for the user to rework |
+  | Fig. 5's caption does not state n_g | not edited |
+  | conclusions (iii) gives no magnitude | not edited |
+
+### 13.4 Open items (user)
+
+- The broken reference at l.653.
+- l.1318 says "three of the main analyses" at z ~ 0.26; App. A says "two".
+- `TODO.md` entries l.79 and l.226-227 are stale (App. C, the dropped
+  `[AUTHOR]` placeholder on the fitted densities).
+- The `Zhou2023_DESI_LRG` clause: not checked against Zhou et al.'s text; the
+  companion does not state that density.
+- Rework of the `\arev` text in IV C, the App. A kSZ paragraph and the
+  Fig. 6/9 captions.
+- Session test products in `/pscratch/sd/r/rhliu/claude_jobs/density_switch_check/`
+  (40 MB) and the build directories `/pscratch/sd/r/rhliu/latex-build/Unbound_Gas-20261012-*`:
+  left for the user.

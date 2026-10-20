@@ -144,8 +144,14 @@ Nyquist frequency, identical k bins across files.
   current code builds (provenance unknown; effect on P_mm < 1e-4).
 - Fixed X_H = 0.76 makes ionized > gas in metal-enriched cells (5% of cells in
   TNG300-1, 21% in Illustris-1; negative neutral mass ≤ 0.12% of gas).
-- The hydro run's own DM is not an adequate reference: it underestimates the
-  suppression at k = 5 h/Mpc by up to ~0.07; all results use DMO runs.
+- The hydro run's own DM is not an adequate reference; all results use DMO
+  runs. Its error in S(k) changes sign between runs: at k = 5 h/Mpc it
+  understates the suppression by 0.068 (Illustris-1), 0.071 (SIMBA-100) and
+  0.015–0.016 (FLAMINGO fgas-8sigma, Jet_fgas-4sigma), but overstates it by
+  0.011 for FLAMINGO L1_m9. TNG300-1 is overstated by 0.011 at k = 2 h/Mpc and
+  understated by 0.005 at k = 5 h/Mpc. Figures and table: `make_pk_dm_ratio.py`
+  (corrected 2026-10-18; this entry used to say the hydro DM always
+  understates the suppression).
 - FLAMINGO neutrinos are excluded from both hydro and DMO fields.
 
 ## 6. Results snapshot (global model, 2026-09-22)

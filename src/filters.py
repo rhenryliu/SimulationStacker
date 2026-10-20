@@ -640,3 +640,125 @@ def DSigma_from_mass(r, radii_2D, M_2D, k=3):
         return np.stack(result, axis=-1)
     else:
         raise ValueError("M_2D must be either a 1D or 2D array.")
+
+def _signed_quadrant_area(x, y, R):
+    """Signed area of the disk u^2 + v^2 < R^2 between the origin and the corner (x, y).
+
+    For x, y >= 0 this is the area of the disk inside [0, x] x [0, y]. Flipping the sign of
+    x or y flips the sign of the result, so the area of the disk inside any axis-aligned
+    rectangle [x0, x1] x [y0, y1] is Q(x1, y1) - Q(x0, y1) - Q(x1, y0) + Q(x0, y0).
+
+    Args:
+        x (np.ndarray): Corner abscissae (broadcastable with ``y`` and ``R``).
+        y (np.ndarray): Corner ordinates.
+        R (np.ndarray): Disk radii, > 0.
+
+    Returns:
+        np.ndarray: Signed areas, in the squared units of the inputs.
+    """
+    sign = np.sign(x) * np.sign(y)
+    x = np.minimum(np.abs(x), R)
+    y = np.minimum(np.abs(y), R)
+    u_star = np.sqrt(np.maximum(R**2 - y**2, 0.0))   # where the circle drops to height y
+
+    def chord_integral(u):
+        """Integral of sqrt(R^2 - t^2) dt from 0 to u."""
+        return 0.5 * (u * np.sqrt(np.maximum(R**2 - u**2, 0.0))
+                      + R**2 * np.arcsin(np.clip(u / R, -1.0, 1.0)))
+
+    area = np.where(x <= u_star, x * y, y * u_star + chord_integral(x) - chord_integral(u_star))
+    return sign * area
+
+
+def pixel_disk_overlap(x0, x1, y0, y1, R):
+    """Exact area of the disk of radius R centred on the origin inside each rectangle.
+
+    Args:
+        x0 (np.ndarray): Lower row-axis edges of the rectangles.
+        x1 (np.ndarray): Upper row-axis edges.
+        y0 (np.ndarray): Lower column-axis edges.
+        y1 (np.ndarray): Upper column-axis edges.
+        R (np.ndarray): Disk radii, > 0, broadcastable with the edges.
+
+    Returns:
+        np.ndarray: Overlap areas, in the squared units of the inputs.
+    """
+    Q = _signed_quadrant_area
+    return Q(x1, y1, R) - Q(x0, y1, R) - Q(x1, y0, R) + Q(x0, y0, R)
+
+
+def delta_sigma_lensing_weights(half: int, pixel_size: float, edges: np.ndarray,
+                                offset: Tuple[float, float] = (0.0, 0.0),
+                                n_quad: int = 256) -> np.ndarray:
+    """Per-pixel weights that turn a mass cutout into the lensing-bin average of ΔΣ.
+
+    A weak-lensing ΔΣ measurement (e.g. dsigma) reports the area-weighted mean of
+    ΔΣ(R) = Σ̄(<R) − Σ(R) over each radial bin. For a bin [a, b] that mean is a compensated
+    aperture filter on Σ:
+
+        <ΔΣ>_[a,b] = [∫_a^b 2 M(<R) / R dR − (M(<b) − M(<a))] / (π (b² − a²)),
+
+    with M(<R) the projected mass within R of the halo. Treating the mass in each pixel as
+    uniform over the pixel, M(<R) = Σ_p m_p f_p(R), where f_p(R) is the exact fraction of pixel
+    p inside radius R (``pixel_disk_overlap``), so <ΔΣ> = Σ_p m_p W_p with
+
+        W_p = [∫_a^b 2 f_p(R) / R dR − f_p(b) + f_p(a)] / (π (b² − a²)).
+
+    The R integral uses Gauss–Legendre quadrature. Since Σ_p f_p(R) × (pixel area) = π R²
+    exactly once the cutout contains the disk of radius b, the weights cancel a uniform sheet
+    to rounding error for any number of nodes, as the disk-minus-ring 'DSigma' filter does.
+    Unlike that filter, the result does not depend on a ring width: it is the quantity a
+    lensing measurement in the same bins would give.
+
+    Args:
+        half: Cutout half-width in pixels; the cutout is (2*half+1, 2*half+1), centred on
+            its central pixel.
+        pixel_size: True pixel size, in the units of ``edges``.
+        edges: Bin edges, shape (N+1,), positive and strictly increasing.
+        offset: (row, column) position of the halo relative to the centre of the central
+            pixel, in the units of ``edges``. Rows run along the first map coordinate, as in
+            ``SimulationStacker.cutout_2d_periodic``.
+        n_quad: Gauss–Legendre nodes per bin.
+
+    Returns:
+        Weights of shape (N, 2*half+1, 2*half+1). For a cutout ``m`` holding mass per pixel,
+        ``np.tensordot(W, m, axes=([1, 2], [0, 1]))`` is <ΔΣ> in each bin, in mass per unit
+        area of ``edges``.
+
+    Raises:
+        ValueError: If the edges are not positive and increasing, or if the disk of radius
+            ``edges[-1]`` around the halo is not inside the cutout.
+    """
+    edges = np.asarray(edges, dtype=float)
+    if edges[0] <= 0 or np.any(np.diff(edges) <= 0):
+        raise ValueError(f'edges must be positive and strictly increasing, got {edges}')
+    off = np.asarray(offset, dtype=float)
+    reach = (half + 0.5) * pixel_size - np.max(np.abs(off))
+    if reach < edges[-1]:
+        raise ValueError(f'cutout reaches {reach:.4g} from the halo, inside the outer bin edge '
+                         f'{edges[-1]:.4g}; enlarge the cutout')
+
+    n = 2 * half + 1
+    centres = np.arange(-half, half + 1) * pixel_size
+    # Pixel rectangles relative to the halo, flattened row-major.
+    x0 = np.repeat(centres - 0.5 * pixel_size - off[0], n)
+    y0 = np.tile(centres - 0.5 * pixel_size - off[1], n)
+    x1, y1 = x0 + pixel_size, y0 + pixel_size
+    nearest = lambda lo, hi: np.where((lo <= 0) & (hi >= 0), 0.0, np.minimum(np.abs(lo), np.abs(hi)))
+    r_near = np.hypot(nearest(x0, x1), nearest(y0, y1))
+    r_far = np.hypot(np.maximum(np.abs(x0), np.abs(x1)), np.maximum(np.abs(y0), np.abs(y1)))
+    area = pixel_size**2
+
+    nodes, node_weights = np.polynomial.legendre.leggauss(n_quad)
+    W = np.zeros((len(edges) - 1, n * n))
+    for i, (a, b) in enumerate(zip(edges[:-1], edges[1:])):
+        R = 0.5 * (b - a) * nodes + 0.5 * (b + a)
+        wq = 0.5 * (b - a) * node_weights * 2.0 / R          # quadrature weights of ∫ 2 (.) / R dR
+        inside = r_far <= a                                  # f_p = 1 on [a, b]
+        W[i, inside] = wq.sum()                              # (∫ 2/R dR) − 1 + 1
+        p = np.nonzero((r_near < b) & ~inside)[0]            # f_p changes somewhere on [a, b]
+        if p.size:
+            frac = lambda r: pixel_disk_overlap(x0[p], x1[p], y0[p], y1[p], r) / area
+            W[i, p] = wq @ frac(R[:, None]) - frac(b) + frac(a)
+        W[i] /= np.pi * (b**2 - a**2)
+    return W.reshape(len(edges) - 1, n, n)

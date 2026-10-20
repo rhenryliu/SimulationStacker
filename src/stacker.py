@@ -30,9 +30,9 @@ except ImportError:
     il = None
 
 # from tools import numba_tsc_3D, hist2d_numba_seq
-from utils import fft_smoothed_map, comoving_to_arcmin
+from utils import fft_smoothed_map, comoving_to_arcmin, bins_from_geomean_monotonic
 from halos import halo_ind, select_halos
-from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon
+from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon, delta_sigma_lensing_weights
 from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data, load_flamingo_header, resolve_data_root
 from mapMaker import create_field, create_masked_field
 
@@ -401,7 +401,11 @@ class SimulationStacker(object):
 
         if z is None:
             z = self.z
-        
+        if filterType == 'DSigma_lensing' and mask:
+            raise NotImplementedError(
+                "DSigma_lensing assumes pixel i spans [i d, (i+1) d) (binned_statistic_2d); "
+                "masked maps are TSC-deposited with cell i centred at i d.")
+
         # Load or create the map
         fieldKey = (pType, z, projection, pixelSize, beamSize)
         if not (fieldKey in self.maps and self.maps[fieldKey] is not None):
@@ -508,6 +512,10 @@ class SimulationStacker(object):
 
         if nPixels is None:
             nPixels = self.nPixels
+        if filterType == 'DSigma_lensing' and mask:
+            raise NotImplementedError(
+                "DSigma_lensing assumes pixel i spans [i d, (i+1) d) (binned_statistic_2d); "
+                "masked fields are TSC-deposited with cell i centred at i d.")
 
         # Load or create the field
         fieldKey = (pType, nPixels, projection)
@@ -570,7 +578,12 @@ class SimulationStacker(object):
 
         Args:
             array (np.ndarray): 2D array to stack on. Requires shape (nPixels, nPixels) such that the array is square.
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring']. Defaults to 'cumulative'.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring', 'DSigma_lensing']. Defaults to 'cumulative'.
+                'DSigma_lensing' is the lensing-bin average of DeltaSigma (filters.delta_sigma_lensing_weights)
+                over bins whose geometric-mean centres are the stacking radii, centred on each halo's true position.
+                It assumes pixel i spans [i d, (i+1) d), as binned_statistic_2d maps do (not masked TSC fields),
+                and ignores dr and the beam. Mass is taken as uniform within each pixel, which on 0.2 arcmin
+                maps costs up to ~2% in the innermost bin for compact profiles (tests/test_delta_sigma_lensing.py).
             minRadius (float, optional): Minimum radius for stacking. Defaults to 0.1.
             maxRadius (float, optional): Maximum radius for stacking. Defaults to 4.5.
             numRadii (int, optional): Number of radial bins for stacking. Defaults to 25.
@@ -678,6 +691,9 @@ class SimulationStacker(object):
             # filterFunc = delta_sigma_ring
         elif filterType == 'upsilon':
             filterFunc = upsilon
+        elif filterType == 'DSigma_lensing':
+            # Weights depend on each halo's sub-pixel position; built in the stacking loop.
+            filterFunc = None
         elif filterType == 'DSigma_mccarthy':
             filterFunc = delta_sigma_mccarthy
             if radDistanceUnits != 'arcmin':
@@ -720,12 +736,31 @@ class SimulationStacker(object):
             if filterType == 'upsilon':
                 r_outer = max(r_outer, r0 + dr_filter)
             n_vir = int(r_outer + 1)
+        elif filterType == 'DSigma_lensing':
+            # Lensing bins: edges whose geometric means are the stacking radii, as the
+            # DESI x HSC 'convert_arcmin' bins are built. The cutout must contain the
+            # outer edge around the halo, which sits up to a pixel off the cutout centre.
+            lens_edges = bins_from_geomean_monotonic(radii, pick='geom')[0]
+            if numRadii < 3 or not np.isfinite(lens_edges[-1]) or lens_edges[-1] > 1.5 * radii.max():
+                raise ValueError(f'DSigma_lensing needs >= 3 radii whose geometric-mean bins stay near '
+                                 f'maxRadius; got edges {lens_edges}')
+            n_vir = int(np.ceil(lens_edges[-1] + 2.0 / RadPixel))
         else:
             n_vir = int(radii.max() + 1)  # number of virial radii to cutout
 
         # 'upsilon' takes a reference radius on top of the compensated kernel;
         # 'DSigma' does not accept the keyword at all.
         filter_extra = {'r0': r0} if filterType == 'upsilon' else {}
+
+        if filterType == 'DSigma_lensing':
+            # Weights in true units (pixelSize_true per pixel, edges scaled by radDistance),
+            # so the output is mass per true unit area like delta_sigma_kernel's. They are
+            # built for N_OFF x N_OFF classes of the halo's sub-pixel position (residual
+            # offset <= half a class, 1/8 pixel) and cached per class.
+            N_OFF = 4
+            lens_half = int(round(n_vir * RadPixel))   # as cutout_2d_periodic rounds it
+            lens_weights = {}
+            box_pixel = self.header['BoxSize'] / nPixels
 
         # Do stacking
         profiles = []
@@ -758,6 +793,20 @@ class SimulationStacker(object):
                     raise ValueError('DSigma_mccarthy filter currently requires radDistanceUnits to be arcmin')
                 radii, profile, _ = delta_sigma_mccarthy(cutout, rr, pixel_scale_arcmin=pixelSize, z=z, # type: ignore
                                                          cosmo=cosmo, rmin_theta=minRadius, rmax_theta=maxRadius, n_rbins=numRadii)
+            elif filterType == 'DSigma_lensing':
+                # Maps bin pixel i over [i d, (i+1) d) (mapMaker, binned_statistic_2d over
+                # [0, BoxSize]), so the cutout's central pixel haloLoc is centred at
+                # (haloLoc + 0.5) d and the halo lies in [-d, 0) per axis from it.
+                rel = haloPos_2D / box_pixel - haloLoc - 0.5          # pixels, in [-1, 0)
+                cls = tuple(np.clip(np.floor((rel + 1.0) * N_OFF).astype(int), 0, N_OFF - 1))
+                if cls not in lens_weights:
+                    centre = (-1.0 + (np.asarray(cls) + 0.5) / N_OFF) * pixelSize_true
+                    lens_weights[cls] = delta_sigma_lensing_weights(
+                        lens_half, pixelSize_true, lens_edges * radDistance, offset=tuple(centre))
+                if cutout.shape != lens_weights[cls].shape[1:]:
+                    raise ValueError(f'cutout {cutout.shape} does not match the DSigma_lensing '
+                                     f'weights {lens_weights[cls].shape[1:]}')
+                profile = np.tensordot(lens_weights[cls], cutout, axes=([1, 2], [0, 1]))
             elif filterType in ('DSigma', 'upsilon'):
                 # TODO: This does not work with stackField for some reason. (I think fixed?)
                 # 'upsilon' is the same compensated kernel plus the

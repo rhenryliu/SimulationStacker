@@ -99,7 +99,7 @@ The two main workflows are **fields** (simulation-native units, kpc/h radii) and
 | `stack_on_array(array, filterType, radDistance, radDistanceUnits, ...)` | Stack any 2D array directly |
 | `setField(pType, field_, nPixels, projection)` | Inject a precomputed field |
 
-`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`.
+`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`, `'DSigma_lensing'` (lensing-bin average of ΔΣ; see `docs/lensing/dsigma_lensing_denominator.md`).
 
 ## Data Caching
 

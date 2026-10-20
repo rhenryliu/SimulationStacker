@@ -21,6 +21,9 @@ Outputs (new files next to the 3D caches; existing outputs are skipped unless
       w^T P w with w = means / sum(means)), box_mpc, n_pixels.
   <stem>_Pk_dmo_<n>.npz  (only when the DMO field exists)
       k, Nmodes, P_total, P_dmo, P_total_dmo (cross), box_mpc, n_pixels.
+  <stem>_Pk_dmcross_<n>.npz  (only with --what dmcross, when the DMO field exists)
+      k, Nmodes, P_dm, P_dmo, P_dm_dmo (cross), box_mpc, n_pixels, with P_dm
+      the hydro run's DM (total - gas - Stars - BH, as in the components file).
 
 All spectra use Pylians with TSC deconvolution (matching the TSC-binned
 fields), monopole only, truncated at the grid Nyquist frequency.
@@ -171,13 +174,43 @@ def dmo_spectra(entry: dict, threads: int) -> dict:
     return out
 
 
+def dmcross_spectra(entry: dict, threads: int) -> dict:
+    """Compute P_DM,hydro, P_DMO and their cross spectrum.
+
+    The hydro DM is derived from the caches in the same order as
+    ``build_components``, so P_dm reproduces P[DM, DM] of the components file.
+    """
+    box = box_size_mpc(entry)
+    n = entry['n_pixels']
+    t0 = time.time()
+    dmo = load_dmo_field(entry)
+    to_overdensity(dmo)
+    dm = load_field(entry, 'total')
+    for p_type in ('gas', 'Stars', 'BH'):
+        part = load_field(entry, p_type)
+        dm -= part
+        del part
+    to_overdensity(dm)
+    X = PKL.XPk([dm, dmo], box, axis=0, MAS=['TSC', 'TSC'], threads=threads)
+    sel = nyquist_cut(X.k3D, box, n)
+    out = dict(k=X.k3D[sel], Nmodes=X.Nmodes3D[sel], P_dm=X.Pk[sel, 0, 0],
+               P_dmo=X.Pk[sel, 0, 1], P_dm_dmo=X.XPk[sel, 0, 0],
+               box_mpc=box, n_pixels=n)
+    del X, dm, dmo
+    gc.collect()
+    r = out['P_dm_dmo'] / np.sqrt(out['P_dm'] * out['P_dmo'])
+    print(f"  DM cross spectra in {time.time() - t0:.0f} s; cross-correlation "
+          f"r(k) at the lowest 3 k: {np.round(r[:3], 5).tolist()}")
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('-p', '--path2config', required=True)
     parser.add_argument('--sims', nargs='*', default=None,
                         help="restrict to these entries (label, name or feedback)")
     parser.add_argument('--what', nargs='+', default=['components', 'dmo'],
-                        choices=['components', 'dmo'])
+                        choices=['components', 'dmo', 'dmcross'])
     parser.add_argument('--overwrite', action='store_true',
                         help="recompute spectra files that already exist")
     parser.add_argument('--fresh', action='store_true',
@@ -205,6 +238,15 @@ def main() -> None:
                     save_npz_atomic(path, **dmo_spectra(entry, threads))
                 except FileNotFoundError as e:
                     print(f"  DMO spectra skipped: {e}")
+        if 'dmcross' in args.what:
+            path = spectra_path(entry, 'dmcross')
+            if path.exists() and not args.overwrite:
+                print(f"  exists, skipping: {path}")
+            else:
+                try:
+                    save_npz_atomic(path, **dmcross_spectra(entry, threads))
+                except FileNotFoundError as e:
+                    print(f"  DM cross spectra skipped: {e}")
 
 
 if __name__ == '__main__':

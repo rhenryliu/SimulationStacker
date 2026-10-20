@@ -72,7 +72,7 @@ _FLAMINGO_COLOURS = {
 # plt.rcParams['text.usetex'] = True
 # plt.rcParams['mathtext.fontset'] = 'cm'
 
-def main(path2config, from_npz=None, verbose=True):
+def main(path2config, from_npz=None, unmasked_only=False, verbose=True):
     """Main function to process the simulation maps.
 
     Args:
@@ -82,6 +82,11 @@ def main(path2config, from_npz=None, verbose=True):
             instead of being stacked. The guide-line radius of each row is read
             from it too if saved there (since 2026-10-07), otherwise
             recomputed from the halo catalogues. Defaults to None.
+        unmasked_only (bool, optional): If True, stack and draw only the
+            unmasked column (no masked map is read), and write
+            ``..._unmasked.<fig_type>`` and ``..._unmasked_profiles.npz``
+            instead of the full figure's files. A quick look at a new halo
+            selection before its masked maps exist. Defaults to False.
         verbose (bool, optional): If True, prints detailed information. Defaults to True.
 
     Raises:
@@ -162,9 +167,6 @@ def main(path2config, from_npz=None, verbose=True):
     row_labels = plot_config.get('row_labels') or [
         ' + '.join(st['sim_type'] for st, r in zip(config['simulations'], suite_rows) if r == row)
         for row in range(nRows)]
-    fig, axes = plt.subplots(nRows, 4, figsize=(18, rowHeight * nRows), sharex=True, sharey=True)
-    axes = np.atleast_2d(axes)
-    
     # Define mask configurations: [maskRadii=1, 2, 3, False]
     mask_configs = [
         {'maskHaloes': True, 'maskRadii': 1.0},
@@ -172,7 +174,20 @@ def main(path2config, from_npz=None, verbose=True):
         {'maskHaloes': True, 'maskRadii': 3.0},
         {'maskHaloes': False, 'maskRadii': None}
     ]
-    
+    if unmasked_only:
+        mask_configs = [mc for mc in mask_configs if not mc['maskHaloes']]
+    nCols = len(mask_configs)
+    # 4.5 in per column (18 in for the full figure), but at least 7 in so a
+    # one-column figure keeps room for its labels; the left margin for the
+    # row labels keeps its absolute width.
+    figWidth = max(4.5 * nCols, 7.0)
+    marginScale = 18 / figWidth
+    fig, axes = plt.subplots(nRows, nCols, figsize=(figWidth, rowHeight * nRows), sharex=True, sharey=True)
+    axes = np.asarray(axes).reshape(nRows, nCols)
+
+    # Output files; the unmasked-only quick look never replaces a full run's.
+    outStem = f'{pType}_{figName}_z{redshift}' + ('_unmasked' if unmasked_only else '')
+
     t0 = time.time()
     # Stacked profiles, written next to the figure so the numbers quoted in the
     # text can be read back without restacking.
@@ -185,7 +200,7 @@ def main(path2config, from_npz=None, verbose=True):
     # name only the simulation, so insist on the file this config writes.
     npz_in = None
     if from_npz:
-        expected = f'{pType}_{figName}_z{redshift}_profiles.npz'
+        expected = f'{outStem}_profiles.npz'
         if Path(from_npz).name != expected:
             raise ValueError(f"--from-npz {from_npz!r} is not this config's profiles file ({expected!r})")
         npz_in = dict(np.load(from_npz))
@@ -369,7 +384,8 @@ def main(path2config, from_npz=None, verbose=True):
                     profiles_plot = np.mean(profiles0, axis=1)
                     profiles_err = np.std(profiles0, axis=1) / np.sqrt(profiles0.shape[1])
                     n_objects = profiles0.shape[1]
-                    _n = sim_selection['halo_abundance_target']
+                    # The SHAM density; a mass-cut stack has none.
+                    _n = sim_selection['halo_abundance_target'] if sim_selection['use_subhalos'] else None
                     abundance = np.nan if _n is None else _n
                 profiles_out[f'{out_key}/{col_key}_mean'] = profiles_plot
                 profiles_out[f'{out_key}/{col_key}_sem'] = profiles_err
@@ -385,8 +401,8 @@ def main(path2config, from_npz=None, verbose=True):
                                     upper, 
                                     color=colours[j], alpha=0.2)
 
-        # Plot data only on the last column (col_idx == 3)
-        if col_idx == 3 and plot_config['plot_data']:
+        # Plot data only on the unmasked (last) column
+        if not maskHaloes and plot_config['plot_data']:
             data_path = plot_config['data_path']
 
             rad_key = plot_config.get('rad_key', 'RApArcmin')
@@ -415,11 +431,11 @@ def main(path2config, from_npz=None, verbose=True):
 
     
     for row_idx in range(nRows):
-        for col_idx in range(4):
+        for col_idx in range(nCols):
             ax = axes[row_idx, col_idx]
             
-            if col_idx != 3:
-                ax.axvline(row_rad_arcmin[row_idx] * (col_idx + 1), color='k', linestyle='--', lw=1)
+            if mask_configs[col_idx]['maskHaloes']:
+                ax.axvline(row_rad_arcmin[row_idx] * mask_configs[col_idx]['maskRadii'], color='k', linestyle='--', lw=1)
             
             # Set x-label only on bottom row
             if row_idx == nRows - 1:
@@ -440,7 +456,7 @@ def main(path2config, from_npz=None, verbose=True):
             # Set secondary y-axis only on rightmost column
             if col_idx == 0:
                 ax.legend(loc='upper left', fontsize=12)
-            elif col_idx == 3 and plot_config['plot_data']:
+            elif not mask_configs[col_idx]['maskHaloes'] and plot_config['plot_data']:
                 # Only the data entry here; the simulations are labelled in
                 # the first column.
                 handles, labels = ax.get_legend_handles_labels()
@@ -454,24 +470,25 @@ def main(path2config, from_npz=None, verbose=True):
             
             # Set column titles on top row
             if row_idx == 0:
-                if col_idx < 3:
+                if mask_configs[col_idx]['maskHaloes']:
                     ax.set_title(f'Masked ($R_{{mask}} = {mask_configs[col_idx]["maskRadii"]:.0f} R_{{200m}}$)')
                 else:
                     ax.set_title('No Masking')
     
     if showSuptitle:
         fig.suptitle(f'Stacked tSZ profiles, {filterType} filter, z={redshift}', fontsize=22)
-    fig.tight_layout(rect=(0.03, 0, 1, 1))  # Leave space on left for row labels
+    fig.tight_layout(rect=(0.03 * marginScale, 0, 1, 1))  # Leave space on left for row labels
 
     # Row labels, taken from the config so they cannot desync from the row
     # order, and centred on each row after tight_layout has fixed the layout.
     for row_idx, row_label in enumerate(row_labels):
         bbox = axes[row_idx, 0].get_position()
-        fig.text(0.02, 0.5 * (bbox.y0 + bbox.y1), row_label,
+        fig.text(0.02 * marginScale, 0.5 * (bbox.y0 + bbox.y1), row_label,
                  fontsize=20, va='center', rotation=90, ha='center')
-    fig.savefig(figPath / f'{pType}_{figName}_z{redshift}_masking_comparison.{figType}', dpi=300) # type: ignore
+    fig.savefig(figPath / (f'{outStem}.{figType}' if unmasked_only
+                           else f'{outStem}_masking_comparison.{figType}'), dpi=300) # type: ignore
     plt.close(fig)
-    np.savez(figPath / f'{pType}_{figName}_z{redshift}_profiles.npz', **profiles_out)
+    np.savez(figPath / f'{outStem}_profiles.npz', **profiles_out)
     
     print('Done!!! time taken = ', time.time() - t0, ' seconds')
 
@@ -481,6 +498,8 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--path2config', type=str, default='./configs/unbound_gas/tSZ_z05_CAP_masked.yaml', help='Path to the configuration file.')
     parser.add_argument('--from-npz', type=str, default=None,
                         help='Redraw from the profiles .npz of an earlier run instead of stacking.')
+    parser.add_argument('--unmasked-only', action='store_true',
+                        help='Stack and draw only the unmasked column (no masked maps needed).')
     # parser.add_argument("--set", nargs=2, action="append",
     #                     metavar=("KEY", "VALUE"),
     #                     help="Override with dotted.key  value")

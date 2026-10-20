@@ -1,4 +1,12 @@
-# DRAFT: message to the SIMBA and CAMELS teams (not sent)
+# Message to the SIMBA and CAMELS teams (sent)
+
+> **Status 2026-10-14:** sent. The SIMBA team replied and tentatively confirmed
+> the bug; see `simba_electron_abundance_report.md` section 11. The text below
+> is kept as the record of what was drafted. Two corrections to point 2:
+> it calls the per-H class "exactly the set of particles with `Dust_Masses > 0`",
+> but dust tracks the class closely, not exactly (report section 3.3); and it
+> gives the mass-fraction He total as 0.24, which is 0.24(1-Z) (report
+> section 3.1).
 
 Suggested recipients: Romeel Davé (SIMBA) and the CAMELS team
 (camel.simulations@gmail.com, the contact address listed in the CAMELS docs).

@@ -1,7 +1,10 @@
 # Bug report: SIMBA's `ElectronAbundance` field mixes two normalisations
 
-**23 September 2026.** Status: based on our own checks of the public snapshots.
-The SIMBA and CAMELS teams have not confirmed it yet.
+**23 September 2026, updated 14 October 2026.** Status: the SIMBA team has
+tentatively confirmed the bug and recommends a correction built from the Grackle
+species alone (section 3). It agrees with our original correction to $10^{-6}$
+in every global budget we checked. The CAMELS team has not replied. Full record:
+`simba_electron_abundance_report.md` (section 11 covers the reply).
 
 ## Summary
 
@@ -11,19 +14,26 @@ The SIMBA and CAMELS teams have not confirmed it yet.
 - For about two thirds of SIMBA gas particles, EA instead stores Grackle's
   internal normalisation, **n_e m_p/ρ = X_H · n_e/n_H**, which is 24% lower. The
   share is 63–69% in SIMBA m100n1024 and m50n512 and 72–79% in CAMELS-SIMBA.
-- **Whether a particle carries dust separates the two populations exactly.**
-  Particles with dust store n_e/n_H. Dust-free particles store the Grackle value.
+- **Each particle's Grackle species fields use the same normalisation as its
+  EA.** The hydrogen sum GrackleHI + GrackleHII (X_H(1 − Z) or 1) identifies the
+  class exactly. Dust tracks it closely but not exactly: almost all dusty
+  particles store n_e/n_H, and more than 99% of dust-free particles store the
+  Grackle value (section 2.3).
 - Reading EA as n_e/n_H everywhere undercounts SIMBA's free electrons by about
   17%, mostly in the diffuse IGM. It also biases temperatures derived from EA
   high by 14% in the affected ionized gas.
-- A per-particle correction recovers n_e/n_H for all but about $10^{-7}$ of the
-  gas mass:
+- The SIMBA team's species-ratio formula recovers n_e/n_H for all but about
+  $3 \times 10^{-7}$ of the gas mass, without using EA:
 
 ```
-n_e/n_H = min( ElectronAbundance / (GrackleHI + GrackleHII),  1 + 2y )
+n_e/n_H = GrackleHII / (GrackleHI + GrackleHII)
+        + y (GrackleHeII + 2 GrackleHeIII) / (GrackleHeI + GrackleHeII + GrackleHeIII)
 
-y = n_He/n_H = (1 - X_H) / (4 X_H) = 0.0789   (X_H = 0.76, so the cap is 1 + 2y = 1.158)
+y = n_He/n_H = (1 - X_H) / (4 X_H) = 0.0789   (X_H = 0.76; maximum 1 + 2y = 1.158)
 ```
+
+  Our original correction, `min(EA / (GrackleHI + GrackleHII), 1 + 2y)`, gives
+  the same value wherever EA and the species share a normalisation (section 3).
 
 We found this while checking the ionized-gas budgets for a kSZ/tSZ stacking
 analysis. Our pipeline also reads EA as n_e/n_H, and with that reading about
@@ -46,9 +56,11 @@ by a factor of X_H = 0.76:
 
 Here X_H = 0.76 and Y = 0.24 are the primordial H and He mass fractions.
 
-In the snapshots, SIMBA's gas particles fall into two classes:
+In the snapshots, SIMBA's gas particles fall into two classes. Dust tracks the
+classes closely but not exactly; the exact indicator is the hydrogen sum
+(section 2.3):
 
-| | Dust-free particles | Dust-bearing particles |
+| | Mass-fraction class (≈ dust-free) | Per-H class (≈ dust-bearing) |
 |---|---|---|
 | `ElectronAbundance` | n_e m_p/ρ (Grackle) | n_e/n_H (documented) |
 | `GrackleHI`, `GrackleHII`, `GrackleHe*` | mass fractions | abundances per H nucleus |
@@ -106,23 +118,33 @@ The Grackle species fields (`GrackleHI`, `GrackleHII`, `GrackleHM`,
 `GrackleHeI/II/III`) show the same two normalisations. No particle falls between
 them:
 
-- **Mass-fraction class:** HI + HII + HM = 0.76(1 − Z) and total He = 0.24. For
-  100.000% of these particles, EA = HII + HeII/4 + HeIII/2, which is n_e m_p/ρ.
+- **Mass-fraction class:** HI + HII + HM = 0.76(1 − Z) and total He =
+  0.24(1 − Z), so n_He/n_H = y exactly. For 100.000% of these particles,
+  EA = HII + HeII/4 + HeIII/2, which is n_e m_p/ρ.
 - **Per-H class:** HI + HII + HM = 1 exactly and total He = 0.0789 = y. For
   97.2–98.3% of these particles, EA = HII + HeII + 2 HeIII, which is n_e/n_H.
+  Most of the rest are nearly neutral, where a relative tolerance is
+  ill-defined. Excluding particles with n_e/n_H ≤ 0.02, 99.45% match at 0.2%
+  and all but 15 of $4.0 \times 10^{7}$ match at 1% (m50n512 s50).
 
 We checked this to 0.2% tolerance in SIMBA m100n1024 at z = 0.49 and z = 0 and in
 m50n512 s50. The values are not random errors: each particle's EA agrees with its
 own species fields. The snapshot simply mixes two conventions, one per class.
+(Before 14 October the mass-fraction He total was given as 0.24.)
 
-### 2.3 Dust decides the class
+### 2.3 Dust tracks the class, but not exactly
 
 - Dust-bearing particles fall in the per-H class with probability 1.0000 in all
   seven SIMBA snapshots, and 0.99999–1.00000 in the three CAMELS-SIMBA snapshots.
-- Dust-free particles fall in the per-H class with probability 0.0002–0.0072.
+  The exceptions are few but real: 2 of $4.08 \times 10^{7}$ dusty particles in
+  m50n512 s50, and 5 in CAMELS-SIMBA CV_0, use mass fractions.
+- Dust-free particles fall in the per-H class with probability 0.0002–0.0072
+  (435,386 particles in m50n512 s50).
 
-Metallicity also tracks the class (P(per-H | Z > 0) = 0.97), but less sharply
-than dust does.
+So the dust flag should not be used to choose the convention. The hydrogen sum
+is the exact indicator, as the SIMBA team also pointed out. Metallicity also
+tracks the class (P(per-H | Z > 0) = 0.97), but less sharply than dust does.
+(Before 14 October this section was titled "Dust decides the class".)
 
 ### 2.4 Electron budgets
 
@@ -179,31 +201,89 @@ from a literature search and were not individually re-checked.
 
 ## 3. Correction
 
+**Recommended (the SIMBA team's species-ratio formula):**
+
+```
+n_e/n_H = GrackleHII / (GrackleHI + GrackleHII)
+        + y (GrackleHeII + 2 GrackleHeIII) / (GrackleHeI + GrackleHeII + GrackleHeIII)
+```
+
+- It uses only ratios within one particle's species, so the normalisation
+  cancels in both classes.
+- n_He/n_H = y exactly in both classes, because the mass-fraction class has
+  He = 0.24(1 − Z) alongside H = 0.76(1 − Z).
+- It cannot exceed 1 + 2y = 1.157895, so it needs no cap, and it does not use EA.
+
+**Our original correction (equivalent wherever EA and the species share a
+normalisation):**
+
 ```
 n_e/n_H = min( ElectronAbundance / (GrackleHI + GrackleHII),  1.158 )
 ```
 
 - **Per-H class:** the divisor is 1, so EA is unchanged.
 - **Mass-fraction class:** the divisor is the hydrogen mass fraction,
-  ≈ X_H(1 − Z). Dividing by it converts n_e m_p/ρ into n_e/n_H, metallicity
+  X_H(1 − Z). Dividing by it converts n_e m_p/ρ into n_e/n_H, metallicity
   dependence included.
 - **Cap at the fully ionized value:** this affects about $10^{-7}$ of the gas
-  mass. In m100n1024 it catches 16 of $10^{8}$ particles scanned. Most are
-  jet-kicked particles that are currently hydrodynamically decoupled. They carry
-  a per-H EA (1.079) but mass-fraction species. The rest are a few ~$10^{9}$ K,
-  very low-density particles with trace dust. CAMELS-SIMBA CV_0 gives the same
-  scale ($1.2 \times 10^{-7}$ of the gas mass above the cap by more than
-  rounding).
+  mass.
+  - In m100n1024 it catches 16 of $10^{8}$ particles scanned. Most are
+    jet-kicked particles that are currently hydrodynamically decoupled. They
+    carry a per-H EA (1.079) but mass-fraction species. The rest are a few
+    ~$10^{9}$ K, very low-density particles with trace dust.
+  - CAMELS-SIMBA CV_0 gives the same scale ($1.2 \times 10^{-7}$ of the gas
+    mass above the cap by more than rounding).
+
+**How the two compare (14 October).** We checked CAMELS-SIMBA CV_0 and SIMBA
+m50n512 s50 in full, and a $5 \times 10^{6}$-particle subsample of SIMBA
+m100n1024 s50.
+
+| Run | Ionized gas fraction, as read → corrected (both corrections) | Electrons, original / species formula |
+|---|---|---|
+| CAMELS-SIMBA CV_0, z = 0.47 | 0.782 → 0.960 | 1.000000 |
+| SIMBA m50n512 s50, z = 0.49 | 0.799 → 0.956 | 1.0000006 |
+| SIMBA m100n1024 s50, z = 0.49 (subsample) | 0.796 → 0.957 | 1.000001 |
+
+The tSZ-like sum Σ n_e T_e agrees to $10^{-6}$ as well.
+
+In the full m50n512 s50 snapshot the two disagree (by more than 0.01) for only 25
+particles, $2.9 \times 10^{-7}$ of the gas mass. All 25 are jet-launched,
+currently decoupled, dust-free particles at T > $10^{5.2}$ K with EA = 1.0789
+(= 1 + y) exactly:
+
+- where their species are mass fractions, the species formula gives 0.0003–0.37
+  and the capped ratio gives 1.158;
+- where their species are per H, the species formula gives 0.015–1.15 and the
+  capped ratio gives 1.079.
+
+Gas this hot should be at ~1.158. The species formula falls well short for
+most of them, and the capped ratio reaches 1.158 only where it hits the cap.
+Neither is reliable for these particles. The species look stale from before the
+launch (an inference).
+
+No particle combines a mass-fraction EA with per-H species. That is the one
+mismatch the cap could not catch. The SIMBA team reported particles with
+EA/(HI + HII) above 1.5. We find 2 in m50n512 s50 and 1 in CAMELS-SIMBA CV_0.
+All have a per-H EA of 1.158 with mass-fraction species, and both corrections
+give 1.158 there.
+
+We recommend the species formula: no cap, no dependence on EA, and it is what
+the SIMBA team recommends. HI/(HI + HII) from the same fields gives a
+normalisation-free neutral fraction.
 
 ## 4. Confidence and open questions
 
 **Established by the data (high confidence)**
 
-- For dust-free gas, EA = n_e m_p/ρ. For dust-bearing gas, EA = n_e/n_H. The
-  species fields follow the same split.
+- For dust-free gas, EA = n_e m_p/ρ. For dust-bearing gas, EA = n_e/n_H, with
+  the small exceptions in section 2.3. The species fields follow the same split,
+  and the hydrogen sum identifies it exactly.
 - This holds at z ≈ 0.5 and z = 0, across feedback variants, and in both the
   original SIMBA runs and CAMELS-SIMBA. It never appears in TNG.
-- The correction above recovers n_e/n_H for all but ~$10^{-7}$ of the gas mass.
+- Both corrections in section 3 recover n_e/n_H for all but a few $10^{-7}$ of
+  the gas mass. The exceptions are jet-launched particles.
+- The SIMBA team has tentatively confirmed the bug (reply received by
+  14 October 2026).
 
 **Plausible but unconfirmed**
 
@@ -235,8 +315,9 @@ convention.
 
 ## 5. Next steps and reproduction
 
-- Before making any public claim, we intend to confirm the reading and the
-  correction with the SIMBA developers and the CAMELS team.
+- We sent our reading and correction to the SIMBA developers and the CAMELS
+  team. The SIMBA team has tentatively confirmed it (section 3 and the full
+  record, section 11). The CAMELS team has not replied.
 - If you use EA or `NeutralHydrogenAbundance` from SIMBA or CAMELS-SIMBA, the
   check below takes about ten seconds. It uses the public CAMELS-SIMBA CV_0
   snapshot (z = 0.47, 1.75 GB, from
@@ -249,6 +330,8 @@ with h5py.File('Sims/SIMBA/L25n256/CV/CV_0/snapshot_074.hdf5', 'r') as f:
     EA, u = g['ElectronAbundance'][:], g['InternalEnergy'][:].astype(float)
     Hs = g['GrackleHI'][:] + g['GrackleHII'][:]
     dust = g['Dust_Masses'][:] > 0
+    HI, HII = g['GrackleHI'][:].astype(float), g['GrackleHII'][:].astype(float)
+    He = [g[k][:].astype(float) for k in ('GrackleHeI', 'GrackleHeII', 'GrackleHeIII')]
 
 T_min = (2/3) * u * 1e10 * 1.6726e-24 * 0.588 / 1.3807e-16   # K; lower bound (mu = 0.588)
 hot = T_min > 10**6.5
@@ -257,7 +340,10 @@ print(at088.mean())                                # hot gas at EA = 0.880: 0.61
 print(dust[hot][at088].mean())                     # ...of which dusty: 0.00
 print(np.mean(np.abs(Hs[dust] - 1) < 1e-3))        # dusty gas with per-H species: 1.00
 
-ne_nH = np.minimum(EA / Hs, 1 + 2 * 0.24 / 3.04)   # corrected n_e/n_H
+y = 0.24 / (4 * 0.76)
+ne_nH = HII / (HI + HII) + y * (He[1] + 2 * He[2]) / sum(He)   # corrected n_e/n_H (SIMBA team)
+ne_nH_alt = np.minimum(EA / Hs, 1 + 2 * y)                      # equivalent (section 3)
+print(ne_nH.max(), np.mean(np.abs(ne_nH_alt - ne_nH) > 0.01))   # 1.157895, 1.9e-07 (3 particles)
 ```
 
 The full investigation record is available on request. It includes every table,

@@ -1,6 +1,6 @@
 # Decision log
 
-**As of 2026-09-27** (Round 3A: D-05, D-10, D-14, D-19 updated; D-21 added). One entry per decision. Status is one of **settled**, **provisional** (settled unless a named open item overturns it), **open**, **reopened**, **superseded**. Entries are never deleted; a reversed decision gets its status changed and a pointer to what replaced it. Evidence points at the record or document that holds the numbers; nothing here is a number's primary home.
+**As of 2026-10-20** (D-22 added; Round 3A, 2026-09-27: D-05, D-10, D-14, D-19 updated; D-21 added). One entry per decision. Status is one of **settled**, **provisional** (settled unless a named open item overturns it), **open**, **reopened**, **superseded**. Entries are never deleted; a reversed decision gets its status changed and a pointer to what replaced it. Evidence points at the record or document that holds the numbers; nothing here is a number's primary home.
 
 Read with `README.md` (map and status) and `open-items.md` (what could change these).
 
@@ -139,3 +139,9 @@ Read with `README.md` (map and status) and `open-items.md` (what could change th
 - **Decision:** the suppression is $S = (f_m+f_bx)^2 \times B(k)$ with the measured back-reaction $B = P^{\rm hydro}_{mm}/P^{\rm DMO}$, rather than the adopted $B = 1$ of formalism Eq. (62). At $z\approx0.5$, $B$ lies within $\pm2.5$ per cent of unity for all four runs over $0.5\le k\le7\,h/$Mpc, with a run-dependent sign.
 - **Why:** DMO references for all four runs are on disk since 2026-09-24, with 3D component spectra at $z\approx0.5$ from the unbound-gas pipeline. $B$ enters $S$ one-to-one, not suppressed by $f_b$, so at the per-cent level it is as large as the whole calibration budget (6 per cent on $C$ gives 1.9 per cent on $S$).
 - **Open:** $z\approx0.26$ needs the hydro component spectra at snapshots 71 (FLAMINGO) and 80 (TNG300-1); the DMO spectra exist.
+
+### D-22 The FRB DM–galaxy comparison: sample, snapshots and an uncompensated statistic
+- **Status:** settled (user decisions, 2026-10-20)
+- **Date:** 2026-10-20 (`records/frb_dm_xi_record.md`)
+- **Decision:** the simulated McCarty et al. Figure 5 uses the repo's BGS SHAM sample ($10^{-3}\,(h^{-1}{\rm cMpc})^{-3}$, parent cap $5\times10^{14}\,M_\odot/h$) with no stellar-mass sub-cuts, the electron field $e$, FLAMINGO snapshot 71 ($z=0.30$) and TNG300-1 snapshot 80 ($z=0.261$, the nearest on disk), and the paper's own statistic: the annulus mean of the mean-subtracted electron column in log bins over 0.3–30 cMpc.
+- **Why:** the statistic is the paper's observable, so it is uncompensated by construction. This is a scoped exception to D-04 for this comparison only: absolute amplitudes above about 10 cMpc are not like-for-like between boxes of different size (TNG300-1's 205 cMpc/$h$ against FLAMINGO's 1 cGpc), and the per-run ratio to the NFW curve is the comparable quantity. The stellar-mass cuts were dropped because every galaxy in this sample already has $M_* > 9\times10^{10}\,M_\odot$.

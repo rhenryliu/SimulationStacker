@@ -16,6 +16,8 @@ The programme measures $x = P_{bm}/P_{mm}$, the baryon–matter cross-correlatio
 
 | document | authoritative for | superseded on | status |
 |---|---|---|---|
+| `records/frb_dm_xi_record.md` | the simulated FRB DM–galaxy cross-correlation (McCarty et al. Figure 5): checks, results, predictions scored (2026-10-20) | nothing | **current, append-only** |
+| `predictions/2026-10-20_frb_dm_xi.md` | the FRB DM–galaxy predictions, as written before the run | nothing (scored in `records/frb_dm_xi_record.md` §5) | frozen |
 | `records/round3a_record.md` | every Round 3A number: $C(k)$, the split $C_{\mathcal F} = W_{\mathcal F}M_{\mathcal F}$, the DoG kernel, the back-reaction and the true suppression at $z\approx0.5$, O-03/04/05/06/09/10; the Round 3A predictions scored | nothing | **current, append-only** |
 | `predictions/2026-09-27_round3a.md` | the Round 3A predictions and acceptance thresholds, as written before the runs | nothing (scored in `records/round3a_record.md` §4) | frozen |
 | `records/tasks_7_to_10_record.md` | every round-two number; gate verdicts; code defects found; commits `ec8f129`, `82526e3`; §11 adds `dba0a68` and `6dbbebd` | the explanation of $\Upsilon$'s $C$ plateau at $9.75'$ (Stage 6, prediction 4): corrected in `records/round3a_record.md` | **current, append-only** |
@@ -63,6 +65,8 @@ When two documents disagree, the later row in this table wins. When a record and
 - $\Delta\Sigma$ log-slope $-1.3$ ($z\approx0.5$) and $-1.2$ ($z\approx0.26$), not $-2$; $\Upsilon(1')$ keeps 50–83 per cent of the amplitude. A $C(x)$ line through the FLAMINGO variants does not predict TNG300-1, so the feedback prior (D-14) stands.
 
 **Runs:** TNG300-1; FLAMINGO L1_m9 fiducial, fgas$-8\sigma$, Jet_fgas$-4\sigma$. Two code families only. SIMBA and Illustris-1 dropped (too few SHAM galaxies).
+
+**Side task, outside the gates (2026-10-20):** the simulated FRB DM–galaxy cross-correlation of McCarty et al. Figure 5, on the same four runs at $z\approx0.3$; numbers and the scored predictions in `records/frb_dm_xi_record.md`, choices in `decisions.md` D-22.
 
 ---
 
@@ -121,6 +125,9 @@ Violating any of these has already cost a round. Each is justified in the formal
 | `tests/test_round3a.py` | Round 3A tests: Parseval amplitudes against `compute_Y_matrix`, the split's limits, the DoG kernel, the wiring |
 | `data/r_profiles/*.npz` | round-one amplitudes, frozen at `dba0a68`; plus the $z\approx0.75$ and $z\approx1.0$ files (2026-09-30), outside the frozen set |
 | `data/cross_corr_C/` | round-two outputs; `round3a/` holds Round 3A's |
+| `scripts/cross_corr/make_frb_dm_xi.py`, `runINT_frb_dm_xi.sh`; `scripts/configs/cross_corr/frb_dm_xi_z03.yaml` | the simulated FRB DM–galaxy cross-correlation (log-bin annulus means of $\delta_e$ and $\delta_m$ around SHAM galaxies, in pc cm$^{-3}$) and its figure; `--check-against` runs the regression against `data/r_profiles/` |
+| `tests/test_frb_dm_xi.py` | its tests: painted rings, wiring against `compute_Y_matrix`, DM unit chains |
+| `data/frb_dm_xi/*.npz` | its outputs, one per run |
 
 ---
 
@@ -136,10 +143,12 @@ docs/cross_corr/
   filter_specification.md         Phase 0 conventions; status note at its top
   predictions/
     2026-09-27_round3a.md                dated predictions, written before Round 3A ran
+    2026-10-20_frb_dm_xi.md              dated predictions, written before the FRB DM run
   records/
     tasks_1_to_4_record.md               append-only, ground truth for round one
     tasks_7_to_10_record.md              append-only, ground truth for round two
     round3a_record.md                    append-only, ground truth for Round 3A
+    frb_dm_xi_record.md                  append-only, the FRB DM–galaxy simulation
     r_profiles_implementation_plan.md    append-only, Task 1 build log and U1–U7
   archive/
     cross_correlation_notes.md               v0.1, superseded 2026-09

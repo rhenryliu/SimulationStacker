@@ -1,0 +1,63 @@
+# Simulated FRB DM-galaxy cross-correlation, after Figure 5 of McCarty et al.
+# (arXiv:2608.11296), on single snapshots with the map-level estimator.
+# Predictions: docs/cross_corr/predictions/2026-10-20_frb_dm_xi.md.
+#
+# User decisions (2026-10-20): the repo's BGS SHAM sample, no stellar-mass
+# sub-cuts; FLAMINGO at z = 0.30 (snapshot 71) and TNG300-1 at its existing
+# snapshot 80 (z = 0.261; no z = 0.3 snapshot on disk); yz projection.
+#
+# Run with:
+#   cd scripts/
+#   python cross_corr/make_frb_dm_xi.py -p configs/cross_corr/frb_dm_xi_z03.yaml
+
+stack:
+  redshift: 0.30
+  projection: 'yz'
+
+  # The paper's binning: 15 logarithmic bins over 0.3-30 comoving Mpc (no h),
+  # each an annulus [a, b) of the 'Sigma' kernel.
+  r_min_cmpc: 0.3
+  r_max_cmpc: 30.0
+  n_bins: 15
+
+  n_jk_side: 4
+
+  # Electron field (proportional to the free-electron count).
+  particle_type_e: 'ionized_gas'
+
+  # BGS SHAM sample, as r_profiles_z026.yaml.
+  halo_abundance_target: 1.0e-3    # (cMpc/h)^-3
+  parent_mass_upper: 5.0e+14       # Msun/h (signed exponent: PyYAML reads 5.0e14 as a string)
+
+plot:
+  npz_path: '../data/frb_dm_xi/'
+  fig_path: '../figures/'
+  fig_name: 'frb_dm_xi_z03'
+  fig_type: 'pdf'
+  yscale: 'linear'               # as the paper's Figure 5; 'log' also works
+  # Run whose CDM overdensity times its mean electron column is drawn as NFW.
+  nfw_run: 'L1_m9_fiducial'
+
+# n_pixels: the cached 0.2' grids (r_profiles_z026.yaml).
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG300-1'
+        snapshot: 80
+        redshift: 0.26
+        n_pixels: 4822
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        n_pixels: 14015
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        n_pixels: 14015

@@ -208,6 +208,52 @@ def delta_sigma_kernel(
     
     return float(np.sum(mass_grid * kernel))
 
+def sigma_ring(
+    mass_grid: np.ndarray,
+    r_grid: np.ndarray,
+    r: float,
+    dr: float = 0.5,
+    pixel_size: float = 1,
+) -> float:
+    """Compute the mean surface density Σ(R) in the annulus R <= r < R + dr.
+
+    The annulus is the one ``delta_sigma_kernel`` subtracts, so for the same
+    ``dr`` and ``pixel_size``, ΔΣ(R) = Σ̄(<R) - Σ(R) exactly, with Σ̄(<R) the
+    pixel-mean surface density of the disk r < R. Unlike ``delta_sigma_ring``,
+    whose ring is the pixels bordering the disk, the ring has a fixed width.
+
+    Args:
+        mass_grid (np.ndarray): 2-D map in mass units per pixel (same shape as
+            ``r_grid``).
+        r_grid (np.ndarray): 2-D array of radial distances from the centre for
+            each pixel. Units must match those of ``r`` and ``dr``.
+        r (float): Inner radius of the annulus.
+        dr (float, optional): Width of the annulus. Must be positive.
+            Defaults to 0.5.
+        pixel_size (float, optional): Linear size of one pixel in the units of
+            ``r`` (e.g. arcmin), so the result is mass per unit area in those
+            units. Defaults to 1.
+
+    Returns:
+        float: Σ(R), the mean mass per pixel over the annulus pixels divided
+            by ``pixel_size**2``.
+
+    Raises:
+        ValueError: If ``dr`` is not positive, or if no pixel centre falls in
+            the annulus.
+    """
+
+    if dr <= 0:
+        raise ValueError("dr must be positive.")
+
+    annulus = (r_grid >= r) & (r_grid < r + dr)
+    n_annulus = np.sum(annulus)
+    if n_annulus == 0:
+        raise ValueError(f"No pixels in the annulus [{r:.6g}, {r + dr:.6g}).")
+
+    # Summed in float64 so the ΔΣ identity holds to rounding for float32 maps too.
+    return float(np.sum(mass_grid[annulus], dtype=np.float64) / (pixel_size**2 * n_annulus))
+
 def upsilon(
     mass_grid: np.ndarray,
     r_grid: np.ndarray,

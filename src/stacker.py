@@ -32,7 +32,7 @@ except ImportError:
 # from tools import numba_tsc_3D, hist2d_numba_seq
 from utils import fft_smoothed_map, comoving_to_arcmin, bins_from_geomean_monotonic
 from halos import halo_ind, select_halos
-from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon, delta_sigma_lensing_weights
+from filters import total_mass, delta_sigma, CAP, CAP_ringring, CAP_from_mass, DSigma_from_mass, delta_sigma_mccarthy, delta_sigma_kernel, delta_sigma_ring, upsilon, delta_sigma_lensing_weights, sigma_ring
 from loadIO import load_subhalos, snap_path, load_halos, load_subsets, load_subset, load_data, save_data, load_flamingo_header, resolve_data_root
 from mapMaker import create_field, create_masked_field
 
@@ -476,7 +476,7 @@ class SimulationStacker(object):
 
         Args:
             pType (str): Particle Type. One of 'gas', 'DM', or 'Stars'
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring']. Defaults to 'cumulative'.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring', 'Sigma']. Defaults to 'cumulative'.
             minRadius (float, optional): Minimum radius in kpc/h for the stacking. Defaults to 0.1.
             maxRadius (float, optional): Maximum radius in kpc/h for the stacking. Defaults to 4.5.
             numRadii (int, optional): Number of radial bins for the stacking. Defaults to 25.
@@ -498,7 +498,8 @@ class SimulationStacker(object):
                 catalogue. When provided, internal halo selection is skipped entirely.
                 Defaults to None.
             dr (float, optional): Annulus width of the compensated ('DSigma',
-                'upsilon') filters, in the same units as ``radDistance``.
+                'upsilon') filters and of the 'Sigma' ring, in the same units as
+                ``radDistance``.
                 Defaults to None, meaning ``stack_on_array``'s own fallback of
                 3 pixels. The fallback is a fixed pixel count, so it scales with
                 the field resolution; pass ``dr`` explicitly when the annulus
@@ -578,7 +579,10 @@ class SimulationStacker(object):
 
         Args:
             array (np.ndarray): 2D array to stack on. Requires shape (nPixels, nPixels) such that the array is square.
-            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring', 'DSigma_lensing']. Defaults to 'cumulative'.
+            filterType (str, optional): Stacked Filter Types. One of ['cumulative', 'CAP', 'DSigma', 'upsilon', 'ringring', 'DSigma_lensing', 'Sigma']. Defaults to 'cumulative'.
+                'Sigma' is the mean surface density in the annulus [R, R + dr) (filters.sigma_ring), the ring
+                the 'DSigma' filter subtracts, in mass per true unit area. Unlike 'DSigma', it is not invariant
+                to a uniform background, so with stackMap/stackField's subtract_mean it is the mean-subtracted Σ.
                 'DSigma_lensing' is the lensing-bin average of DeltaSigma (filters.delta_sigma_lensing_weights)
                 over bins whose geometric-mean centres are the stacking radii, centred on each halo's true position.
                 It assumes pixel i spans [i d, (i+1) d), as binned_statistic_2d maps do (not masked TSC fields),
@@ -599,7 +603,8 @@ class SimulationStacker(object):
                 catalogue. When provided, internal halo selection is skipped entirely.
                 Defaults to None.
             dr (float, optional): Annulus width of the compensated ('DSigma',
-                'upsilon') filters, in the same units as ``radDistance``.
+                'upsilon') filters and of the 'Sigma' ring, in the same units as
+                ``radDistance``.
                 Defaults to None, meaning 0.75 arcmin for arcmin units and
                 3 pixels otherwise.
             r0 (float, optional): Reference radius of the 'upsilon' filter, in
@@ -691,6 +696,8 @@ class SimulationStacker(object):
             # filterFunc = delta_sigma_ring
         elif filterType == 'upsilon':
             filterFunc = upsilon
+        elif filterType == 'Sigma':
+            filterFunc = sigma_ring
         elif filterType == 'DSigma_lensing':
             # Weights depend on each halo's sub-pixel position; built in the stacking loop.
             filterFunc = None
@@ -723,9 +730,10 @@ class SimulationStacker(object):
             # annulus. The renormalisation inside the filter hides it, so the
             # symptom was a quietly biased profile at the largest radii.
             n_vir = int(np.ceil(np.sqrt(2) * maxRadius)) + 1
-        elif filterType in ('DSigma', 'upsilon'):
-            # The compensated kernels subtract an annulus reaching r + dr, and
-            # 'upsilon' also evaluates one at r0, so the cutout must reach the
+        elif filterType in ('DSigma', 'upsilon', 'Sigma'):
+            # The compensated kernels subtract an annulus reaching r + dr, the
+            # 'Sigma' ring is that annulus, and 'upsilon' also evaluates one at
+            # r0, so the cutout must reach the
             # outermost annulus edge. Sizing it on radii.max() alone clipped
             # that annulus whenever its edge overshot the square cutout by more
             # than a pixel, silently dropping its pixels near the x/y axes.
@@ -807,7 +815,7 @@ class SimulationStacker(object):
                     raise ValueError(f'cutout {cutout.shape} does not match the DSigma_lensing '
                                      f'weights {lens_weights[cls].shape[1:]}')
                 profile = np.tensordot(lens_weights[cls], cutout, axes=([1, 2], [0, 1]))
-            elif filterType in ('DSigma', 'upsilon'):
+            elif filterType in ('DSigma', 'upsilon', 'Sigma'):
                 # TODO: This does not work with stackField for some reason. (I think fixed?)
                 # 'upsilon' is the same compensated kernel plus the
                 # (r0/R)^2 * DSigma(r0) reference term, so it needs the same dr
@@ -815,7 +823,8 @@ class SimulationStacker(object):
                 # generic branch below would silently fall back to
                 # filters.upsilon's defaults (dr=0.5, r0=1.0, pixel_size=1.0),
                 # which is a different filter from the one specified in
-                # docs/cross_corr/filter_specification.md.
+                # docs/cross_corr/filter_specification.md. 'Sigma' is that same
+                # annulus on its own, so it takes the same dr and pixel area.
                 profile = []
                 for rad in radii:
                     # TODO: pixel_size unit conversions!! Important

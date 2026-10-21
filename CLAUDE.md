@@ -67,7 +67,7 @@ demo of the FLAMINGO data layout and h5py access patterns.
 
 2. **`mapMaker.py`** — Low-level field creation from particle data. Called by `stacker.makeField()`. Supports particle types: `gas`, `dm`, `stars`, `bh`, `tSZ`, `kSZ`, `tau`, `ionized_gas`, `baryon`, `total`. Experimental types: `neutral_gas`, `tau_DM`.
 
-3. **`filters.py`** — Stacking filter functions: `CAP` (Circular Aperture Profile, the primary method), `DSigma`/`delta_sigma` (excess surface mass density), `delta_sigma_ring`, `total_mass`, `upsilon`. These operate on 2D projected fields and return radial profiles.
+3. **`filters.py`** — Stacking filter functions: `CAP` (Circular Aperture Profile, the primary method), `DSigma`/`delta_sigma` (excess surface mass density), `delta_sigma_ring`, `sigma_ring` (ring surface density Σ(R)), `total_mass`, `upsilon`. These operate on 2D projected fields and return radial profiles.
 
 4. **`loadIO.py`** — Data I/O for TNG, SIMBA and FLAMINGO group catalogs and particle data. Differences between the sims are handled here (e.g., halo radius field names and unit conventions differ). Uses `illustris_python` for TNG; reads HDF5 directly for SIMBA and FLAMINGO. For FLAMINGO, halo catalogs come from the SOAP-HBT file (`load_halos` keeps centrals only, using `SO/200_mean`; `load_subhalos` keeps all rows, using `BoundSubhalo` masses), `load_flamingo_header` normalizes the SWIFT header to TNG-style conventions, and `_convert_flamingo_particles` applies the no-h-to-h unit conversion at load time.
 
@@ -99,7 +99,7 @@ The two main workflows are **fields** (simulation-native units, kpc/h radii) and
 | `stack_on_array(array, filterType, radDistance, radDistanceUnits, ...)` | Stack any 2D array directly |
 | `setField(pType, field_, nPixels, projection)` | Inject a precomputed field |
 
-`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`, `'DSigma_lensing'` (lensing-bin average of ΔΣ; see `docs/lensing/dsigma_lensing_denominator.md`).
+`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`, `'DSigma_lensing'` (lensing-bin average of ΔΣ; see `docs/lensing/dsigma_lensing_denominator.md`), `'Sigma'` (mean surface density Σ(R) in the ring [R, R + dr), the annulus `'DSigma'` subtracts; `filters.sigma_ring`).
 
 ## Data Caching
 

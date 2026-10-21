@@ -10,6 +10,10 @@ Layout
 Rows:    one per filter, from ``stack.rows`` (default ``['Sigma', 'DSigma']``),
          the same filter on the numerator and the denominator:
          'Sigma'  = Σ(R), the mean surface density in the ring [R, R + 0.75')
+         'Sigma_lensing' = <Σ>, the area-weighted mean of Σ over the
+                    'DSigma_lensing' bins (contiguous, with geometric-mean
+                    centres at the stacking radii), exact pixel weights,
+                    centred on each halo's true position
          'DSigma' = ΔΣ(R) = Σ̄(<R) - Σ(R), as Figure 1's ΔΣ column
 Columns: one per simulation suite, in config order (IllustrisTNG, SIMBA,
          FLAMINGO), with the suite's legend below the bottom row.
@@ -18,7 +22,9 @@ Both rows stack the same unconvolved maps (``stack.pixel_size`` 0.2 arcmin,
 ``stack.beam_size`` 0: no beam), and the row titles, right of each row, say
 so. The ring width is 0.75 arcmin, stack_on_array's default for arcmin radii
 (stackMap does not pass one), so the Σ(R) ring is exactly the annulus the ΔΣ
-filter subtracts; Σ(R) is plotted at the ring's inner edge R.
+filter subtracts; Σ(R) is plotted at the ring's inner edge R. <Σ> is plotted at
+its bin's geometric-mean centre R; its bins (about 0.9-1.0' wide) are not that
+annulus, so <Σ> and the 'DSigma' row do not combine into Σ̄(<R).
 
 The radii, halo selection ('massive', mean mass 10^13.22), ratio and error are
 those of make_ratios3x2.py, whose helpers this script imports. The error bands
@@ -30,6 +36,7 @@ selection; Figure 1 took it from its 3D column, which is not drawn here.
 Usage (from scripts/)
 ---------------------
     python unbound_gas/make_ratios_sigma_dsigma.py -p configs/unbound_gas/ratios_sigma_dsigma_z05.yaml
+    python unbound_gas/make_ratios_sigma_dsigma.py -p configs/unbound_gas/ratios_sigma_lensing_dsigma_z05.yaml
 
 ``--from-npz <profiles.npz>`` redraws the figure from the profiles file of an
 earlier run (written next to each figure) instead of stacking.
@@ -54,9 +61,11 @@ from halos import select_massive_halos
 # default for arcmin radii, which stackMap cannot override.
 _RING_WIDTH_ARCMIN = 0.75
 
-# Row kinds: the filterType passed to stackMap and the row label.
+# Row kinds: the filterType passed to stackMap, the row label and the y-label symbol.
 _ROW_TITLES = {'Sigma': rf"2D $\Sigma(R)$, ring $[R, R + {_RING_WIDTH_ARCMIN:g}')$",
+               'Sigma_lensing': r'2D $\langle\Sigma\rangle$, lensing bins',
                'DSigma': r'2D $\Delta\Sigma(R)$'}
+_ROW_SYMBOLS = {'Sigma': r'\Sigma', 'Sigma_lensing': r'\langle\Sigma\rangle', 'DSigma': r'\Delta\Sigma'}
 
 # Upper halo mass bound of the 'massive' selection. It must equal stackMap's
 # default halo_mass_upper, which compute_2d_profile_ratio cannot override, or
@@ -97,7 +106,7 @@ def configure_panel(ax, row_kind: str, is_top: bool, is_bottom: bool, is_left: b
 
     Args:
         ax (matplotlib.axes.Axes): The panel.
-        row_kind (str): 'Sigma' or 'DSigma', for the y label.
+        row_kind (str): A key of ``_ROW_SYMBOLS``, for the y label.
         is_top, is_bottom, is_left (bool): Position of the panel in the grid.
         pType, pType2 (str): Numerator and denominator particle types.
         R200m_arcmin (float or None): R200m of the column's first simulation
@@ -115,7 +124,7 @@ def configure_panel(ax, row_kind: str, is_top: bool, is_bottom: bool, is_left: b
     ax.grid(True)
 
     if is_left:
-        sym = r'\Sigma' if row_kind == 'Sigma' else r'\Delta\Sigma'
+        sym = _ROW_SYMBOLS[row_kind]
         ax.set_ylabel(
             rf'${sym}_{{\mathrm{{{_subscript(pType)}}}}} / {sym}_{{\mathrm{{{_subscript(pType2)}}}}}'
             r' \;/\; (\Omega_b / \Omega_m)$',
@@ -134,7 +143,7 @@ def configure_panel(ax, row_kind: str, is_top: bool, is_bottom: bool, is_left: b
 
 
 def main(path2config: str, ptype: str = None, from_npz: str = None, verbose: bool = True):
-    """Generate the Σ(R) / ΔΣ(R) fraction figure.
+    """Generate the fraction figure, one row per filter in ``stack.rows``.
 
     Args:
         path2config (str): Path to the YAML configuration file.
@@ -176,9 +185,10 @@ def main(path2config: str, ptype: str = None, from_npz: str = None, verbose: boo
     }
 
     rows = stack_cfg.get('rows', ['Sigma', 'DSigma'])
-    unknown = [r for r in rows if r not in _ROW_TITLES]
+    # Checked before stacking: the titles and y labels are only drawn after it.
+    unknown = [r for r in rows if r not in _ROW_TITLES or r not in _ROW_SYMBOLS]
     if unknown:
-        raise ValueError(f"Unknown row kind(s) {unknown}; use 'Sigma' or 'DSigma'.")
+        raise ValueError(f"Unknown row kind(s) {unknown}; use one of {list(_ROW_TITLES)}.")
     # Row labels name the filter and the maps both rows are stacked on.
     beam_str = rf"${float(beam_size):g}'$ beam" if beam_size else 'no beam'
     map_str = rf"${pixel_size:g}'$ pixels, {beam_str}"
@@ -335,7 +345,7 @@ def main(path2config: str, ptype: str = None, from_npz: str = None, verbose: boo
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate the Sigma(R) / DeltaSigma(R) fraction figure.")
+    parser = argparse.ArgumentParser(description="Generate the fraction figure, one row per filter.")
     parser.add_argument('-p', '--path2config', type=str,
                         default='./configs/unbound_gas/ratios_sigma_dsigma_z05.yaml',
                         help='Path to the YAML configuration file.')

@@ -1,0 +1,99 @@
+# ratios_sigma_lensing_dsigma_z05.yaml
+# ====================================
+# Configuration for make_ratios_sigma_dsigma.py: ratios_sigma_dsigma_z05.yaml
+# with the lensing-bin Σ in place of the ring Σ; a variant of Figure 1
+# (ratios_3x2_z05.yaml, make_ratios3x2.py), not in the draft.
+#
+# Fraction profiles particle_type / particle_type_2 / (OmegaBaryon / OmegaMatter),
+#   Rows (stack.rows):  'Sigma_lensing' = <Σ>, area-weighted Σ over the 'DSigma_lensing'
+#                                         bins (contiguous, edges ~0.245' to ~10.95' at
+#                                         z = 0.5, geometric-mean centres at the stacking
+#                                         radii), exact pixel weights, true halo centres
+#                       'DSigma' = ΔΣ(R) = Σ̄(<R) - Σ(R), Figure 1's ΔΣ column
+#   Columns:            one per suite, config order: IllustrisTNG, SIMBA, FLAMINGO
+# Both rows stack the unconvolved 0.2 arcmin maps (no beam).
+
+stack:
+  redshift: 0.5
+  projection: 'yz'
+
+  # I/O caching, as Figure 1 (the 0.2' fields are cached for every run below).
+  load_field: true
+  save_field: true
+  subtract_mean: false
+
+  # Fraction plotted: particle_type / particle_type_2 (--ptype overrides the first).
+  particle_type:   'ionized_gas'
+  particle_type_2: 'total'
+
+  # Radii: Figure 1's comoving range (comoving kpc/h), converted to arcmin per
+  # simulation (0.52' to 10.4' at z = 0.5).
+  min_radius: 200.0
+  max_radius: 4000.0
+  num_radii:  11
+
+  # Halo selection: 'massive', with the script's default target mean mass
+  # 10^13.22 (GroupMass units), as Figure 1. To change it, set e.g.
+  # halo_mass_avg: 1.6596e13
+
+  # Maps for both rows: 0.2 arcmin pixels, no beam (Figure 1's ΔΣ column).
+  pixel_size:   0.2
+  beam_size:    0
+  rad_distance: 1.0
+
+  # Rows drawn, top to bottom.
+  rows: ['Sigma_lensing', 'DSigma']
+
+
+plot:
+  fig_path: '../figures/'
+  fig_name: 'ratios_sigmalens_dsigma_yz'   # output: <fig_name>_<particle_type>.pdf
+  panel_width: 4.6
+  panel_height: 4.0
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+
+# Figure 1's runs. The 3D grid sizes (n_pixels) are not needed here.
+simulations:
+  - sim_type: 'IllustrisTNG'
+    sims:
+      - name: 'TNG100-1'
+        snapshot: 67
+      - name: 'TNG300-1'
+        snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 103
+
+  - sim_type: 'SIMBA'
+    sims:
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50noagn'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nox'
+      - name: 'm50n512'
+        snapshot: 125
+        feedback: 's50nofb'
+      - name: 'm100n1024'
+        snapshot: 125
+        feedback: 's50'
+
+  - sim_type: 'FLAMINGO'
+    sims:
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Jet_fgas-4sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma'
+      - name: 'L1_m9'
+        snapshot: 67
+        feedback: 'Mstar-1sigma_fgas-4sigma'

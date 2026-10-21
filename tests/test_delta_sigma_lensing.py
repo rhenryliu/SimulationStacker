@@ -1,5 +1,6 @@
 """Known-answer tests for the lensing-bin ΔΣ filter (filters.delta_sigma_lensing_weights and
-SimulationStacker.stack_on_array(filterType='DSigma_lensing')).
+SimulationStacker.stack_on_array(filterType='DSigma_lensing')), and for its Σ counterpart
+(filters.sigma_lensing_weights, filterType='Sigma_lensing') at the end of the file.
 
 The reference is a 2D Gaussian surface density, whose area-weighted ΔΣ over a bin [a, b] is
 exact: with x = R^2 / 2 s^2 and F(x) = Ein(x) + e^-x (Ein(x) = E1(x) + ln x + γ),
@@ -179,3 +180,103 @@ def test_stack_on_array_rejects_degenerate_radius_grid():
         s_obj.stack_on_array(array, filterType='DSigma_lensing', minRadius=1.0, maxRadius=6.0,
                              numRadii=2, projection='yz', radDistance=1.0,
                              radDistanceUnits='kpc/h', halo_mask=np.arange(9))
+
+
+# ---------------------------------------------------------------------------
+# 'Sigma_lensing': the area-weighted mean of Σ over each lensing bin. For a unit-mass
+# Gaussian, M(<R) = 1 - exp(-R^2 / 2 s^2), so
+#     <Σ>_[a,b] = [exp(-a^2 / 2 s^2) - exp(-b^2 / 2 s^2)] / (π (b^2 - a^2)).
+# Σ falls by orders of magnitude across a bin in a Gaussian's tail, where the uniform-pixel
+# approximation cannot follow it, so the relative checks keep the bins holding at least 1% of
+# the largest bin average. Profiles narrower than about two pixels (FWHM 0.5 on 0.2 pixels
+# is off by >100% in its one non-negligible bin) are outside what the filter can resolve.
+# ---------------------------------------------------------------------------
+
+def exact_sigma_bin_average(a, b, s):
+    """Area-weighted mean of Σ over [a, b] for a unit-mass Gaussian of width s."""
+    return (np.exp(-a**2 / (2 * s**2)) - np.exp(-b**2 / (2 * s**2))) / (np.pi * (b**2 - a**2))
+
+
+def test_sigma_uniform_sheet_is_exact():
+    """A uniform sheet gives back its density in every bin, for any halo offset."""
+    for pix, half, off in ((0.2, 35, (-0.13, -0.05)), (0.5, 15, (-0.4, -0.01))):
+        W = filters.sigma_lensing_weights(half, pix, EDGES, offset=off)
+        np.testing.assert_allclose(W.sum(axis=(1, 2)) * pix**2, 1.0, rtol=1e-12)
+
+
+def test_sigma_point_masses_are_exact():
+    """Mass in a pixel inside the inner edge contributes nothing; mass in a pixel wholly inside
+    bin [a, b] contributes 1 / (π (b² - a²)) to that bin only."""
+    half, pix = 35, 0.2
+    W = filters.sigma_lensing_weights(half, pix, EDGES, offset=(0.0, 0.0))
+    m = np.zeros((2 * half + 1,) * 2)
+    m[half, half] = 1.0                              # spans r <= 0.14 < EDGES[0]
+    np.testing.assert_allclose(lensing_profile(W, m), 0.0, atol=1e-15)
+    m[:] = 0.0
+    m[half + 5, half] = 1.0                          # spans 0.9 <= r <= 1.105, inside [0.741, 1.350]
+    expected = np.zeros(len(EDGES) - 1)
+    expected[0] = 1.0 / (np.pi * (EDGES[1]**2 - EDGES[0]**2))
+    np.testing.assert_allclose(lensing_profile(W, m), expected, rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize('fwhm', [1.2, 2.5, 6.0])
+def test_sigma_gaussian_converges_with_pixel_size(fwhm):
+    s = sig(fwhm)
+    exact = exact_sigma_bin_average(EDGES[:-1], EDGES[1:], s)
+    keep = exact >= 1e-2 * exact.max()
+    errors = []
+    for pix in (0.2, 0.1, 0.05):
+        half = int(np.ceil(7.0 / pix))
+        off = (-0.37 * pix, -0.81 * pix)
+        c = np.arange(-half, half + 1) * pix
+        W = filters.sigma_lensing_weights(half, pix, EDGES, offset=off)
+        errors.append(np.max(np.abs(lensing_profile(W, pixel_mass(c, c, off, pix, s)) / exact - 1)[keep]))
+    # Measured at 0.05': 5.5e-3 (FWHM 1.2), 9.5e-4 (2.5), 1.2e-4 (6.0); a change to EDGES or to
+    # the 1% bin cut changes these.
+    assert errors[2] < 0.006                         # 0.05': within 0.6 per cent
+    assert errors[0] > 10 * errors[2]                # converging as the pixel size squared
+    assert errors[2] < errors[1] < errors[0]
+    if fwhm >= 2.5:
+        assert errors[0] < 0.02                      # 0.2' maps: within 2 per cent
+
+
+def test_sigma_plus_dsigma_is_mean_sigma_within():
+    """<ΔΣ> + <Σ> is the bin average of Σ̄(<R), [Ein(x_b) - Ein(x_a)] / (π (b² - a²)) for a
+    unit-mass Gaussian (x = R² / 2 s², Ein(x) = E1(x) + ln x + γ); pins the two weight builders to
+    each other."""
+    s, pix = sig(2.5), 0.05
+    half = int(np.ceil(7.0 / pix))
+    off = (-0.37 * pix, -0.81 * pix)
+    c = np.arange(-half, half + 1) * pix
+    m = pixel_mass(c, c, off, pix, s)
+    total = lensing_profile(filters.delta_sigma_lensing_weights(half, pix, EDGES, offset=off)
+                            + filters.sigma_lensing_weights(half, pix, EDGES, offset=off), m)
+    def ein(r):
+        x = r**2 / (2 * s**2)
+        return exp1(x) + np.log(x) + np.euler_gamma
+    exact = (ein(EDGES[1:]) - ein(EDGES[:-1])) / (np.pi * (EDGES[1:]**2 - EDGES[:-1]**2))
+    np.testing.assert_allclose(total, exact, rtol=2e-3)
+
+
+def test_sigma_cutout_too_small_raises():
+    with pytest.raises(ValueError):
+        filters.sigma_lensing_weights(30, 0.2, EDGES, offset=(-0.19, 0.0))   # reach 5.91 < 6.34
+
+
+@pytest.mark.parametrize('units, rad_distance', [('kpc/h', 1.0), ('arcmin', 1.0), ('kpc/h', 2.0)])
+def test_sigma_stack_on_array_centres_haloes_correctly(units, rad_distance):
+    """End to end through stack_on_array, as for 'DSigma_lensing'. A wrong offset sign or a
+    swapped axis would shift every stack centre by up to two pixels and fail the tolerance;
+    radDistance = 2 (radii halved) would fail if the bin edges were not scaled by it."""
+    s_obj, array, s = _stacker_on_gaussians(units)
+    radii, prof = s_obj.stack_on_array(array, filterType='Sigma_lensing',
+                                       minRadius=1.0 / rad_distance, maxRadius=6.0 / rad_distance,
+                                       numRadii=9, projection='yz', radDistance=rad_distance,
+                                       radDistanceUnits=units, halo_mask=np.arange(9))
+    exact = exact_sigma_bin_average(EDGES[:-1], EDGES[1:], s)
+    keep = exact >= 1e-2 * exact.max()
+    assert prof.shape == (9, 9)
+    # 0.1 pixels: the uniform-pixel error is <= 0.4 per cent in these bins (FWHM 2.5); offset
+    # classes add a residual miscentring of at most 1/8 pixel.
+    assert np.max(np.abs(prof / exact[:, None] - 1)[keep]) < 0.006
+    assert np.max(np.abs(prof - exact[:, None])) < 2e-3 * exact.max()

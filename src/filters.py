@@ -808,3 +808,63 @@ def delta_sigma_lensing_weights(half: int, pixel_size: float, edges: np.ndarray,
             W[i, p] = wq @ frac(R[:, None]) - frac(b) + frac(a)
         W[i] /= np.pi * (b**2 - a**2)
     return W.reshape(len(edges) - 1, n, n)
+
+
+def sigma_lensing_weights(half: int, pixel_size: float, edges: np.ndarray,
+                          offset: Tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+    """Per-pixel weights that turn a mass cutout into the lensing-bin average of Σ.
+
+    The area-weighted mean of Σ(R) over a bin [a, b] is the mass in the annulus over its area,
+
+        <Σ>_[a,b] = (M(<b) − M(<a)) / (π (b² − a²)),
+
+    the Σ term of ``delta_sigma_lensing_weights``, so <ΔΣ> + <Σ> is the bin average of Σ̄(<R).
+    With the mass in each pixel uniform over the pixel, M(<R) = Σ_p m_p f_p(R), where f_p(R) is
+    the exact fraction of pixel p inside radius R (``pixel_disk_overlap``), so <Σ> = Σ_p m_p W_p
+    with
+
+        W_p = (f_p(b) − f_p(a)) / (π (b² − a²)).
+
+    Pixels straddling a bin edge count by the fraction of their area inside the bin, and the
+    weights are centred on the halo's true position, as in ``delta_sigma_lensing_weights``.
+    Since Σ_p f_p(R) × (pixel area) = π R² exactly for every R <= ``edges[-1]`` once the cutout
+    contains the disk of radius ``edges[-1]``, a uniform sheet of density s gives <Σ> = s to
+    rounding error.
+
+    Args:
+        half: Cutout half-width in pixels; the cutout is (2*half+1, 2*half+1), centred on
+            its central pixel.
+        pixel_size: True pixel size, in the units of ``edges``.
+        edges: Bin edges, shape (N+1,), positive and strictly increasing.
+        offset: (row, column) position of the halo relative to the centre of the central
+            pixel, in the units of ``edges``. Rows run along the first map coordinate, as in
+            ``SimulationStacker.cutout_2d_periodic``.
+
+    Returns:
+        Weights of shape (N, 2*half+1, 2*half+1). For a cutout ``m`` holding mass per pixel,
+        ``np.tensordot(W, m, axes=([1, 2], [0, 1]))`` is <Σ> in each bin, in mass per unit
+        area of ``edges``.
+
+    Raises:
+        ValueError: If the edges are not positive and increasing, or if the disk of radius
+            ``edges[-1]`` around the halo is not inside the cutout.
+    """
+    edges = np.asarray(edges, dtype=float)
+    if edges[0] <= 0 or np.any(np.diff(edges) <= 0):
+        raise ValueError(f'edges must be positive and strictly increasing, got {edges}')
+    off = np.asarray(offset, dtype=float)
+    reach = (half + 0.5) * pixel_size - np.max(np.abs(off))
+    if reach < edges[-1]:
+        raise ValueError(f'cutout reaches {reach:.4g} from the halo, inside the outer bin edge '
+                         f'{edges[-1]:.4g}; enlarge the cutout')
+
+    n = 2 * half + 1
+    centres = np.arange(-half, half + 1) * pixel_size
+    # Pixel rectangles relative to the halo, flattened row-major.
+    x0 = np.repeat(centres - 0.5 * pixel_size - off[0], n)
+    y0 = np.tile(centres - 0.5 * pixel_size - off[1], n)
+    x1, y1 = x0 + pixel_size, y0 + pixel_size
+    # Fraction of each pixel inside each edge, then the difference across each bin.
+    frac = pixel_disk_overlap(x0, x1, y0, y1, edges[:, None]) / pixel_size**2
+    W = (frac[1:] - frac[:-1]) / (np.pi * (edges[1:]**2 - edges[:-1]**2))[:, None]
+    return W.reshape(len(edges) - 1, n, n)

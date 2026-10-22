@@ -1,0 +1,109 @@
+# Option C copy of ../mass_ratio_data_z026.yaml: the lensing-matched filter 'DSigma_lensing' (the lensing-bin
+# average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
+# simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
+# lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
+# Not modelled: ThumbStack's interpolation of the 0.5' map onto 0.25' stamps (step 1c); it would
+# lower the beam factor by 3-4% at 1', 2% at 1.6' and 1% at 2.25', so f corrected with this beam
+# factor reads that much low there (DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
+# Not to be confused with ../mass_ratio_data_z026_dsigma_lensing.yaml (step 1: only the
+# denominator is DSigma_lensing, with the paper filter's numerator and data).
+stack:
+  redshift: 0.26
+  load_field: true
+  save_field: true
+
+  stack_field: false # If false, stacks maps instead of fields
+  rad_distance: 1.0 # in arcmin, or comoving kpc/h if stack_field is true
+  min_radius: 1.0 # in rad_distance units
+  max_radius: 6.0 # in rad_distance units
+  num_radii: 9 # Number of radial bins between min_radius and max_radius
+  
+  mask_haloes: false
+  mask_radii: 3.0 # Number of virial radii to mask out for haloes. In units of R200c
+
+  n_pixels: 1000 # Number of pixels on a side if stack_field is true
+  projection: 'yz' # 'xy', 'xz', 'yz'
+
+  filter_type: 'DSigma_lensing' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  particle_type: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
+  pixel_size: 0.5 # in arcmin
+  beam_size: 1.6 # in arcmin
+
+  filter_type_2: 'DSigma_lensing' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
+  particle_type_2: 'total'
+  pixel_size_2: 0.2 # in arcmin
+  beam_size_2: null # in arcmin
+
+  subtract_mean: false # Whether to subtract the mean of the field before stacking
+  # TODO: Make sure the subhalo abundance matching is at correct halo abundance.
+  use_subhalos: true # Whether to use subhalos instead of host halos for stacking. If true, will select subhalos based on abundance matching to match the number density specified by the user (see below).
+  halo_abundance_target: 1.0e-3 # Target halo abundance for subhalo selection when use_subhalos is true. In units of h^3/Mpc^3.
+
+
+plot:
+  plot_data: true
+  # data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/specY3_hsc/ratio_specY3_hsc_zbin1_DSigma_ksz_uniformweight.npz'
+  # data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_lensing_ksz_ggl.npz
+  # data_path: '../data/Fig1_Fig8_dr10_allfoot_perbin_dr6_pzbin1.npz'
+  # data_label: 'Hadzhiyska 2024 pz1'
+  fig_path: '../figures/'
+  fig_name: 'BGS_ratios_yz_data_dsigma_lensing'
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+
+simulations:
+  - sim_type: 'SIMBA'
+    sims:
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50noagn'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nox'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nojet'
+      # - name: 'm50n512'
+      #   snapshot: 125
+      #   feedback: 's50nofb'
+      - name: 'm100n1024'
+        snapshot: 136
+        feedback: 's50'
+  - sim_type: 'IllustrisTNG'
+    sims:
+      # - name: 'TNG100-1'
+        # snapshot: 80
+      - name: 'TNG300-1'
+        snapshot: 80
+      # - name: 'TNG300-2'
+        # snapshot: 80
+      # - name: 'TNG50-3'
+      #   snapshot: 67
+      - name: 'Illustris-1'
+        snapshot: 116
+      # - name: 'Illustris-2'
+      #   snapshot: 103
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial).
+      # No FLAMINGO snapshot exists at z=0.26; snapshot 71 (z=0.30) is substituted.
+      # The per-sim 'redshift: 0.3' makes the stacker use z=0.30 for both the
+      # angular projection and the scale factor a=1/(1+z), and matches the snapshot
+      # header so the consistency-check warning stays silent.
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'L1_m9'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'fgas-8sigma'
+        redshift: 0.3
+      - name: 'L1_m9'
+        snapshot: 71
+        feedback: 'Jet_fgas-4sigma'
+        redshift: 0.3

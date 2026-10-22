@@ -1,0 +1,30 @@
+# Option C copy of ../beam_compensated_z026.yaml: the lensing-matched filter 'DSigma_lensing' (the lensing-bin
+# average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
+# simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
+# lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
+# Not modelled: ThumbStack's interpolation of the 0.5' map onto 0.25' stamps (step 1c); it would
+# lower the beam factor by 3-4% at 1', 2% at 1.6' and 1% at 2.25', so f corrected with this beam
+# factor reads that much low there (DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
+beam_test_config: mass_ratio_beamTest_z026.yaml
+no_beam_config:   mass_ratio_noBeam_z026.yaml
+
+compensation:
+  use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
+  load_beam_factor: true  # read beam_test_config's beam_factor.npz_path; restack if missing or stale
+  save_compensated: false  # the paper filter's file has the same name; this run's values are in the figure data
+
+plot:
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_lensing_ksz_ggl.npz
+  fig_path: '../figures/'
+  fig_name: 'beam_compensated_z026_dsigma_lensing'
+  fig_type: 'pdf'
+  plot_error_bars: true
+
+# Extra simulation ratios to overlay (used only by beam_compensated_ratio_v2.py).
+# Each entry is stacked with the same parameters as the primary ratio but with a
+# different numerator particle type.  The denominator (particle_type_2 from
+# no_beam_config) and all other stacking settings are shared.
+# With six simulations the gas/baryon overlays make the figure unreadable, so
+# the main-text figure shows ionized gas only; the total-baryon curves moved to
+# the companion figure (beam_compensated_z026_baryon.yaml).
+extra_sim_ratios: []

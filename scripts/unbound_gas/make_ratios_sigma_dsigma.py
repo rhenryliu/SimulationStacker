@@ -193,6 +193,11 @@ def main(path2config: str, ptype: str = None, from_npz: str = None, verbose: boo
     beam_str = rf"${float(beam_size):g}'$ beam" if beam_size else 'no beam'
     map_str = rf"${pixel_size:g}'$ pixels, {beam_str}"
     row_titles = {r: f'{_ROW_TITLES[r]}\n{map_str}' for r in rows}
+    # Only the Σ rows change when the map mean is subtracted (ΔΣ is compensated).
+    if params_2d['subtract_mean']:
+        for r in ('Sigma', 'Sigma_lensing'):
+            if r in row_titles:
+                row_titles[r] += ', mean subtracted'
 
     now = datetime.now()
     figPath = Path(plot_cfg.get('fig_path', '../figures/')) / now.strftime("%Y-%m") / now.strftime("%m-%d")

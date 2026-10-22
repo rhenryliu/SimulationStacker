@@ -14,7 +14,7 @@ compensation:
   save_compensated: false  # the paper filter's file has the same name; this run's values are in the figure data
 
 plot:
-  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_lensing_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_lensing_ksz_ggl.npz
   fig_path: '../figures/'
   fig_name: 'beam_compensated_z026_dsigma_lensing'
   fig_type: 'pdf'

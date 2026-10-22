@@ -43,7 +43,7 @@ stack:
 
 plot:
   plot_data: true
-  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_lensing_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_lensing_ksz_ggl.npz
   fig_path: '../figures/'
   fig_name: 'noBeam_yz_data_dsigma_lensing'
   fig_type: 'pdf'

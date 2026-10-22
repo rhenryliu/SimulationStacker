@@ -35,7 +35,7 @@ stack:
 
 plot:
   plot_data: True
-  data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/hsc/products/spec_Y3/dsigma_tomo_noboost_hscy3_bin3_LRG_bin1.fits'
+  data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/hsc/products/spec_Y3_v2/dsigma_tomo_noboost_hscy3_bin3_LRG_bin1.fits'
   data_label: 'HSCY3 Bin3 x LRG bin1 Lensing'
   # Hubble parameter of the cosmology the measurement was made with (Planck18,
   # see DESIxHSC-Lensing/scripts/precompute_pipeline_combined.py). Used as the

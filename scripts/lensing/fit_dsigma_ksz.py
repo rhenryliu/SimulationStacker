@@ -211,6 +211,62 @@ def config_fingerprint(config):
     return hashlib.sha256(blob).hexdigest()
 
 
+# Per-simulation keys of the density sweep. These depend only on the
+# simulations, the stacking settings and the radial bins, not on the measured
+# Delta Sigma values, so they can be carried over to a new measurement.
+_SWEEP_KEYS = ('targets', 'ds_grid', 'ds_sem', 'n_haloes', 'mean_mass')
+
+
+def load_sweep_source(config, source_config_path):
+    """Load another configuration's cached density sweep for reuse.
+
+    The swept Delta Sigma profiles do not depend on the measurement, only the
+    chi-squared does, so a new measurement on the same radial bins can reuse
+    them and restack only the best-fit sample. The source configuration must
+    match this one in everything that sets the profiles; only the measurement
+    file, its label and the output names may differ.
+
+    Args:
+        config (dict): The parsed configuration of this run.
+        source_config_path (str): Configuration whose cache holds the sweep.
+
+    Returns:
+        dict: A ``resume``-style mapping holding only the sweep keys (no
+        best-fit stacks), tagged with this configuration's fingerprint, plus
+        ``sweep_source`` (the source npz path) and ``sweep_theta``.
+
+    Raises:
+        ValueError: If the configurations differ in anything but the allowed
+            keys, or the source cache is stale for its own configuration.
+    """
+    with open(source_config_path) as f:
+        source = yaml.safe_load(f)
+
+    for block in ('stack', 'fit', 'simulations'):
+        if source.get(block) != config.get(block):
+            raise ValueError(f"--sweep-from: the '{block}' block of "
+                             f"{source_config_path} differs from this config.")
+    for key in ('ds_data_key', 'data_z_lens'):
+        if source['plot'].get(key) != config['plot'].get(key):
+            raise ValueError(f"--sweep-from: plot.{key} differs from {source_config_path}.")
+
+    source_npz = Path(source['plot'].get(
+        'npz_path', f"../data/fit_dsigma_ksz/{source['plot'].get('fig_name')}.npz"))
+    with np.load(source_npz, allow_pickle=False) as archive:
+        cached = {k: archive[k] for k in archive.files}
+    if str(cached.get('config_fingerprint', '')) != config_fingerprint(source):
+        raise ValueError(f"--sweep-from: {source_npz} was not written under "
+                         f"{source_config_path} as it stands now.")
+
+    sweep = {k: v for k, v in cached.items()
+             if '/' in k and k.split('/', 1)[1] in _SWEEP_KEYS}
+    sweep['targets'] = cached['targets']
+    sweep['config_fingerprint'] = np.asarray(config_fingerprint(config))
+    sweep['sweep_source'] = np.asarray(str(source_npz))
+    sweep['sweep_theta'] = cached['theta']
+    return sweep
+
+
 # ---------------------------------------------------------------------------
 # Fitting
 # ---------------------------------------------------------------------------
@@ -483,6 +539,12 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
                'fit_mask': fit_mask,
                'r_min_arcmin': np.asarray(r_min_arcmin),
                'n_jk_lens': np.asarray(n_jk)}
+    if resume is not None and 'sweep_source' in resume:
+        # The reused sweep was stacked on the source measurement's radial bins.
+        if 'sweep_theta' in resume and not np.array_equal(resume['sweep_theta'], theta):
+            raise ValueError("--sweep-from: the source cache was stacked on "
+                             f"different bins: {resume['sweep_theta']} vs {theta}")
+        results['sweep_source'] = resume['sweep_source']
     labels, panels = [], []
 
     for panel_idx, sim_type in enumerate(config['simulations']):
@@ -551,11 +613,16 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
             if sweep_usable:
                 ds_grid = list(cached['ds_grid'])
                 ds_sem = list(cached['ds_sem'])
-                chi2_values = list(cached['chi2'])
+                # A sweep carried over from another measurement (--sweep-from)
+                # has no chi-squared for this one.
+                chi2_values = (list(cached['chi2']) if 'chi2' in cached else
+                               [chi2_of_profile(p, lens['ds'], lens['cov'], fit_mask, n_jk)
+                                for p in ds_grid])
                 n_haloes = list(cached['n_haloes'])
                 mean_mass = list(cached['mean_mass'])
                 if verbose:
-                    print(f"    sweep reused from cache ({len(targets)} densities)")
+                    print(f"    sweep reused from cache ({len(targets)} densities), "
+                          f"chi2 = {np.round(chi2_values, 2)}")
             else:
                 ds_grid, ds_sem, chi2_values = [], [], []
                 n_haloes, mean_mass = [], []
@@ -847,7 +914,7 @@ def print_summary(results, config):
 
 # ---------------------------------------------------------------------------
 
-def main(path2config, replot=False, resume=False, verbose=True):
+def main(path2config, replot=False, resume=False, sweep_from=None, verbose=True):
     """Run the fit and write the figure.
 
     Args:
@@ -856,6 +923,9 @@ def main(path2config, replot=False, resume=False, verbose=True):
             restacking. Defaults to False.
         resume (bool, optional): Restack only the simulations missing from the
             cache. Defaults to False.
+        sweep_from (str, optional): Configuration whose cached density sweep
+            is reused (see :func:`load_sweep_source`); only the best-fit
+            stacks are redone. Defaults to None.
         verbose (bool, optional): Print progress. Defaults to True.
 
     Raises:
@@ -877,6 +947,8 @@ def main(path2config, replot=False, resume=False, verbose=True):
     t0 = time.time()
     if replot and resume:
         print('--resume is ignored when --replot is given.')
+    if replot and sweep_from is not None:
+        print('--sweep-from is ignored when --replot is given.')
     if replot:
         if not npz_path.exists():
             raise FileNotFoundError(
@@ -890,10 +962,24 @@ def main(path2config, replot=False, resume=False, verbose=True):
                   'labelled with. Re-run without --replot to refresh it.')
     else:
         previous = None
+        if sweep_from is not None:
+            previous = load_sweep_source(config, sweep_from)
+            print(f"Reusing the density sweep of {previous['sweep_source']}")
         if resume and npz_path.exists():
             with np.load(npz_path, allow_pickle=False) as archive:
-                previous = {k: archive[k] for k in archive.files}
-            print(f'Resuming from {npz_path}')
+                cached = {k: archive[k] for k in archive.files}
+            if 'sweep_source' in cached and sweep_from is None:
+                raise ValueError(f"{npz_path} was started with --sweep-from (sweep of "
+                                 f"{cached['sweep_source']}); pass it again with --resume.")
+            # On top of a reused sweep, so simulations not yet finished still
+            # skip their sweep; a stale cache must not discard that sweep too.
+            if (previous is not None and str(cached.get('config_fingerprint', ''))
+                    != str(previous['config_fingerprint'])):
+                print(f'  WARNING: {npz_path} is stale for this config; resuming '
+                      'from the reused sweep only.')
+            else:
+                previous = dict(previous or {}, **cached)
+                print(f'Resuming from {npz_path}')
         results = compute_results(config, cache_path=npz_path, resume=previous,
                                   verbose=verbose)
         # compute_results already checkpointed after the last simulation.
@@ -915,6 +1001,10 @@ if __name__ == '__main__':
                         help='Reuse the cached profiles instead of restacking.')
     parser.add_argument('--resume', action='store_true',
                         help='Restack only the simulations missing from the cache.')
+    parser.add_argument('--sweep-from', type=str, default=None,
+                        help='Config whose cached density sweep to reuse for a new '
+                             'measurement on the same bins; only the best-fit '
+                             'stacks are redone.')
     args = vars(parser.parse_args())
     print(f"Arguments: {args}")
 

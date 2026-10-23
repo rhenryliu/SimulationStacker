@@ -85,7 +85,7 @@ plot:
   # conversion is a pure scale factor, so it is inverted exactly at runtime by
   # calibrating on 1 Msun/pc^2. Verified to reproduce
   # dsigma_tomo_noboost_hscy3_bin0_LRG_bin1.fits to 4e-16.
-  ds_data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_ksz_ggl.npz'
+  ds_data_path: '/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_ksz_ggl.npz'
   ds_data_key: 'source_bin_0'
   ds_data_label: 'HSCY3 Bin0 x BGS Lensing'
   # Effective lens redshift of the full DESI BGS sample (bin 0), from

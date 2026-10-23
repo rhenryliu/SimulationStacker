@@ -16,7 +16,7 @@ compensation:
   load_beam_factor: true  # read beam_test_config's beam_factor.npz_path; restack if missing or stale
 
 plot:
-  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
   data_label: 'LRG z-bin 1 (z$\sim$0.51) (beam-corrected)'
   cmb_fgas_path: ../data/cmb_fgas/fgas_desi_ls_x_act_dr6_fig6_extended_lrgs.npz
   cmb_fgas_label: 'Hadzhiyska et al. (2025) (extended LRGs)'

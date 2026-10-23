@@ -195,12 +195,18 @@ def save_beam_factor_npz(path, results: dict, bt_config: dict) -> None:
     os.replace(tmp, path)
 
 
-def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
+def main(config_z05: str, config_z026: str, fig_name: Optional[str] = None,
+         verbose: bool = True) -> None:
     """Compute and plot beam suppression factors for both redshifts.
 
     Args:
         config_z05:  Path to the beamTest config for z=0.5.
         config_z026: Path to the beamTest config for z=0.26.
+        fig_name: Stem of the saved PDF. If None, 'beam_factors_all_sims' for
+            the paper's filters (filter_type and filter_type_2 both 'DSigma' in
+            the z=0.5 config), with '_{filter_type}_{filter_type_2}' appended
+            otherwise, so runs with other filters do not replace the paper's
+            figure of the same day.
         verbose: If True, print progress messages to stdout.
     """
     configs = {
@@ -213,6 +219,13 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
     for key, path in configs.items():
         with open(path) as f:
             loaded[key] = yaml.safe_load(f)
+
+    if fig_name is None:
+        filters = (loaded['z05']['stack'].get('filter_type', 'DSigma'),
+                   loaded['z05']['stack'].get('filter_type_2', 'DSigma'))
+        fig_name = 'beam_factors_all_sims'
+        if filters != ('DSigma', 'DSigma'):
+            fig_name += '_{}_{}'.format(*filters)
 
     # ---- Build sim_label → colour mapping from the z05 config ----
     # Both configs list the same simulations, so building from either is equivalent.
@@ -408,7 +421,7 @@ def main(config_z05: str, config_z026: str, verbose: bool = True) -> None:
 
     fig.tight_layout()
 
-    out_path = fig_path / 'beam_factors_all_sims.pdf'
+    out_path = fig_path / f'{fig_name}.pdf'
     print(f'Saving figure to {out_path}')
     fig.savefig(out_path, dpi=150) # type: ignore[union-attr] (Path has no `savefig` method, but fig does)
     figure_data.save(out_path)
@@ -432,6 +445,13 @@ if __name__ == '__main__':
         type=str,
         default='./configs/lensing/mass_ratio_beamTest_z026.yaml',
         help='Path to the beamTest config for z=0.26.',
+    )
+    parser.add_argument(
+        '--fig-name',
+        type=str,
+        default=None,
+        help=("Stem of the saved PDF (default: beam_factors_all_sims, with "
+              "'_{filter_type}_{filter_type_2}' appended unless both are 'DSigma')."),
     )
     args = vars(parser.parse_args())
     main(**args)

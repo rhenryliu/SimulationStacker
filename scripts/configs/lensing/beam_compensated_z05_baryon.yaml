@@ -11,7 +11,7 @@ compensation:
   save_compensated: true  # write the compensated data points to ../data/beam_compensated/
 
 plot:
-  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_ksz_ggl.npz
   fig_path: '../figures/'
   fig_name: 'beam_compensated_z05'
   fig_type: 'pdf'

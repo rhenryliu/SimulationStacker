@@ -1,0 +1,28 @@
+# Option C copy of ../beam_compensated_z05_baryon.yaml: the lensing-matched filter 'DSigma_lensing' (the lensing-bin
+# average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
+# simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
+# lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
+# Not modelled: ThumbStack's interpolation of the 0.5' map onto 0.25' stamps (step 1c); it would
+# lower the beam factor by 3-4% at 1', 2% at 1.6' and 1% at 2.25', so f corrected with this beam
+# factor reads that much low there (DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
+# Total-baryon companion to beam_compensated_z05.yaml (paper Fig. 17b).
+# The beam compensation is still calibrated on ionized gas (beam_test_config is
+# shared with the ionized-gas figure), since the data points are the same kSZ
+# measurement in both figures — only the simulation curves change to baryon/total.
+beam_test_config: mass_ratio_beamTest_z05.yaml
+no_beam_config:   mass_ratio_noBeam_z05_baryon.yaml
+
+compensation:
+  use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
+  load_beam_factor: true  # read beam_test_config's beam_factor.npz_path; restack if missing or stale
+  save_compensated: false  # the paper filter's file has the same name; this run's values are in the figure data
+
+plot:
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_lensing_ksz_ggl.npz
+  fig_path: '../figures/'
+  fig_name: 'beam_compensated_z05_dsigma_lensing'
+  fig_type: 'pdf'
+  plot_error_bars: true
+  ylabel: '$f_{\rm baryon}(R)$'
+
+# No extra_sim_ratios: this figure shows only the primary baryon/total curves.

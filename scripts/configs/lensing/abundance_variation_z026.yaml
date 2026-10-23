@@ -22,7 +22,7 @@ plot:
   # Only used for the grey band showing the fractional statistical error.
   # sigma/R is unchanged by beam compensation, so the raw (uncompensated)
   # measurement gives the correct band.
-  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_ksz_ggl.npz
+  data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_BGS_full_no_src_with_cluster_mask_zbin0_DSigma_ksz_ggl.npz
   data_key:  'source_bin_0'
 
   # Canonical cache, on a stable (non date-stamped) path so --replot finds it.

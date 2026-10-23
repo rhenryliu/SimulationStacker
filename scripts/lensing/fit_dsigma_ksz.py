@@ -152,18 +152,50 @@ def read_lensing_data(plot_config):
 def read_ksz_data(plot_config):
     """Read the kSZ measurement overlaid on the bottom row.
 
+    ``ksz_data_format`` selects the file type:
+
+    - ``'npz'`` (default): the Hadzhiyska et al. (2024) file, with keys
+      ``theta_arcmins``, ``signal`` and ``noise`` in uK arcmin^2.
+    - ``'thumbstack'``: a ThumbStack ``*_ksz_uniformweight_measured.txt``
+      (theta, signal, error) and its bootstrap covariance ``ksz_cov_path``.
+      ThumbStack gives uK sr with no velocity-reconstruction correction, so the
+      profile is converted to uK arcmin^2 and divided by ``ksz_r_val``, as
+      DESIxHSC-Lensing's compare_combined_self.py does; unlike there, the
+      aperture-integrated profile is kept, matching the simulated one.
+
     Args:
-        plot_config (dict): The config's ``plot`` block. Uses ``ksz_data_path``.
+        plot_config (dict): The config's ``plot`` block. Uses
+            ``ksz_data_path``, and for ThumbStack files ``ksz_cov_path`` and
+            ``ksz_r_val``.
 
     Returns:
         dict: With keys ``theta`` (arcmin), ``signal`` and ``err``
-        (uK arcmin^2). Only diagonal errors are available, which is why the
+        (uK arcmin^2). Only the diagonal errors are plotted, which is why the
         bottom row carries no goodness-of-fit number.
+
+    Raises:
+        ValueError: If ``ksz_data_format`` is not recognised.
     """
-    archive = np.load(plot_config['ksz_data_path'])
-    return {'theta': np.asarray(archive['theta_arcmins'], dtype=float),
-            'signal': np.asarray(archive['signal'], dtype=float),
-            'err': np.asarray(archive['noise'], dtype=float)}
+    fmt = plot_config.get('ksz_data_format', 'npz')
+    if fmt == 'npz':
+        archive = np.load(plot_config['ksz_data_path'])
+        return {'theta': np.asarray(archive['theta_arcmins'], dtype=float),
+                'signal': np.asarray(archive['signal'], dtype=float),
+                'err': np.asarray(archive['noise'], dtype=float)}
+    if fmt == 'thumbstack':
+        missing = [k for k in ('ksz_cov_path', 'ksz_r_val') if k not in plot_config]
+        if missing:
+            raise KeyError(f"ksz_data_format 'thumbstack' also needs {missing}.")
+        measured = np.loadtxt(plot_config['ksz_data_path'])  # theta already in arcmin
+        cov = np.loadtxt(plot_config['ksz_cov_path'])
+        if cov.shape != (len(measured), len(measured)):
+            raise ValueError(f"covariance shape {cov.shape} does not match the "
+                             f"{len(measured)} radial bins of the profile.")
+        scale = (180. * 60. / np.pi) ** 2 / float(plot_config['ksz_r_val'])
+        return {'theta': measured[:, 0],
+                'signal': measured[:, 1] * scale,
+                'err': np.sqrt(np.diag(cov)) * scale}
+    raise ValueError(f"Unknown ksz_data_format {fmt!r}; use 'npz' or 'thumbstack'.")
 
 
 def save_npz_atomic(path, data):
@@ -186,16 +218,24 @@ def save_npz_atomic(path, data):
     os.replace(tmp, path)
 
 
-def config_fingerprint(config):
+# Caches written before 2026-10-22 also hashed plot.ksz_data_path, which every
+# config then set to this file, so their fingerprints can be recomputed.
+_LEGACY_KSZ_DATA_PATH = '../data/Fig2_sim.npz'
+
+
+def config_fingerprint(config, legacy=False):
     """Hash of the configuration that determines the stacked and fitted results.
 
     ``--resume`` reuses cached profiles for simulations it does not restack, so
     the cache is only valid while the settings behind it are unchanged. Only the
     inputs that affect numbers are hashed; purely cosmetic plot keys are not, so
-    a rename or a colour change does not throw away hours of stacking.
+    a rename or a colour change does not throw away hours of stacking. The kSZ
+    measurement is only drawn on the figure, so it is not hashed either.
 
     Args:
         config (dict): The parsed configuration.
+        legacy (bool, optional): Reproduce the fingerprint of caches written
+            while ``ksz_data_path`` was hashed. Defaults to False.
 
     Returns:
         str: Hex digest.
@@ -204,11 +244,27 @@ def config_fingerprint(config):
         'stack': config.get('stack', {}),
         'fit': config.get('fit', {}),
         'data': {k: config.get('plot', {}).get(k) for k in
-                 ('ds_data_path', 'ds_data_key', 'data_z_lens', 'ksz_data_path')},
+                 ('ds_data_path', 'ds_data_key', 'data_z_lens')},
         'simulations': config.get('simulations', []),
     }
+    if legacy:
+        relevant['data']['ksz_data_path'] = _LEGACY_KSZ_DATA_PATH
     blob = json.dumps(relevant, sort_keys=True, default=str).encode()
     return hashlib.sha256(blob).hexdigest()
+
+
+def fingerprint_matches(stored, config):
+    """Whether a cache's stored fingerprint is valid for a configuration.
+
+    Args:
+        stored: The cache's ``config_fingerprint`` entry.
+        config (dict): The parsed configuration.
+
+    Returns:
+        bool: True for the current fingerprint or the legacy one.
+    """
+    return str(stored) in (config_fingerprint(config),
+                           config_fingerprint(config, legacy=True))
 
 
 # Per-simulation keys of the density sweep. These depend only on the
@@ -254,7 +310,7 @@ def load_sweep_source(config, source_config_path):
         'npz_path', f"../data/fit_dsigma_ksz/{source['plot'].get('fig_name')}.npz"))
     with np.load(source_npz, allow_pickle=False) as archive:
         cached = {k: archive[k] for k in archive.files}
-    if str(cached.get('config_fingerprint', '')) != config_fingerprint(source):
+    if not fingerprint_matches(cached.get('config_fingerprint', ''), source):
         raise ValueError(f"--sweep-from: {source_npz} was not written under "
                          f"{source_config_path} as it stands now.")
 
@@ -525,7 +581,8 @@ def compute_results(config, cache_path=None, resume=None, verbose=True):
         print(f"  abundance grid : {default_targets}\n")
 
     fingerprint = config_fingerprint(config)
-    if resume is not None and str(resume.get('config_fingerprint', '')) != fingerprint:
+    if resume is not None and not fingerprint_matches(resume.get('config_fingerprint', ''),
+                                                      config):
         print("  WARNING: the cache was written under a different configuration "
               "(or predates this check); ignoring it and restacking everything.")
         resume = None
@@ -943,6 +1000,11 @@ def main(path2config, replot=False, resume=False, sweep_from=None, verbose=True)
     npz_path = Path(plot_config.get(
         'npz_path', f"../data/fit_dsigma_ksz/{plot_config.get('fig_name')}.npz"))
     npz_path.parent.mkdir(parents=True, exist_ok=True)
+    # A config that only re-plots another config's cache (e.g. with different
+    # kSZ data) must never restack into, and so overwrite, that cache.
+    if plot_config.get('cache_readonly', False) and not replot:
+        raise ValueError(f"{path2config} reads another config's cache ({npz_path}); "
+                         "run it with --replot.")
 
     t0 = time.time()
     if replot and resume:
@@ -956,7 +1018,7 @@ def main(path2config, replot=False, resume=False, sweep_from=None, verbose=True)
         print(f'Loading cached profiles from {npz_path}')
         with np.load(npz_path, allow_pickle=False) as archive:
             results = {k: archive[k] for k in archive.files}
-        if str(results.get('config_fingerprint', '')) != config_fingerprint(config):
+        if not fingerprint_matches(results.get('config_fingerprint', ''), config):
             print('  WARNING: this cache was written under a different '
                   'configuration; the figure will not match the config it is '
                   'labelled with. Re-run without --replot to refresh it.')
@@ -973,8 +1035,8 @@ def main(path2config, replot=False, resume=False, sweep_from=None, verbose=True)
                                  f"{cached['sweep_source']}); pass it again with --resume.")
             # On top of a reused sweep, so simulations not yet finished still
             # skip their sweep; a stale cache must not discard that sweep too.
-            if (previous is not None and str(cached.get('config_fingerprint', ''))
-                    != str(previous['config_fingerprint'])):
+            if (previous is not None
+                    and not fingerprint_matches(cached.get('config_fingerprint', ''), config)):
                 print(f'  WARNING: {npz_path} is stale for this config; resuming '
                       'from the reused sweep only.')
             else:

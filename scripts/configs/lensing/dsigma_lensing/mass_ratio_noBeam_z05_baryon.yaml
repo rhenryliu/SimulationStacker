@@ -2,9 +2,11 @@
 # average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
 # simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
 # lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
-# Not modelled: ThumbStack's interpolation of the 0.5' map onto 0.25' stamps (step 1c); it would
-# lower the beam factor by 3-4% at 1', 2% at 1.6' and 1% at 2.25', so f corrected with this beam
-# factor reads that much low there (DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
+# Step 1c is modelled: the beamed numerator stacks are filtered on 0.25' stamps bilinearly
+# interpolated from the 0.5' map, as ThumbStack filters the data (stack.stamp_res in the beamTest and
+# data configs; the beam-compensation configs inherit it through beam_test_config). On the six
+# simulations this lowers the beam factor by 3.1-4.1% at 1', 1.9-2.6% at 1.6' and 1.0-1.5% at 2.25'
+# (job 60144834; DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
 # Copy of mass_ratio_noBeam_z05.yaml with particle_type switched to 'baryon'.
 # Used by beam_compensated_z05_baryon.yaml to produce the total-baryon
 # companion figure (paper Fig. 17); keep stacking settings in sync with the

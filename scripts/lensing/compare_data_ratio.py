@@ -181,6 +181,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     filter_type  = stack_config.get('filter_type',     'CAP')
     pixel_size   = stack_config.get('pixel_size', 0.5)    # arcmin
     beam_size    = stack_config.get('beam_size', 1.6)     # arcmin; None → no smoothing
+    stamp_res    = stack_config.get('stamp_res', None)    # arcmin; step 1c, numerator only
 
     pType2       = stack_config.get('particle_type_2', 'total')
     filter_type2 = stack_config.get('filter_type_2',   'DSigma')
@@ -339,7 +340,7 @@ def main(path2config: str, verbose: bool = True) -> None:
             # profiles shape: (n_radii, n_halos)
             radii0, profiles0 = stacker.stackMap(pType,  filterType=filter_type,  
                                                  pixelSize=pixel_size, beamSize=beam_size,
-                                                 **base_kwargs)
+                                                 stampRes=stamp_res, **base_kwargs)
             radii1, profiles1 = stacker.stackMap(pType2, filterType=filter_type2,
                                                  pixelSize=pixel_size_2, beamSize=beam_size_2,
                                                  **base_kwargs)

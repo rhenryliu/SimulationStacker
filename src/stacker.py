@@ -8,7 +8,7 @@ import warnings
 
 import scipy
 from scipy.stats import binned_statistic_2d
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, map_coordinates
 from scipy.interpolate import InterpolatedUnivariateSpline
 from astropy.cosmology import FlatLambdaCDM
 from astropy import units as u
@@ -362,7 +362,7 @@ class SimulationStacker(object):
                  mask=False, maskRad=3.0, subtract_mean=False,
                  use_subhalos=False, halo_abundance_target=5e-4,
                  halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14),
-                 halo_mask=None):
+                 halo_mask=None, stampRes=None):
         """Stack the map of a given particle type.
 
         Args:
@@ -390,9 +390,18 @@ class SimulationStacker(object):
             halo_mask (np.ndarray, optional): Pre-selected integer index array into the halo
                 catalogue. When provided, internal halo selection is skipped entirely.
                 Defaults to None.
+            stampRes (float, optional): 'DSigma_lensing' only: filter each halo on a stamp of
+                this pixel size in arcmin, bilinearly interpolated from the map and centred on the
+                halo, as ThumbStack does to the data (step 1c of DESIxHSC-Lensing
+                docs/ksz_lensing_matched_filter.md). See stack_on_array. Defaults to None (filter
+                the map directly).
 
         Returns:
             radii, profiles: Stacked radial profiles (2D) and their corresponding radii (1D).
+
+        Raises:
+            ValueError: From stack_on_array, if stampRes is set for a filter other than
+                'DSigma_lensing' or is not positive.
 
         TODO:
             Add a wrapper for automatic stacking along all 3 projections.
@@ -434,6 +443,7 @@ class SimulationStacker(object):
             halo_mass_avg=halo_mass_avg,
             halo_mass_upper=halo_mass_upper,
             halo_mask=halo_mask,
+            stampRes=stampRes,
         )
         
         # restore the mean if subtracted
@@ -574,7 +584,7 @@ class SimulationStacker(object):
     def stack_on_array(self, array, filterType='cumulative', minRadius=0.1, maxRadius=4.5, numRadii=25,
                        projection='xy', radDistance=1000.0, radDistanceUnits='kpc/h', use_subhalos=False,
                        halo_mass_avg=10**(13.22), halo_mass_upper=5*10**(14), halo_abundance_target=5e-4,
-                       z=None, pixelSize=0.5, halo_mask=None, dr=None, r0=1.0):
+                       z=None, pixelSize=0.5, halo_mask=None, dr=None, r0=1.0, stampRes=None):
         """Abstract stacking function that works on any 2D array.
 
         Args:
@@ -615,13 +625,31 @@ class SimulationStacker(object):
                 3 pixels otherwise.
             r0 (float, optional): Reference radius of the 'upsilon' filter, in
                 the same units as ``radDistance``. Defaults to 1.0.
+            stampRes (float, optional): Step 1c, 'DSigma_lensing' on arcmin maps only. The data's
+                kSZ is filtered after ThumbStack bilinearly interpolates the map onto a stamp
+                centred on each galaxy (0.25 arcmin pixels for the ACT stacks). With stampRes set,
+                each halo is filtered the same way: the map is sampled bilinearly (periodic) on a
+                grid of stampRes arcmin centred on the halo's true position
+                (``interpolated_stamp``), and the lensing-bin weights are applied on that grid.
+                Defaults to None: the weights are applied to the map pixels directly.
 
         Returns:
             tuple: (radii, profiles) - 1D radii array and 2D profiles array.
+
+        Raises:
+            ValueError: If stampRes is set for a filter other than 'DSigma_lensing', for
+                radDistanceUnits other than 'arcmin', or is not positive.
         """
 
         nPixels = array.shape[0]
         assert array.shape == (nPixels, nPixels), f"Array must be square, got shape: {array.shape}"
+        if stampRes is not None:
+            if filterType != 'DSigma_lensing':
+                raise ValueError(f"stampRes is implemented for 'DSigma_lensing' only, got {filterType}")
+            if radDistanceUnits != 'arcmin':
+                raise ValueError("stampRes is in arcmin and needs radDistanceUnits='arcmin'")
+            if not stampRes > 0:
+                raise ValueError(f'stampRes must be positive, got {stampRes}')
 
         # Allow callers to pass halo_abundance_target=None to request the default.
         if halo_abundance_target is None:
@@ -778,6 +806,15 @@ class SimulationStacker(object):
             lens_weights = {}
             box_pixel = self.header['BoxSize'] / nPixels
 
+        if stampRes is not None:
+            # Step 1c: one grid for every halo, centred on the halo itself (no offset classes).
+            # The interpolated values are mass per map pixel, so the weights (per true unit
+            # area, on stampRes pixels) are scaled by the stamp-to-map pixel area ratio.
+            stamp_half = int(np.ceil(lens_edges[-1] * radDistance / stampRes)) + 1
+            stamp_step = stampRes / pixelSize_true          # stamp spacing in map pixels
+            stamp_weights = delta_sigma_lensing_weights(
+                stamp_half, stampRes, lens_edges * radDistance) * stamp_step**2
+
         # Do stacking
         profiles = []
         for j, haloID in enumerate(halo_mask):
@@ -791,6 +828,12 @@ class SimulationStacker(object):
             else:
                 raise NotImplementedError('Projection type not implemented: ' + projection)
             
+            if stampRes is not None:
+                stamp = SimulationStacker.interpolated_stamp(array, haloPos_2D / box_pixel,
+                                                             stamp_step, stamp_half)
+                profiles.append(np.tensordot(stamp_weights, stamp, axes=([1, 2], [0, 1])))
+                continue
+
             # Convert halo position to pixel coordinates
             if radDistanceUnits == 'kpc/h':
                 haloLoc = np.round(haloPos_2D / (self.header['BoxSize'] / nPixels)).astype(int)
@@ -870,7 +913,30 @@ class SimulationStacker(object):
         return radii, profiles
 
     # Other util functions:
-    
+
+    @staticmethod
+    def interpolated_stamp(array, position, step, half):
+        """Bilinear samples of a periodic map on a square grid centred on a position.
+
+        This is ThumbStack's cutout (step 1c): the map is sampled on a grid centred on each
+        object, interpolating linearly between pixel values. Pixel i spans [i, i + 1) in pixel
+        units and its value sits at the pixel centre i + 1/2, as in maps binned with
+        binned_statistic_2d (mapMaker).
+
+        Args:
+            array (np.ndarray): 2D periodic map.
+            position (array-like): (row, column) position of the grid centre, in map pixels.
+            step (float): Grid spacing, in map pixels.
+            half (int): Half-width of the grid in grid points; the grid is (2*half+1)^2.
+
+        Returns:
+            np.ndarray: (2*half+1, 2*half+1) samples, first axis along the map rows.
+        """
+        k = np.arange(-half, half + 1) * step
+        rows = np.broadcast_to(position[0] - 0.5 + k[:, None], (k.size, k.size))
+        cols = np.broadcast_to(position[1] - 0.5 + k[None, :], (k.size, k.size))
+        return map_coordinates(array, [rows, cols], order=1, mode='grid-wrap')
+
     @staticmethod
     def cutout_2d_periodic(array, center, length):
         """Extract a square cutout from a 2D array with periodic boundary conditions.

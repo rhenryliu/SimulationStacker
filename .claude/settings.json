@@ -31,7 +31,6 @@
       "Edit(**/*.h5)",
       "Edit(**/*.npy)",
       "Edit(**/*.npz)",
-      "Edit(//pscratch/sd/r/rhliu/**)",
       "Read(**/.env*)"
     ]
   },

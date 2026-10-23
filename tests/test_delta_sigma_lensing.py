@@ -280,3 +280,125 @@ def test_sigma_stack_on_array_centres_haloes_correctly(units, rad_distance):
     # classes add a residual miscentring of at most 1/8 pixel.
     assert np.max(np.abs(prof / exact[:, None] - 1)[keep]) < 0.006
     assert np.max(np.abs(prof - exact[:, None])) < 2e-3 * exact.max()
+
+
+# ---------------------------------------------------------------------------------------------
+# Step 1c: ThumbStack-style stamps (stack_on_array(stampRes=...), 'DSigma_lensing' only).
+# The data's kSZ is filtered after ThumbStack bilinearly interpolates the 0.5' map onto a 0.25'
+# stamp centred on each galaxy; stampRes makes the simulations do the same.
+
+def _arcmin_stacker_on_lattice(fwhm, pix_target, n_side=8, spacing=18.0, beam=None, seed=None):
+    """A stub SimulationStacker (arcmin units, as stackMap uses) and a periodic map of
+    n_side^2 unit-mass Gaussians, `spacing` arcmin apart, with exact mass per pixel; optionally
+    smoothed with utils.fft_smoothed_map, as makeMap does. The sub-pixel offsets form an
+    n_side x n_side lattice, or are uniform random with `seed` (not symmetric between rows and
+    columns, so a swapped axis moves the stack centre)."""
+    import astropy.units as u
+    import stacker as stk
+    from astropy.cosmology import FlatLambdaCDM
+    from utils import comoving_to_arcmin, fft_smoothed_map
+
+    h, om, z = 0.7, 0.3, 0.5
+    cosmo = FlatLambdaCDM(H0=100 * h, Om0=om, Tcmb0=2.7255 * u.K)       # as stack_on_array
+    target = n_side * spacing                                            # arcmin
+    box = target / comoving_to_arcmin(1.0, z, cosmo=cosmo)               # kpc/h
+    s_obj = stk.SimulationStacker.__new__(stk.SimulationStacker)
+    s_obj.header = {'BoxSize': box, 'HubbleParam': h, 'Omega0': om}
+    s_obj.z = z
+    size = comoving_to_arcmin(box, z, cosmo=cosmo)
+    npix = int(round(size / pix_target))
+    pix = size / npix
+    s = sig(fwhm)
+    u_sub = (np.arange(n_side) + 0.5) / n_side
+    j = np.arange(n_side)
+    pos = np.array([((jy + 0.5) * size / n_side, (jz + 0.5) * size / n_side)
+                    for jy in j for jz in j])
+    if seed is None:
+        sub = np.array([(a, b) for a in u_sub for b in u_sub])
+    else:
+        sub = np.random.default_rng(seed).uniform(0, 1, (n_side**2, 2))
+    pos = np.floor(pos / pix) * pix + sub * pix
+    centres = (np.arange(npix) + 0.5) * pix
+    reach = int(np.ceil(8 * s / pix)) + 1
+    array = np.zeros((npix, npix))
+    for y, zz in pos:
+        rows = (int(y / pix) + np.arange(-reach, reach + 1)) % npix
+        cols = (int(zz / pix) + np.arange(-reach, reach + 1)) % npix
+        array[np.ix_(rows, cols)] += pixel_mass(centres[rows], centres[cols], (y, zz), pix, s)
+    if beam is not None:
+        array = np.asarray(fft_smoothed_map(array, beam, pixel_size_arcmin=pix), dtype=float)
+    pos3d = np.column_stack([np.zeros(len(pos)), pos * box / size])
+    s_obj.loadHalos = lambda: {'GroupMass': np.ones(len(pos)), 'GroupPos': pos3d}
+    return s_obj, array, len(pos)
+
+
+def _stack_lensing(s_obj, array, n, **kw):
+    _, prof = s_obj.stack_on_array(array, filterType='DSigma_lensing', minRadius=1.0,
+                                   maxRadius=6.0, numRadii=9, projection='yz', radDistance=1.0,
+                                   radDistanceUnits='arcmin', halo_mask=np.arange(n), **kw)
+    return prof
+
+
+def test_interpolated_stamp_reproduces_a_plane_exactly():
+    """Bilinear interpolation of pixel means reproduces a linear field exactly, so the stamp
+    must equal the plane at each stamp point: a half-pixel or axis error shows at once."""
+    import stacker as stk
+    npix, alpha, beta, gamma = 64, 0.3, 0.7, -1.1
+    centres = np.arange(npix) + 0.5                    # pixel i spans [i, i + 1)
+    plane = alpha + beta * centres[:, None] + gamma * centres[None, :]
+    for position in ((31.37, 30.82), (29.0, 33.5), (32.95, 32.05)):
+        stamp = stk.SimulationStacker.interpolated_stamp(plane, position, step=0.5, half=10)
+        k = np.arange(-10, 11) * 0.5
+        expected = alpha + beta * (position[0] + k[:, None]) + gamma * (position[1] + k[None, :])
+        np.testing.assert_allclose(stamp, expected, rtol=0, atol=1e-12)
+
+
+def test_stamp_uniform_sheet_cancels():
+    s_obj, array, n = _arcmin_stacker_on_lattice(2.0, 0.5, n_side=2)
+    sheet = np.ones_like(array)
+    prof = _stack_lensing(s_obj, sheet, n, stampRes=0.25)
+    scale = np.abs(_stack_lensing(s_obj, array, n, stampRes=0.25)).max()
+    assert np.max(np.abs(prof)) < 1e-12 * max(scale, 1.0)
+
+
+def test_stamp_converges_to_exact_on_fine_maps():
+    """Pixel means plus bilinear interpolation smooth the profile slightly, an error that falls
+    as the pixel size squared (FWHM 2.5: -0.38 per cent at 1' on 0.1' maps, -0.095 on 0.05').
+    This catches gross errors (a half-pixel shift); the beamed-Gaussian test below pins the
+    centring more finely."""
+    exact = np.array([exact_bin_average(a, b, sig(2.5)) for a, b in zip(EDGES[:-1], EDGES[1:])])
+    err = []
+    for pix in (0.1, 0.05):
+        s_obj, array, n = _arcmin_stacker_on_lattice(2.5, pix, n_side=3, seed=5)
+        err.append(_stack_lensing(s_obj, array, n, stampRes=pix / 2).mean(axis=1) / exact - 1)
+    assert np.max(np.abs(err[1])) < 1.5e-3
+    assert 3.5 < err[0][0] / err[1][0] < 4.5
+
+
+def test_stamp_step1c_factor_on_beamed_gaussian():
+    """Known answer: stamp / direct filter at R0 = 1', ..., 6' for unit-mass Gaussians of FWHM 2'
+    with exact mass per 0.5' pixel, smoothed by fft_smoothed_map with a 1.6' beam, 0.25' stamps.
+    The expected values are the mean over 400 objects whose sub-pixel offsets form a 20 x 20
+    lattice (DESIxHSC-Lensing scratch/gaussian_step1c.py, 2026-10-22; an independent
+    implementation checked against ThumbStack's extractStamp). Here 64 objects at random
+    offsets reproduce them to 2e-3; a quarter-pixel centring error or a swapped axis does not."""
+    expected = np.array([0.9646, 0.9739, 0.9830, 0.9904, 0.9964, 0.9989, 0.9998, 1.0000, 1.0000])
+    s_obj, array, n = _arcmin_stacker_on_lattice(2.0, 0.5, n_side=8, beam=1.6, seed=11)
+    direct = _stack_lensing(s_obj, array, n).mean(axis=1)
+    stamp = _stack_lensing(s_obj, array, n, stampRes=0.25).mean(axis=1)
+    np.testing.assert_allclose(stamp / direct, expected, rtol=0, atol=2e-3)
+
+
+def test_stamp_rejects_unsupported_settings():
+    s_obj, array, n = _arcmin_stacker_on_lattice(2.0, 0.5, n_side=2)
+    with pytest.raises(ValueError):
+        s_obj.stack_on_array(array, filterType='DSigma', minRadius=1.0, maxRadius=6.0,
+                             numRadii=9, projection='yz', radDistance=1.0,
+                             radDistanceUnits='arcmin', halo_mask=np.arange(n), stampRes=0.25)
+    with pytest.raises(ValueError):
+        _stack_lensing(s_obj, array, n, stampRes=0.0)
+    s_kpc, arr_kpc, s = _stacker_on_gaussians('kpc/h')
+    with pytest.raises(ValueError):
+        s_kpc.stack_on_array(arr_kpc, filterType='DSigma_lensing', minRadius=1.0, maxRadius=6.0,
+                             numRadii=9, projection='yz', radDistance=1.0,
+                             radDistanceUnits='kpc/h', halo_mask=np.arange(9), stampRes=0.25)

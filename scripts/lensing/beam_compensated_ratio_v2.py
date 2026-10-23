@@ -340,6 +340,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     bt_filter_type  = bt_stack.get('filter_type',     'DSigma')
     bt_pixel_size   = bt_stack.get('pixel_size',      0.5)
     bt_beam_size    = bt_stack.get('beam_size',        1.6)
+    bt_stamp_res    = bt_stack.get('stamp_res',        None)   # step 1c, numerator only
     bt_pType2       = bt_stack.get('particle_type_2', 'ionized_gas')
     bt_filter_type2 = bt_stack.get('filter_type_2',   'DSigma')
     bt_pixel_size_2 = bt_stack.get('pixel_size_2',    0.2)
@@ -384,7 +385,7 @@ def main(path2config: str, verbose: bool = True) -> None:
 
                 radii_b, profiles_b = stacker.stackMap(
                     bt_pType,  filterType=bt_filter_type,
-                    pixelSize=bt_pixel_size, beamSize=bt_beam_size,
+                    pixelSize=bt_pixel_size, beamSize=bt_beam_size, stampRes=bt_stamp_res,
                     **bt_base_kwargs)
                 radii_n, profiles_n = stacker.stackMap(
                     bt_pType2, filterType=bt_filter_type2,

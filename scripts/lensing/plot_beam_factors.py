@@ -275,6 +275,7 @@ def main(config_z05: str, config_z026: str, fig_name: Optional[str] = None,
         filter_type  = stack.get('filter_type',     'DSigma')
         pixel_size   = stack.get('pixel_size',      0.5)
         beam_size    = stack.get('beam_size',        1.6)
+        stamp_res    = stack.get('stamp_res',        None)   # step 1c, numerator only
         pType2       = stack.get('particle_type_2', 'ionized_gas')
         filter_type2 = stack.get('filter_type_2',   'DSigma')
         pixel_size_2 = stack.get('pixel_size_2',    0.2)
@@ -342,7 +343,7 @@ def main(config_z05: str, config_z026: str, fig_name: Optional[str] = None,
 
                     radii_b, profiles_b = stacker.stackMap(
                         pType,  filterType=filter_type,
-                        pixelSize=pixel_size, beamSize=beam_size,
+                        pixelSize=pixel_size, beamSize=beam_size, stampRes=stamp_res,
                         **base_kwargs)
                     radii_n, profiles_n = stacker.stackMap(
                         pType2, filterType=filter_type2,

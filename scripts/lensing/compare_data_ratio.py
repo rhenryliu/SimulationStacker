@@ -181,7 +181,7 @@ def main(path2config: str, verbose: bool = True) -> None:
     filter_type  = stack_config.get('filter_type',     'CAP')
     pixel_size   = stack_config.get('pixel_size', 0.5)    # arcmin
     beam_size    = stack_config.get('beam_size', 1.6)     # arcmin; None → no smoothing
-    stamp_res    = stack_config.get('stamp_res', None)    # arcmin; step 1c, numerator only
+    stamp_res    = stack_config.get('stamp_res', None)    # arcmin; ThumbStack-like stamps, numerator only
 
     pType2       = stack_config.get('particle_type_2', 'total')
     filter_type2 = stack_config.get('filter_type_2',   'DSigma')

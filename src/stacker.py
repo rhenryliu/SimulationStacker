@@ -392,8 +392,8 @@ class SimulationStacker(object):
                 Defaults to None.
             stampRes (float, optional): 'DSigma_lensing' only: filter each halo on a stamp of
                 this pixel size in arcmin, bilinearly interpolated from the map and centred on the
-                halo, as ThumbStack does to the data (step 1c of DESIxHSC-Lensing
-                docs/ksz_lensing_matched_filter.md). See stack_on_array. Defaults to None (filter
+                halo, as ThumbStack does to the data (DESIxHSC-Lensing
+                docs/ksz_lensing_matched_filter.md, "ThumbStack's stamp cutout"). See stack_on_array. Defaults to None (filter
                 the map directly).
 
         Returns:
@@ -625,7 +625,7 @@ class SimulationStacker(object):
                 3 pixels otherwise.
             r0 (float, optional): Reference radius of the 'upsilon' filter, in
                 the same units as ``radDistance``. Defaults to 1.0.
-            stampRes (float, optional): Step 1c, 'DSigma_lensing' on arcmin maps only. The data's
+            stampRes (float, optional): 'DSigma_lensing' on arcmin maps only. The data's
                 kSZ is filtered after ThumbStack bilinearly interpolates the map onto a stamp
                 centred on each galaxy (0.25 arcmin pixels for the ACT stacks). With stampRes set,
                 each halo is filtered the same way: the map is sampled bilinearly (periodic) on a
@@ -807,7 +807,7 @@ class SimulationStacker(object):
             box_pixel = self.header['BoxSize'] / nPixels
 
         if stampRes is not None:
-            # Step 1c: one grid for every halo, centred on the halo itself (no offset classes).
+            # ThumbStack-like stamps: one grid for every halo, centred on the halo itself (no offset classes).
             # The interpolated values are mass per map pixel, so the weights (per true unit
             # area, on stampRes pixels) are scaled by the stamp-to-map pixel area ratio.
             stamp_half = int(np.ceil(lens_edges[-1] * radDistance / stampRes)) + 1
@@ -918,7 +918,7 @@ class SimulationStacker(object):
     def interpolated_stamp(array, position, step, half):
         """Bilinear samples of a periodic map on a square grid centred on a position.
 
-        This is ThumbStack's cutout (step 1c): the map is sampled on a grid centred on each
+        This is ThumbStack's cutout: the map is sampled on a grid centred on each
         object, interpolating linearly between pixel values. Pixel i spans [i, i + 1) in pixel
         units and its value sits at the pixel centre i + 1/2, as in maps binned with
         binned_statistic_2d (mapMaker).

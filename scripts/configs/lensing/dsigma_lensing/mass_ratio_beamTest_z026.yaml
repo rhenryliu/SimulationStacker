@@ -2,11 +2,11 @@
 # average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
 # simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
 # lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
-# Step 1c is modelled: the beamed numerator stacks are filtered on 0.25' stamps bilinearly
+# The beamed numerator stacks are filtered on 0.25' stamps bilinearly
 # interpolated from the 0.5' map, as ThumbStack filters the data (stack.stamp_res in the beamTest and
 # data configs; the beam-compensation configs inherit it through beam_test_config). On the six
 # simulations this lowers the beam factor by 3.1-4.1% at 1', 1.9-2.6% at 1.6' and 1.0-1.5% at 2.25'
-# (job 60144834; DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, step 1c).
+# (job 60144834; DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, "ThumbStack's stamp cutout").
 stack:
   redshift: 0.26
   load_field: true
@@ -28,7 +28,7 @@ stack:
   particle_type: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'
   pixel_size: 0.5 # in arcmin
   beam_size: 1.6 # in arcmin
-  stamp_res: 0.25 # in arcmin: filter on ThumbStack-like stamps (step 1c); null filters the map directly
+  stamp_res: 0.25 # in arcmin: filter on ThumbStack-like stamps; null filters the map directly
 
   filter_type_2: 'DSigma_lensing' # Options: 'CAP', 'cumulative', 'DSigma', 'upsilon'
   particle_type_2: 'ionized_gas' # 'DM', 'gas', 'stars', 'total', 'ionized_gas'

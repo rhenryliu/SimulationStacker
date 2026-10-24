@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SimulationStacker is a Python toolkit for halo stacking analysis on cosmological simulations (IllustrisTNG, SIMBA and FLAMINGO). It creates 2D/3D projected fields from particle data, applies stacking filters, and generates comparison figures between simulations and observations.
 
+## kSZ filter terminology for the DESIxHSC-Lensing f_gas paper (2026-10-23)
+
+Applies to that paper's configs (`scripts/configs/lensing/`); the unbound-gas paper's `DSigma` and
+`Sigma` figures are separate and keep their own names.
+
+- **Default filter** = option C = `DSigma_lensing`, the lensing-matched kSZ filter (the lensing-bin
+  average of ΔΣ on annuli matched to the lensing bins). The production filter from 2026-10-23.
+- **Old filter** = `DSigma`, the current paper draft's filter (mean Σ inside R minus a 0.75′ ring
+  outside R).
+- Never write "paper filter" or "the paper's filter". Write "default filter (option C,
+  `DSigma_lensing`)" or "old filter (`DSigma`)", with the code name, in docs, reports and captions.
+- Option A (the old filter divided by the simulations' B′ beam factor) was rejected on 2026-10-23:
+  the simulation spread in B′ is too large for a model-independent correction. Do not use or
+  suggest it.
+- Make or show old-filter results only when asked for that comparison, and keep them in folders
+  whose names say the filter, never next to default-filter outputs.
+- Here the filters are `filter_type`/`filter_type_2` values; the default filter's paper configs are
+  in `scripts/configs/lensing/dsigma_lensing/`.
+
 ## Python Environment
 
 This repo uses the **cosmodesi DR1** environment on NERSC, with a virtualenv layered on top:
@@ -99,7 +118,7 @@ The two main workflows are **fields** (simulation-native units, kpc/h radii) and
 | `stack_on_array(array, filterType, radDistance, radDistanceUnits, ...)` | Stack any 2D array directly |
 | `setField(pType, field_, nPixels, projection)` | Inject a precomputed field |
 
-`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`, `'DSigma_lensing'` (lensing-bin average of ΔΣ; see `docs/lensing/dsigma_lensing_denominator.md`; with `stackMap(..., stampRes=0.25)`, config `stack.stamp_res`, it is applied on ThumbStack-like stamps bilinearly interpolated from the map, step 1c, the default in `scripts/configs/lensing/dsigma_lensing/`), `'Sigma'` (mean surface density Σ(R) in the ring [R, R + dr), the annulus `'DSigma'` subtracts; `filters.sigma_ring`), `'Sigma_lensing'` (area-weighted Σ over the `'DSigma_lensing'` bins, with the same pixel-fraction geometry and centring; `filters.sigma_lensing_weights`).
+`filterType` options: `'CAP'` (default), `'cumulative'`, `'DSigma'`, `'ringring'`, `'DSigma_ring'`, `'upsilon'`, `'DSigma_mccarthy'`, `'DSigma_lensing'` (lensing-bin average of ΔΣ; see `docs/lensing/dsigma_lensing_denominator.md`; with `stackMap(..., stampRes=0.25)`, config `stack.stamp_res`, it is applied on ThumbStack-like stamps bilinearly interpolated from the map, the default in `scripts/configs/lensing/dsigma_lensing/`), `'Sigma'` (mean surface density Σ(R) in the ring [R, R + dr), the annulus `'DSigma'` subtracts; `filters.sigma_ring`), `'Sigma_lensing'` (area-weighted Σ over the `'DSigma_lensing'` bins, with the same pixel-fraction geometry and centring; `filters.sigma_lensing_weights`).
 
 ## Data Caching
 

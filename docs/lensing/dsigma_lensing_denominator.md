@@ -22,7 +22,7 @@ in place of the 0.75′ disk-minus-ring `'DSigma'` filter on total mass.
 - `src/stacker.py`: `stack_on_array` applies them, centred on each halo's true position. With
   `stampRes` (arcmin; `stackMap` passes it, config key `stack.stamp_res`) it applies them instead on
   a stamp bilinearly interpolated from the map around each halo, as ThumbStack filters the data
-  (step 1c; `SimulationStacker.interpolated_stamp`). The option C configs in
+  (`SimulationStacker.interpolated_stamp`). The option C configs in
   `scripts/configs/lensing/dsigma_lensing/` set `stamp_res: 0.25` for the beamed numerator.
 - `tests/test_delta_sigma_lensing.py`: known-answer tests.
 - `scripts/configs/lensing/mass_ratio_data_{z05,z026}_dsigma_lensing.yaml`: Figure 14 with

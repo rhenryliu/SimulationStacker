@@ -11,6 +11,7 @@ figures/
 external/
 .ipynb_checkpoints/
 NOTES/
+scratch/
 
 # Deliberately untracked archived material (external/exploratory scripts)
 scripts/archive/clean_mass_bin_stack.py

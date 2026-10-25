@@ -25,6 +25,22 @@ Applies to that paper's configs (`scripts/configs/lensing/`); the unbound-gas pa
 - Here the filters are `filter_type`/`filter_type_2` values; the default filter's paper configs are
   in `scripts/configs/lensing/dsigma_lensing/`.
 
+## f_gas version terminology for the DESIxHSC-Lensing f_gas paper (2026-10-25)
+
+The versions name which probes carry the DESI completeness weights. Paths are under
+`/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/`.
+
+- **v2.1** = neither the kSZ nor the lensing is weighted. Every config in `scripts/configs/lensing/`
+  reads `spec_Y3_v2.1/`; this is the default.
+- **v2.2** = both are weighted: `spec_Y3_v2.2_compweight/` (LRG bin 1, BGS) and
+  `compweight_v2.1_v2.2/v2.2/` (all lens bins). No config here reads them. Whether v2.2 replaces
+  v2.1 is not decided.
+- Weighting only one probe is wrong: both or neither. The lensing-only weighting (v2.2 lensing over
+  the unweighted kSZ) is kept only for a possible appendix, in `spec_Y3_mixed_weights/` (named
+  `spec_Y3_v2.2/` until 2026-10-25), with figures and figure data tagged `mixed_weights`. Never call
+  it v2.2; write "lensing-only completeness weighting (`mixed_weights`)".
+- Details: DESIxHSC-Lensing `docs/completeness_weights.md` and `docs/lensing_v2.2.md`.
+
 ## Python Environment
 
 This repo uses the **cosmodesi DR1** environment on NERSC, with a virtualenv layered on top:

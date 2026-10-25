@@ -11,18 +11,21 @@ SimulationStacker is a Python toolkit for halo stacking analysis on cosmological
 Applies to that paper's configs (`scripts/configs/lensing/`); the unbound-gas paper's `DSigma` and
 `Sigma` figures are separate and keep their own names.
 
-- **Default filter** = option C = `DSigma_lensing`, the lensing-matched kSZ filter (the lensing-bin
-  average of ΔΣ on annuli matched to the lensing bins). The production filter from 2026-10-23.
-- **Old filter** = `DSigma`, the current paper draft's filter (mean Σ inside R minus a 0.75′ ring
-  outside R).
-- Never write "paper filter" or "the paper's filter". Write "default filter (option C,
-  `DSigma_lensing`)" or "old filter (`DSigma`)", with the code name, in docs, reports and captions.
-- Option A (the old filter divided by the simulations' B′ beam factor) was rejected on 2026-10-23:
+- **v2 filter** = option C = `DSigma_lensing`, the lensing-matched kSZ filter (the lensing-bin
+  average of ΔΣ on annuli matched to the lensing bins), with the simulations filtered on
+  ThumbStack-like 0.25′ stamps (`stamp_res: 0.25`), as the data are. The production filter from
+  2026-10-23.
+- **v1 filter** = `DSigma`, the published filter (mean Σ inside R minus a 0.75′ ring outside R).
+- Write "the v2 filter (option C, `DSigma_lensing`)" or "the v1 filter (`DSigma`)", with the code
+  name, in docs, reports and captions. Always write "lensing v2.1" and "the v2 filter" in full, never
+  a bare "v2", since the lensing also has a v2. Never write "paper filter", "the paper's filter",
+  or the interim names "default filter" and "old filter".
+- Option A (the v1 filter divided by the simulations' B′ beam factor) was rejected on 2026-10-23:
   the simulation spread in B′ is too large for a model-independent correction. Do not use or
   suggest it.
-- Make or show old-filter results only when asked for that comparison, and keep them in folders
-  whose names say the filter, never next to default-filter outputs.
-- Here the filters are `filter_type`/`filter_type_2` values; the default filter's paper configs are
+- Make or show v1-filter results only when asked for that comparison, and keep them in folders
+  whose names say the filter, never next to v2-filter outputs.
+- Here the filters are `filter_type`/`filter_type_2` values; the v2 filter's paper configs are
   in `scripts/configs/lensing/dsigma_lensing/`.
 
 ## f_gas version terminology for the DESIxHSC-Lensing f_gas paper (2026-10-25)

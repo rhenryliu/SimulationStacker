@@ -203,10 +203,10 @@ def main(config_z05: str, config_z026: str, fig_name: Optional[str] = None,
         config_z05:  Path to the beamTest config for z=0.5.
         config_z026: Path to the beamTest config for z=0.26.
         fig_name: Stem of the saved PDF. If None, 'beam_factors_all_sims' for
-            the old filter (filter_type and filter_type_2 both 'DSigma' in the
+            the v1 filter (filter_type and filter_type_2 both 'DSigma' in the
             z=0.5 config), with '_{filter_type}_{filter_type_2}' appended
-            otherwise (e.g. the default filter, option C, 'DSigma_lensing'), so
-            runs with other filters do not replace the old filter's figure of
+            otherwise (e.g. the v2 filter, option C, 'DSigma_lensing'), so
+            runs with other filters do not replace the v1 filter's figure of
             the same day.
         verbose: If True, print progress messages to stdout.
     """

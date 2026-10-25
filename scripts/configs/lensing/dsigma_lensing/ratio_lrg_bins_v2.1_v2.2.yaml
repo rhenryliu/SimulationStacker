@@ -1,0 +1,91 @@
+# f_gas^obs in the four DESI LRG bins with the v2 filter (option C, 'DSigma_lensing'): the v2.1 and
+# v2.2 data (completeness weights on neither / both of kSZ and lensing) with the three FLAMINGO runs,
+# for lensing/compare_data_ratio_lrg_bins.py. The data-only version is the 2026-10-24 figure
+# ratio_LRG_DSigma_lensing_full_no_src_with_cluster_mask_v2.1_v2.2.pdf.
+#
+# The stack section is the one of dsigma_lensing/mass_ratio_data_z05.yaml (the v2-filter version of
+# Figure 14b), so lens bin 1 reproduces its FLAMINGO curves (checked in job 60256233: equal to 2e-16
+# to the figure data of the 2026-10-24 run). Each lens bin's snapshot is placed at its own redshift
+# (sim_redshift = the snapshot's header z), as the z~0.26 configs place snapshot 71 at z = 0.30.
+# User choices (2026-10-25): snapshot 57 for LRG bin 3 (z~0.869 lies between 62 and 57); the same
+# SHAM density, 5e-4, in every bin. Bins 3 and 4 share snapshot 57, so they show the same curves.
+stack:
+  load_field: true
+  save_field: true
+
+  rad_distance: 1.0 # in arcmin
+  min_radius: 1.0 # in rad_distance units
+  max_radius: 6.0 # in rad_distance units
+  num_radii: 9 # the data's kSZ theta grid, checked against the NPZs at plot time
+
+  projection: 'yz' # 'xy', 'xz', 'yz'
+
+  filter_type: 'DSigma_lensing'
+  particle_type: 'ionized_gas'
+  pixel_size: 0.5 # in arcmin
+  beam_size: 1.6 # in arcmin
+  stamp_res: 0.25 # in arcmin: filter on ThumbStack-like stamps; null filters the map directly
+
+  filter_type_2: 'DSigma_lensing'
+  particle_type_2: 'total'
+  pixel_size_2: 0.2 # in arcmin
+  beam_size_2: null # in arcmin
+
+  use_subhalos: true # SHAM: subhalos abundance-matched by stellar mass
+  halo_abundance_target: 5.0e-4 # in h^3/cMpc^3, every lens bin
+  halo_mass_upper: 5.0e+14 # Msun/h, parent-mass cap (the stackMap default)
+
+data:
+  cat_type: 'LRG'
+  # Ratio NPZs from DESIxHSC-Lensing's compare_combined_self.py (full field, no_src_with_cluster_mask)
+  versions:
+    - label: 'v2.1'
+      npz: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/compweight_v2.1_v2.2/v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin{lens_bin}_DSigma_lensing_ksz_ggl.npz
+      open_marker: false
+      x_offset: 0.985 # visual only
+    - label: 'v2.2'
+      npz: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/compweight_v2.1_v2.2/v2.2/ratio_LRG_full_no_src_with_cluster_mask_zbin{lens_bin}_DSigma_lensing_ksz_ggl.npz
+      open_marker: true
+      x_offset: 1.015
+
+# source_bin: 0 = HSC combined; bins 3 and 4 use HSC bin 4, the only source bin behind them
+lens_bins:
+  - lens_bin: 1
+    z_lens: 0.5098837242116946
+    source_bin: 0
+    snapshot: 67
+    sim_redshift: 0.5
+  - lens_bin: 2
+    z_lens: 0.7059285383138378
+    source_bin: 0
+    snapshot: 62
+    sim_redshift: 0.75
+  - lens_bin: 3
+    z_lens: 0.8691271527067349
+    source_bin: 4
+    snapshot: 57
+    sim_redshift: 1.0
+  - lens_bin: 4
+    z_lens: 1.0079813034812752
+    source_bin: 4
+    snapshot: 57
+    sim_redshift: 1.0
+
+plot:
+  fig_path: '../figures/'
+  fig_subdir: 'lrg_bins_DSigma_lensing'
+  fig_name: '_LRG_DSigma_lensing_full_no_src_with_cluster_mask_v2.1_v2.2_flamingo'
+  fig_type: 'pdf'
+  cache_dir: '../data/lrg_bins_fgas/'
+  ylim: [-0.35, 1.9]
+
+simulations:
+  - sim_type: 'FLAMINGO'
+    sims:
+      # feedback holds the FLAMINGO variant directory name ('L1_m9' = fiducial)
+      - name: 'L1_m9'
+        feedback: 'L1_m9'
+      - name: 'L1_m9'
+        feedback: 'fgas-8sigma'
+      - name: 'L1_m9'
+        feedback: 'Jet_fgas-4sigma'

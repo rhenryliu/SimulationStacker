@@ -34,10 +34,11 @@ The versions name which probes carry the DESI completeness weights. Paths are un
 `/pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/`.
 
 - **v2.1** = neither the kSZ nor the lensing is weighted. Every config in `scripts/configs/lensing/`
-  reads `spec_Y3_v2.1/`; this is the default.
+  reads `spec_Y3_v2.1/`, the default, except `dsigma_lensing/ratio_lrg_bins_v2.1_v2.2.yaml`, which
+  reads `compweight_v2.1_v2.2/v2.1/` (all lens bins; LRG bin 1 identical to `spec_Y3_v2.1/`).
 - **v2.2** = both are weighted: `spec_Y3_v2.2_compweight/` (LRG bin 1, BGS) and
-  `compweight_v2.1_v2.2/v2.2/` (all lens bins). No config here reads them. Whether v2.2 replaces
-  v2.1 is not decided.
+  `compweight_v2.1_v2.2/v2.2/` (all lens bins). Only `dsigma_lensing/ratio_lrg_bins_v2.1_v2.2.yaml`
+  reads them (next to v2.1). Whether v2.2 replaces v2.1 is not decided.
 - Weighting only one probe is wrong: both or neither. The lensing-only weighting (v2.2 lensing over
   the unweighted kSZ) is kept only for a possible appendix, in `spec_Y3_mixed_weights/` (named
   `spec_Y3_v2.2/` until 2026-10-25), with figures and figure data tagged `mixed_weights`. Never call

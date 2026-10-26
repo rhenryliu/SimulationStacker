@@ -4,7 +4,10 @@ The comoving versus physical scale test of ``x_F(R) = Y_bm / Y_mm`` at every
 redshift slice on disk: z ~ 0.26 (FLAMINGO 0.30), 0.5, 0.75 and 1.0.  It
 extends ``plot_scale_rescaling.py``, which compares two of them, to the
 snapshots listed per run in the config, for the filter the config names
-(Delta Sigma, Sigma or Upsilon with R0 = 1').
+(Delta Sigma, Sigma or Upsilon with R0 = 1').  The config key ``gas: 'e'``
+runs the same test on the electron ratio ``Y_em / Y_mm`` (the ionized-gas
+map) and adds ``_electron`` to the output names; ``'b'``, the default, keeps
+``Y_bm / Y_mm``.
 
 For each run the curves are plotted against arcmin, comoving Mpc/h and
 physical Mpc/h, and the one-parameter family ``s = R_com (1+z)^beta`` is
@@ -66,6 +69,12 @@ Usage
         -p configs/cross_corr/scale_rescaling_multiz_Sigma.yaml
     python cross_corr/plot_scale_rescaling_multiz.py \
         -p configs/cross_corr/scale_rescaling_multiz_Upsilon.yaml
+    # Electron versions, x = Y_em / Y_mm (config key gas: 'e'), Delta Sigma
+    # and Sigma:
+    python cross_corr/plot_scale_rescaling_multiz.py \
+        -p configs/cross_corr/scale_rescaling_multiz_electron.yaml
+    python cross_corr/plot_scale_rescaling_multiz.py \
+        -p configs/cross_corr/scale_rescaling_multiz_Sigma_electron.yaml
 """
 
 import argparse
@@ -118,8 +127,14 @@ CANDIDATES = ('arcmin', 'physical', 'R200c', 'comoving', 'R_nl', 'best')
 #: Suite names in the shared legend, where a slot's redshift differs by suite.
 SUITE_NAMES = {'IllustrisTNG': 'TNG', 'FLAMINGO': 'FLAMINGO'}
 
+#: Ratio label per gas field (config key ``gas``): all baryons or ionized gas.
+RATIO_LABELS = {'b': r'$Y_{bm}/Y_{mm}$', 'e': r'$Y_{em}/Y_{mm}$'}
 
-def load_runs(npz_dir, runs_cfg, filt, radius_range):
+#: Output-name suffix per gas field; the baryon names are unchanged.
+GAS_SUFFIXES = {'b': '', 'e': '_electron'}
+
+
+def load_runs(npz_dir, runs_cfg, filt, radius_range, gas='b'):
     """Load every listed snapshot of every requested run.
 
     Args:
@@ -128,6 +143,7 @@ def load_runs(npz_dir, runs_cfg, filt, radius_range):
             plotting order.
         filt (str): Filter variant name.
         radius_range (sequence): ``(min, max)`` apertures to keep, arcmin.
+        gas (str, optional): Gas field, 'b' (baryons) or 'e' (electrons).
 
     Returns:
         list: One dict per run with ``label``, ``meta`` (the highest-z file)
@@ -165,7 +181,8 @@ def load_runs(npz_dir, runs_cfg, filt, radius_range):
         runs.append({
             'label': label,
             'meta': cals[0],
-            'snaps': [snapshot_curve(c, filt, radius_range) for c in cals],
+            'snaps': [snapshot_curve(c, filt, radius_range, gas)
+                      for c in cals],
         })
     return runs
 
@@ -396,7 +413,7 @@ def slot_labels(runs):
     return labels
 
 
-def make_figure(runs, cfg, out_path, filt):
+def make_figure(runs, cfg, out_path, filt, gas='b'):
     """x_F at every redshift against each coordinate, one column per run.
 
     Same layout as the two-snapshot figure: each coordinate row is its own
@@ -411,7 +428,9 @@ def make_figure(runs, cfg, out_path, filt):
         cfg (dict): Configuration.
         out_path (pathlib.Path): Output PNG path.
         filt (str): Filter variant name, for the title.
+        gas (str, optional): Gas field, 'b' or 'e', for the labels.
     """
+    ratio = RATIO_LABELS[gas]
     n_runs = len(runs)
     fig = plt.figure(figsize=(3.7 * n_runs, 3.3 * len(ROWS)),
                      constrained_layout=True)
@@ -472,7 +491,7 @@ def make_figure(runs, cfg, out_path, filt):
                     [m * 10.0 ** k for k in range(-2, 3) for m in (1, 2, 3, 5)]))
                 ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
                 ax.xaxis.set_minor_formatter(NullFormatter())
-        axes[0].set_ylabel(r'$Y_{bm}/Y_{mm}$')
+        axes[0].set_ylabel(ratio)
         subfig.supxlabel(xlabel)
 
     if shared_legend:
@@ -484,7 +503,7 @@ def make_figure(runs, cfg, out_path, filt):
                           loc='outside upper center', ncol=n + 1,
                           frameon=False, fontsize=10)
 
-    fig.suptitle(rf'$Y_{{bm}}/Y_{{mm}}$ ({FILTER_LABELS.get(filt, filt)}); '
+    fig.suptitle(rf'{ratio} ({FILTER_LABELS.get(filt, filt)}); '
                  r'rms $\Delta x$ over all redshift pairs', fontsize=14)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, bbox_inches='tight')
@@ -586,8 +605,12 @@ def main(path2config):
     filt = config.get('filter', 'DSigma')
     npz_dir = Path(plot_cfg.get('npz_path', '../data/cross_corr_C/'))
     radius_range = config.get('radius_range_arcmin', [1.0, 9.75])
+    gas = config.get('gas', 'b')
+    if gas not in RATIO_LABELS:
+        raise SystemExit(f"gas must be one of {sorted(RATIO_LABELS)}; "
+                         f"got {gas!r}.")
 
-    runs = load_runs(npz_dir, config['runs'], filt, radius_range)
+    runs = load_runs(npz_dir, config['runs'], filt, radius_range, gas)
     for run in runs:
         analyse(run, config)
 
@@ -595,11 +618,14 @@ def main(path2config):
     fig_dir = (Path(plot_cfg.get('fig_path', '../figures/'))
                / now.strftime('%Y-%m') / now.strftime('%m-%d'))
     name = plot_cfg.get('fig_name', 'scale_rescaling_multiz')
-    out_path = fig_dir / f'{name}_{filt}.png'
+    out_path = fig_dir / f'{name}_{filt}{GAS_SUFFIXES[gas]}.png'
 
-    make_figure(runs, config, out_path, filt)
+    make_figure(runs, config, out_path, filt, gas)
     print(f'Wrote {out_path}')
     lines = report(runs)
+    if gas != 'b':
+        # Name the ratio; the baryon report keeps its original first line.
+        lines.insert(0, f'x = Y_{gas}m / Y_mm')
     txt_path = out_path.with_suffix('.txt')
     txt_path.write_text('\n'.join(lines) + '\n')
     print('\n' + '\n'.join(lines))
@@ -608,8 +634,9 @@ def main(path2config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Plot Y_bm/Y_mm at every listed redshift against arcmin, '
-                    'comoving and physical scale, and fit a rescaling.')
+        description='Plot Y_bm/Y_mm (Y_em/Y_mm with gas: e) at every listed '
+                    'redshift against arcmin, comoving and physical scale, '
+                    'and fit a rescaling.')
     parser.add_argument('-p', '--path2config', type=str,
                         default='./configs/cross_corr/scale_rescaling_multiz.yaml')
     args = vars(parser.parse_args())

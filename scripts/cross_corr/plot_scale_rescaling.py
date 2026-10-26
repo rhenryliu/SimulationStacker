@@ -108,33 +108,37 @@ def jk_sigma(samples):
                                    axis=0))
 
 
-def snapshot_curve(cal, filt, radius_range):
-    """Extract x_F = Y_bm / Y_mm and its distance conversion for one snapshot.
+def snapshot_curve(cal, filt, radius_range, gas='b'):
+    """Extract x_F = Y_Xm / Y_mm and its distance conversion for one snapshot.
 
     Args:
         cal (np.lib.npyio.NpzFile): One ``calibration_*.npz``.
         filt (str): Filter variant name.
         radius_range (sequence): ``(min, max)`` apertures to keep, arcmin.
+        gas (str, optional): Field X, 'b' (all baryons: gas, stars and
+            black holes) or 'e' (ionized gas, i.e. free electrons).
+            Defaults to 'b'.
 
     Returns:
         dict: ``z``, ``snapshot``, ``radii`` (arcmin), ``x``, ``x_jk``
         (realizations x apertures) and ``mpc_per_arcmin`` (cMpc/h).
 
     Raises:
-        KeyError: If the filter is absent from the file.
+        KeyError: If the filter or gas field is absent from the file.
     """
-    if f'x_b_{filt}' not in cal.files:
-        raise KeyError(f'Filter {filt!r} not in {cal.fid.name}.')
+    if f'x_{gas}_{filt}' not in cal.files:
+        raise KeyError(f'Filter {filt!r}, gas {gas!r} not in '
+                       f'{cal.fid.name}.')
     radii = np.asarray(cal['radii'], dtype=np.float64)
     keep = (np.asarray(cal[f'mask_{filt}'], dtype=bool)
             & (radii >= radius_range[0]) & (radii <= radius_range[1]))
     order = np.argsort(radii)
     keep = keep[order]
 
-    # x_b = Y_bm / Y_mm as make_calibration_factor.py wrote it, NaN where
+    # x = Y_Xm / Y_mm as make_calibration_factor.py wrote it, NaN where
     # Y_mm vanishes.
-    x = np.asarray(cal[f'x_b_{filt}'], dtype=np.float64)
-    x_jk = np.asarray(cal[f'xjk_b_{filt}'], dtype=np.float64)
+    x = np.asarray(cal[f'x_{gas}_{filt}'], dtype=np.float64)
+    x_jk = np.asarray(cal[f'xjk_{gas}_{filt}'], dtype=np.float64)
 
     # cMpc/h per arcmin exactly as make_calibration_factor.py converted it:
     # the simulation's own cosmology at the snapshot's true redshift.

@@ -2,15 +2,19 @@
 # average of DeltaSigma, on the lensing bins' annuli) for every filter_type and filter_type_2, so the
 # simulation numerator and denominator measure what the data's kSZ (ThumbStack 'DSigma_lensing') and
 # lensing measure. Data: the DSigma_lensing ratio NPZ. Output names carry '_dsigma_lensing'.
+# Further differences from that file: the digitized curve is rescaled to Omega_b / Omega_m
+# (plot.cmb_fgas_stellar_fraction) and to r = 0.30 (plot.cmb_fgas_r_used, plot.cmb_fgas_r_target),
+# use_sims is false and fig_type is pdf.
 # The beamed numerator stacks are filtered on 0.25' stamps bilinearly
 # interpolated from the 0.5' map, as ThumbStack filters the data (stack.stamp_res in the beamTest and
 # data configs; the beam-compensation configs inherit it through beam_test_config). On the six
 # simulations this lowers the beam factor by 3.1-4.1% at 1', 1.9-2.6% at 1.6' and 1.0-1.5% at 2.25'
 # (job 60144834; DESIxHSC-Lensing docs/ksz_lensing_matched_filter.md, "ThumbStack's stamp cutout").
-# Config for lensing/compare_cmb_fgas.py (not a paper figure).
+# Config for lensing/compare_cmb_fgas.py (Figure 21 of the f_gas paper).
 # Overlays the beam-compensated DESI x ACT x HSC f_gas(R) points (same as the
 # data points in beam_compensated_z05.yaml) with the DESI LS x ACT DR6 f_gas
-# points digitized from Hadzhiyska et al. (2025), arXiv:2507.14136 Fig. 6 (top).
+# points digitized from Hadzhiyska et al. (2025), arXiv:2507.14136 Fig. 6, multiplied
+# by 1 - Omega_*/Omega_b to put them on the Omega_b / Omega_m axis of the measurement.
 # The beamTest simulations are only stacked (if the cached beam factor is
 # missing or stale) to recompute the beam compensation factor.
 # With use_sims: true the simulation f_gas curves are also plotted, stacked
@@ -18,7 +22,7 @@
 # simulations sections below (copied from mass_ratio_noBeam_z05.yaml).
 beam_test_config: mass_ratio_beamTest_z05.yaml
 
-use_sims: true  # if true, stack and plot the simulations below
+use_sims: false  # if true, stack and plot the simulations below
 
 compensation:
   use_sim_scatter: false  # if true, scatter of beam_factor across sims is propagated into data error
@@ -28,11 +32,14 @@ plot:
   data_path: /pscratch/sd/r/rhliu/projects/Weak_lensing/ratio_measurements/spec_Y3_v2.1/ratio_LRG_full_no_src_with_cluster_mask_zbin1_DSigma_lensing_ksz_ggl.npz
   data_label: 'LRG z-bin 1 (z$\sim$0.51) (beam-corrected)'
   cmb_fgas_path: ../data/cmb_fgas/fgas_desi_ls_x_act_dr6_fig6_extended_lrgs.npz
-  cmb_fgas_label: 'Hadzhiyska et al. (2025) (extended LRGs)'
+  cmb_fgas_stellar_fraction: 0.064  # Omega_*/Omega_b in that analysis's normalisation by (Omega_b - Omega_*)/Omega_m (B. Hadzhiyska, private communication)
+  cmb_fgas_r_used: 0.25    # velocity cross-correlation coefficient of that curve (arXiv:2507.14136 Sec. II.4, Extended sample)
+  cmb_fgas_r_target: 0.30  # the curve is multiplied by r_used / r_target, since the kSZ amplitude goes as 1 / r
+  cmb_fgas_label: 'Hadzhiyska et al. (2025) (extended LRGs, $\times$ 0.936 $\times$ 0.25/0.30)'
   x_offset: 0.025  # arcmin; the two datasets are shifted by -/+ this so markers do not overlap
   fig_path: '../figures/'
   fig_name: 'compare_cmb_fgas_dsigma_lensing'
-  fig_type: 'png'
+  fig_type: 'pdf'
   ylabel: '$f_{\rm gas}(R)$'
   plot_error_bars: true  # use_sims only: shaded error band on the simulation curves
   plot_r200m: true       # use_sims only: vertical line at the first IllustrisTNG sim's mean R200m

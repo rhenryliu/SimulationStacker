@@ -2,7 +2,7 @@
 
 Overlay the beam-compensated DESI x ACT x HSC gas fraction measurement with the
 DESI LS x ACT DR6 gas fraction digitized from Hadzhiyska et al. (2025),
-arXiv:2507.14136 Fig. 6 (top).
+arXiv:2507.14136 Fig. 6.
 
 The beam-compensated points are recomputed exactly as in
 beam_compensated_ratio_v2.py (Phases 1–2): the beam suppression factor
@@ -22,6 +22,12 @@ gas-component ratios are not supported).  That stacking needs a compute node;
 the figure name then gains a ``_sims`` suffix.
 
 The digitized data are plotted with the symmetric error bar ``fgas_err``.
+``plot.cmb_fgas_stellar_fraction`` (Omega_* / Omega_b, default 0) multiplies them
+and their errors by (1 - Omega_* / Omega_b): the digitized curve is normalised by
+(Omega_b - Omega_*) / Omega_m, the measurement here by Omega_b / Omega_m.
+``plot.cmb_fgas_r_used`` and ``plot.cmb_fgas_r_target`` (default: no change) also
+multiply them by r_used / r_target, moving the curve to another velocity
+cross-correlation coefficient.
 Both datasets sit on the same 1–6 arcmin grid, so they are shifted
 horizontally by -/+ ``x_offset`` arcmin to keep the markers from overlapping.
 
@@ -267,17 +273,28 @@ def main(path2config: str, verbose: bool = True) -> None:
     # ==========================================================================
     # Phase 3: load the digitized Hadzhiyska et al. (2025) f_gas
     # ==========================================================================
-    # R is in arcmin; fgas is already normalised by Omega_b / Omega_m.
-    # The symmetric fgas_err is used (the last point's upper bar is clipped in
-    # the original figure, so fgas_err falls back to the lower half-bar there).
+    # R is in arcmin. fgas is as drawn in that paper, which states a normalisation
+    # by Omega_b / Omega_m; its code uses (Omega_b - Omega_*) / Omega_m with
+    # Omega_* = 6.4% of Omega_b (B. Hadzhiyska, private communication).
+    # plot.cmb_fgas_stellar_fraction = Omega_* / Omega_b puts the curve on the
+    # Omega_b / Omega_m axis of our measurement; 0 leaves it as digitized.
+    # The symmetric fgas_err is used: in the Extended LRGs file it is the mean of
+    # the upper and lower half-bars, which agree to <= 0.001.
     cmb = np.load(plot_config['cmb_fgas_path'])
+    cmb_rescale = 1.0 - (plot_config.get('cmb_fgas_stellar_fraction') or 0.0)
+    # The kSZ amplitude goes as 1 / r, so moving the curve from the velocity
+    # cross-correlation coefficient it used to plot.cmb_fgas_r_target scales it
+    # by r_used / r_target; without a target it keeps the r it used.
+    if plot_config.get('cmb_fgas_r_target'):
+        cmb_rescale *= plot_config['cmb_fgas_r_used'] / plot_config['cmb_fgas_r_target']
     theta_cmb = cmb['R']
-    fgas_cmb  = cmb['fgas']
-    sigma_cmb = cmb['fgas_err']
+    fgas_cmb  = cmb['fgas'] * cmb_rescale
+    sigma_cmb = cmb['fgas_err'] * cmb_rescale
 
     if verbose:
         print(f"Loaded digitized f_gas from {plot_config['cmb_fgas_path']}")
         print(f"  theta [arcmin]: {theta_cmb}")
+        print(f"  multiplied by {cmb_rescale:.3f}")
 
     # ==========================================================================
     # Phase 4 (optional): noBeam simulation profiles

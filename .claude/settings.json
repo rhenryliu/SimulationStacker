@@ -16,8 +16,10 @@
       "Bash(module load *)",
       "Bash(module list *)"
     ],
+    "ask": [
+      "Bash(git push *)"
+    ],
     "deny": [
-      "Bash(git push *)",
       "Bash(git reset --hard *)",
       "Bash(git rebase *)",
       "Bash(git commit --amend *)",

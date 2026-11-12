@@ -35,7 +35,7 @@ plot:
   cmb_fgas_stellar_fraction: 0.064  # Omega_*/Omega_b in that analysis's normalisation by (Omega_b - Omega_*)/Omega_m (B. Hadzhiyska, private communication)
   cmb_fgas_r_used: 0.25    # velocity cross-correlation coefficient of that curve (arXiv:2507.14136 Sec. II.4, Extended sample)
   cmb_fgas_r_target: 0.30  # the curve is multiplied by r_used / r_target, since the kSZ amplitude goes as 1 / r
-  cmb_fgas_label: 'Hadzhiyska et al. (2025) (extended LRGs, $\times$ 0.936 $\times$ 0.25/0.30)'
+  cmb_fgas_label: 'Hadzhiyska et al. (2025): Extended LRGs, $r = 0.3$, no stellar-fraction correction'
   x_offset: 0.025  # arcmin; the two datasets are shifted by -/+ this so markers do not overlap
   fig_path: '../figures/'
   fig_name: 'compare_cmb_fgas_dsigma_lensing'
